@@ -41,8 +41,7 @@ C:\Users\USERNAME\AppData\Roaming\UsageBar\settings.json
 [System.Environment]::SetEnvironmentVariable("DEEPGRAM_API_KEY", "API_KEY", "User")
 ```
 
-Blank or not setted providers won't be enabled.
-
+Providers with blank or missing API keys will not be enabled
 
 ## Development
 
