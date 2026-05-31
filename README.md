@@ -10,6 +10,7 @@ Rust port -> https://github.com/bariskisir/UsageBarRust
 
 ## Supported LLMs and APIs
 - Codex OAuth
+- Claude OAuth
 - DeepSeek API
 - OpenRouter API
 - Deepgram API
