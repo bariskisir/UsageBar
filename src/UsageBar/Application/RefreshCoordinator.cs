@@ -14,6 +14,8 @@ internal sealed class RefreshCoordinator : IDisposable
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
     private readonly Lock _timerGate = new();
     private Timer? _timer;
+    private double? _previousCodexPrimaryUsedPercent;
+    private double? _previousCodexSecondaryUsedPercent;
     private bool _stopped;
 
     public RefreshCoordinator(
@@ -70,6 +72,7 @@ internal sealed class RefreshCoordinator : IDisposable
 
             _trayIcon.UpdateTooltip(TooltipFormatter.Format(snapshot.Blocks));
             _trayIcon.UpdateIcon(snapshot.CodexPrimaryUsedPercent, snapshot.CodexSecondaryUsedPercent);
+            NotifyCodexLimitRefreshes(snapshot);
         }
         catch (Exception exception)
         {
@@ -82,6 +85,44 @@ internal sealed class RefreshCoordinator : IDisposable
         }
 
         ScheduleNext(settings.RefreshPeriodMinute, scheduleAnchor);
+    }
+
+    private void NotifyCodexLimitRefreshes(UsageSnapshot snapshot)
+    {
+        var messages = new List<string>(capacity: 2);
+
+        if (IsLimitRefreshed(_previousCodexPrimaryUsedPercent, snapshot.CodexPrimaryUsedPercent))
+        {
+            messages.Add("Codex 5h limit refreshed");
+        }
+
+        if (IsLimitRefreshed(_previousCodexSecondaryUsedPercent, snapshot.CodexSecondaryUsedPercent))
+        {
+            messages.Add("Codex 7d limit refreshed");
+        }
+
+        if (snapshot.CodexPrimaryUsedPercent is not null)
+        {
+            _previousCodexPrimaryUsedPercent = snapshot.CodexPrimaryUsedPercent;
+        }
+
+        if (snapshot.CodexSecondaryUsedPercent is not null)
+        {
+            _previousCodexSecondaryUsedPercent = snapshot.CodexSecondaryUsedPercent;
+        }
+
+        if (messages.Count > 0)
+        {
+            _trayIcon.ShowNotification("UsageBar", string.Join(Environment.NewLine, messages));
+        }
+    }
+
+    private static bool IsLimitRefreshed(double? previousUsedPercent, double? currentUsedPercent)
+    {
+        const double minimumDecrease = 0.01;
+        return previousUsedPercent is double previous &&
+            currentUsedPercent is double current &&
+            current < previous - minimumDecrease;
     }
 
     private void ScheduleNext(int refreshPeriodMinute, DateTimeOffset? scheduleAnchor)

@@ -95,6 +95,7 @@ The project currently has no third-party `PackageReference` entries, but restore
 - Manual validation should cover:
   - Tray icon appears without a main window.
   - Tooltip uses cached text; hovering must not call provider APIs.
+  - A Codex usage decrease after a refresh triggers Windows notifications for refreshed limit windows.
   - Missing credentials omit affected providers.
   - Right-click menu `Refresh` triggers an immediate refresh.
   - Right-click menu `Exit` stops the app and removes the tray icon.

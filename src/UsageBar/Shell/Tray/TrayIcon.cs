@@ -104,6 +104,19 @@ internal sealed class TrayIcon : IDisposable
         }
     }
 
+    public void ShowNotification(string title, string message)
+    {
+        lock (_iconGate)
+        {
+            var data = CreateNotifyIconData();
+            data.uFlags = NativeMethods.NifInfo;
+            data.szInfoTitle = LimitBalloonTitle(title);
+            data.szInfo = LimitBalloonText(message);
+            data.dwInfoFlags = NativeMethods.NiifInfo;
+            NativeMethods.ShellNotifyIcon(NativeMethods.NimModify, ref data);
+        }
+    }
+
     private nint WindowProc(nint hWnd, uint message, nint wParam, nint lParam)
     {
         switch (message)
@@ -215,6 +228,16 @@ internal sealed class TrayIcon : IDisposable
     private static string LimitTooltip(string tooltip)
     {
         return tooltip.Length <= 127 ? tooltip : tooltip[..127];
+    }
+
+    private static string LimitBalloonTitle(string title)
+    {
+        return title.Length <= 63 ? title : title[..63];
+    }
+
+    private static string LimitBalloonText(string text)
+    {
+        return text.Length <= 255 ? text : text[..255];
     }
 
     public void Dispose()

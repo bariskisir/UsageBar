@@ -134,7 +134,7 @@ internal sealed class CodexProvider(HttpClient httpClient) : IUsageProvider
     {
         return string.Create(
             CultureInfo.InvariantCulture,
-            $"{window.UsedPercent:0.#}%, resets in {FormatResetDuration(window.ResetAt - DateTimeOffset.Now)}");
+            $"{window.UsedPercent:0.#}%, {FormatResetDuration(window.ResetAt - DateTimeOffset.Now)}");
     }
 
     private static string FormatResetDuration(TimeSpan duration)
