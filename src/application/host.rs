@@ -1,5 +1,5 @@
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::mpsc;
 
@@ -89,6 +89,13 @@ struct RefreshCoordinator {
     providers: Vec<Arc<dyn IUsageProvider>>,
     tray: Arc<TrayIcon>,
     stopped: AtomicBool,
+    last_codex_usage: Mutex<CodexUsage>,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct CodexUsage {
+    primary_used_percent: Option<f64>,
+    secondary_used_percent: Option<f64>,
 }
 
 impl RefreshCoordinator {
@@ -104,6 +111,7 @@ impl RefreshCoordinator {
             providers,
             tray,
             stopped: AtomicBool::new(false),
+            last_codex_usage: Mutex::new(CodexUsage::default()),
         }
     }
 
@@ -165,6 +173,47 @@ impl RefreshCoordinator {
             snapshot.codex_secondary_used_percent,
         )?;
 
+        let refreshed = self.record_codex_usage(
+            snapshot.codex_primary_used_percent,
+            snapshot.codex_secondary_used_percent,
+        );
+        if !refreshed.is_empty() {
+            self.tray
+                .show_notification("Codex limit refreshed", &refreshed.join("\n"));
+        }
+
         Ok(())
+    }
+
+    fn record_codex_usage(
+        &self,
+        primary_used_percent: Option<f64>,
+        secondary_used_percent: Option<f64>,
+    ) -> Vec<String> {
+        let mut messages = Vec::new();
+        let Ok(mut previous) = self.last_codex_usage.lock() else {
+            return messages;
+        };
+
+        if usage_decreased(previous.primary_used_percent, primary_used_percent) {
+            messages.push("Codex 5h limit refreshed".to_string());
+        }
+        if usage_decreased(previous.secondary_used_percent, secondary_used_percent) {
+            messages.push("Codex 7d limit refreshed".to_string());
+        }
+
+        *previous = CodexUsage {
+            primary_used_percent,
+            secondary_used_percent,
+        };
+
+        messages
+    }
+}
+
+fn usage_decreased(previous: Option<f64>, current: Option<f64>) -> bool {
+    match (previous, current) {
+        (Some(previous), Some(current)) => current < previous,
+        _ => false,
     }
 }

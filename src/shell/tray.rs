@@ -6,8 +6,9 @@ use crate::shell::native::{
     DestroyWindow, DispatchMessageW, GetCursorPos, GetMessageW, GetModuleHandleW, Hicon, Hmenu,
     Hwnd, Msg, NotifyIconDataW, Point, PostMessageW, PostQuitMessage, RegisterClassExW,
     SetForegroundWindow, Shell_NotifyIconW, TrackPopupMenuEx, TranslateMessage, WndClassExW,
-    MF_STRING, NIF_ICON, NIF_MESSAGE, NIF_SHOWTIP, NIF_TIP, NIM_ADD, NIM_DELETE, NIM_MODIFY,
-    TPM_RETURNCMD, TPM_RIGHTBUTTON, WM_APP, WM_CONTEXTMENU, WM_DESTROY, WM_NULL, WM_RBUTTONUP,
+    MF_STRING, NIF_ICON, NIF_INFO, NIF_MESSAGE, NIF_SHOWTIP, NIF_TIP, NIIF_INFO, NIM_ADD,
+    NIM_DELETE, NIM_MODIFY, TPM_RETURNCMD, TPM_RIGHTBUTTON, WM_APP, WM_CONTEXTMENU, WM_DESTROY,
+    WM_NULL, WM_RBUTTONUP,
 };
 
 const ICON_ID: u32 = 1;
@@ -84,7 +85,10 @@ impl TrayIcon {
 
         let atom = unsafe { RegisterClassExW(&wc) };
         if atom == 0 {
-            anyhow::bail!("Failed to register tray window class. Error: {}", std::io::Error::last_os_error());
+            anyhow::bail!(
+                "Failed to register tray window class. Error: {}",
+                std::io::Error::last_os_error()
+            );
         }
 
         let window_name: Vec<u16> = "UsageBarRust\0".encode_utf16().collect();
@@ -107,13 +111,26 @@ impl TrayIcon {
         };
 
         if window_handle.0 == 0 {
-            anyhow::bail!("Failed to create tray window. Error: {}", std::io::Error::last_os_error());
+            anyhow::bail!(
+                "Failed to create tray window. Error: {}",
+                std::io::Error::last_os_error()
+            );
         }
 
         let icon_handle = Mutex::new(crate::shell::icon::create_usage_icon(None, None)?);
-        add_icon(window_handle, *icon_handle.lock().unwrap(), "UsageBarRust\nLoading...")?;
+        add_icon(
+            window_handle,
+            *icon_handle.lock().unwrap(),
+            "UsageBarRust\nLoading...",
+        )?;
 
-        Ok((Self { window_handle, icon_handle }, rx))
+        Ok((
+            Self {
+                window_handle,
+                icon_handle,
+            },
+            rx,
+        ))
     }
 
     /// Blocks the calling thread in the Win32 message pump.
@@ -178,6 +195,19 @@ impl TrayIcon {
         }
 
         Ok(())
+    }
+
+    /// Shows a short Windows notification from the tray icon.
+    pub fn show_notification(&self, title: &str, message: &str) {
+        let mut data = notify_icon_data(self.window_handle);
+        data.uFlags = NIF_INFO;
+        data.szInfoTitle = to_wide_array(title);
+        data.szInfo = to_wide_array(message);
+        data.dwInfoFlags = NIIF_INFO;
+
+        unsafe {
+            Shell_NotifyIconW(NIM_MODIFY, &data);
+        }
     }
 
     /// Returns the HWND for posting messages from other threads.
@@ -272,27 +302,31 @@ fn show_context_menu(hwnd: Hwnd) -> anyhow::Result<()> {
 
     if let Ok(cmd) = result {
         if cmd != 0 {
-            let lock = EVENT_TX.get().and_then(|m| m.lock().ok());
-            if let Some(guard) = lock {
-                if let Some(ref tx) = *guard {
-                    match cmd as usize {
-                        REFRESH_COMMAND_ID => {
-                            let _ = tx.send(TrayEvent::Refresh);
-                        }
-                        EXIT_COMMAND_ID => {
-                            let _ = tx.send(TrayEvent::Exit);
-                            // PostQuitMessage MUST be called from the thread that
-                            // owns the message loop (this thread, inside window_proc).
-                            unsafe { PostQuitMessage(0) };
-                        }
-                        _ => {}
-                    }
+            match cmd as usize {
+                REFRESH_COMMAND_ID => {
+                    send_event(TrayEvent::Refresh);
                 }
+                EXIT_COMMAND_ID => {
+                    send_event(TrayEvent::Exit);
+                    // PostQuitMessage MUST be called from the thread that
+                    // owns the message loop (this thread, inside window_proc).
+                    unsafe { PostQuitMessage(0) };
+                }
+                _ => {}
             }
         }
     }
 
     Ok(())
+}
+
+fn send_event(event: TrayEvent) {
+    let lock = EVENT_TX.get().and_then(|m| m.lock().ok());
+    if let Some(guard) = lock {
+        if let Some(ref tx) = *guard {
+            let _ = tx.send(event);
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -336,6 +370,7 @@ fn add_icon(hwnd: Hwnd, icon: Hicon, tooltip: &str) -> anyhow::Result<()> {
     if ok == 0 {
         anyhow::bail!("Failed to add tray icon.");
     }
+
     Ok(())
 }
 
@@ -345,4 +380,12 @@ fn limit_tooltip(tooltip: &str) -> String {
     } else {
         tooltip[..127].to_string()
     }
+}
+
+fn to_wide_array<const N: usize>(text: &str) -> [u16; N] {
+    let mut buf = [0u16; N];
+    let wide: Vec<u16> = text.encode_utf16().take(N.saturating_sub(1)).collect();
+    let len = wide.len().min(N.saturating_sub(1));
+    buf[..len].copy_from_slice(&wide[..len]);
+    buf
 }

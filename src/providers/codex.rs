@@ -41,7 +41,10 @@ impl IUsageProvider for CodexProvider {
             HeaderValue::from_str(&format!("Bearer {}", auth.access_token))?,
         );
         headers.insert("originator", HeaderValue::from_static("codex_cli_rs"));
-        headers.insert("chatgpt-account-id", HeaderValue::from_str(&auth.account_id)?);
+        headers.insert(
+            "chatgpt-account-id",
+            HeaderValue::from_str(&auth.account_id)?,
+        );
 
         let response = tokio::select! {
             r = self.http_client.get(USAGE_ENDPOINT).headers(headers).send() => r?,
@@ -190,10 +193,18 @@ fn from_epoch(epoch: f64) -> DateTime<Local> {
 fn format_usage_line(window: &CodexWindow) -> String {
     let duration = window.reset_at - Local::now();
     format!(
-        "{:.1}%, resets in {}",
-        window.used_percent,
+        "{}%, {}",
+        format_used_percent(window.used_percent),
         format_reset_duration(duration)
     )
+}
+
+fn format_used_percent(used_percent: f64) -> String {
+    let value = format!("{:.1}", used_percent);
+    value
+        .strip_suffix(".0")
+        .unwrap_or(value.as_str())
+        .to_string()
 }
 
 fn format_reset_duration(duration: chrono::Duration) -> String {

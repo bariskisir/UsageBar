@@ -46,10 +46,12 @@ pub const WM_NULL: u32 = 0x0000;
 pub const NIF_MESSAGE: u32 = 0x00000001;
 pub const NIF_ICON: u32 = 0x00000002;
 pub const NIF_TIP: u32 = 0x00000004;
+pub const NIF_INFO: u32 = 0x00000010;
 pub const NIF_SHOWTIP: u32 = 0x00000080;
 pub const NIM_ADD: u32 = 0x00000000;
 pub const NIM_MODIFY: u32 = 0x00000001;
 pub const NIM_DELETE: u32 = 0x00000002;
+pub const NIIF_INFO: u32 = 0x00000001;
 
 pub const MF_STRING: u32 = 0x00000000;
 pub const TPM_RIGHTBUTTON: u32 = 0x0002;
