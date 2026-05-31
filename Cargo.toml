@@ -1,0 +1,35 @@
+[package]
+name = "UsageBarRust"
+version = "1.0.0"
+edition = "2021"
+description = "System tray application that displays LLM and API usage/balance information"
+
+[[bin]]
+name = "UsageBarRust"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde"] }
+rust_decimal = { version = "1", features = ["serde"] }
+anyhow = "1"
+async-trait = "0.1"
+tokio-util = { version = "0.7", features = ["rt"] }
+urlencoding = "2"
+uuid = { version = "1", features = ["v4"] }
+futures = "0.3"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.55"
+
+[build-dependencies]
+winres = "0.1"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
