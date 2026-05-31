@@ -17,7 +17,7 @@ env:
 
 jobs:
   build:
-    name: Build Windows x64
+    name: Build Windows x64 Setup
     runs-on: windows-latest
 
     steps:
@@ -44,17 +44,21 @@ jobs:
       - name: Build release binary
         run: cargo build --release
 
-      - name: Package artifact
+      - name: Install NSIS
+        run: choco install nsis --no-progress --yes
+
+      - name: Build setup package
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path artifacts
-          Compress-Archive -Path target/release/UsageBarRust.exe -DestinationPath artifacts/UsageBarRust-$env:APP_VERSION-x64.zip
+          $makensis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+          New-Item -ItemType Directory -Force -Path artifacts/installer
+          & $makensis /DSOURCEDIR="$pwd\target\release" /DOUTDIR="$pwd\artifacts\installer" /DAPP_VERSION="$env:APP_VERSION" installer/setup.nsi
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: usagebarrust-windows-x64
-          path: artifacts/UsageBarRust-*-x64.zip
+          name: usagebarrust-windows-x64-setup
+          path: artifacts/installer/*_x64-setup.exe
           if-no-files-found: error
 
   publish:
@@ -71,13 +75,13 @@ jobs:
 
       - name: List release assets
         shell: bash
-        run: find release-assets -maxdepth 5 -type f -print
+        run: find release-assets -type f -maxdepth 5 -print
 
       - name: Publish release assets
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: UsageBarRust ${{ github.ref_name }}
-          files: release-assets/**/*.zip
+          files: release-assets/**/*_x64-setup.exe
           fail_on_unmatched_files: true
           generate_release_notes: true
