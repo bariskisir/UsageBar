@@ -1,6 +1,7 @@
 # UsageBarRust
 
 UsageBarRust is a minimal Windows notification-area app for showing LLM or API usage and balance information.
+This project is ported from C# -> https://github.com/bariskisir/UsageBar
 
 ![UsageBarRust interface](images/interface.png)
 
