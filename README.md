@@ -9,6 +9,7 @@ This project is ported from C# -> https://github.com/bariskisir/UsageBar
 
 ## Supported LLMs and APIs
 - Codex OAuth
+- Claude OAuth
 - DeepSeek API
 - OpenRouter API
 - Deepgram API
