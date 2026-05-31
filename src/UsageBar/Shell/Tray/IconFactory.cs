@@ -3,12 +3,18 @@ namespace UsageBar.Shell.Tray;
 internal static class IconFactory
 {
     private const int Size = 32;
+    private const int BorderWidth = 2;
+    private const int SeparatorTop = 15;
+    private const int SeparatorBottom = 17;
+    private const int ContentWidth = Size - (BorderWidth * 2);
 
-    public static nint CreateUsageIcon(double? codexPrimaryUsedPercent)
+    public static nint CreateUsageIcon(double? codexPrimaryUsedPercent, double? codexSecondaryUsedPercent)
     {
-        var accent = GetAccent(codexPrimaryUsedPercent);
-        var usedPercent = codexPrimaryUsedPercent is null ? 100 : Math.Clamp(codexPrimaryUsedPercent.Value, 0, 100);
-        var filledWidth = Math.Max(2, (int)Math.Round(Size * usedPercent / 100d));
+        var hasAnyUsage = codexPrimaryUsedPercent is not null || codexSecondaryUsedPercent is not null;
+        var primaryAccent = GetAccent(codexPrimaryUsedPercent);
+        var secondaryAccent = GetAccent(codexSecondaryUsedPercent);
+        var primaryFilledWidth = GetFilledWidth(codexPrimaryUsedPercent, fillWhenUnknown: !hasAnyUsage);
+        var secondaryFilledWidth = GetFilledWidth(codexSecondaryUsedPercent, fillWhenUnknown: !hasAnyUsage);
 
         var xor = new byte[Size * Size * 4];
         var and = new byte[Size * Size / 8];
@@ -18,13 +24,17 @@ internal static class IconFactory
             for (var x = 0; x < Size; x++)
             {
                 var index = (y * Size + x) * 4;
-                var border = x < 2 || y < 2 || x >= Size - 2 || y >= Size - 2;
-                var fill = x < filledWidth;
-                var color = border
+                var border = x < BorderWidth || y < BorderWidth || x >= Size - BorderWidth || y >= Size - BorderWidth;
+                var separator = y >= SeparatorTop && y < SeparatorBottom;
+                var topFill = y < SeparatorTop && x < primaryFilledWidth;
+                var bottomFill = y >= SeparatorBottom && x < secondaryFilledWidth;
+                var color = border || separator
                     ? (R: (byte)245, G: (byte)245, B: (byte)245)
-                    : fill
-                        ? accent
-                        : (R: (byte)32, G: (byte)36, B: (byte)41);
+                    : topFill
+                        ? primaryAccent
+                        : bottomFill
+                            ? secondaryAccent
+                            : (R: (byte)32, G: (byte)36, B: (byte)41);
 
                 xor[index] = color.B;
                 xor[index + 1] = color.G;
@@ -40,6 +50,17 @@ internal static class IconFactory
         }
 
         return icon;
+    }
+
+    private static int GetFilledWidth(double? usedPercent, bool fillWhenUnknown)
+    {
+        if (usedPercent is null)
+        {
+            return fillWhenUnknown ? Size - BorderWidth : BorderWidth;
+        }
+
+        var clamped = Math.Clamp(usedPercent.Value, 0, 100);
+        return BorderWidth + (int)Math.Round(ContentWidth * clamped / 100d);
     }
 
     private static (byte R, byte G, byte B) GetAccent(double? codexPrimaryUsedPercent)

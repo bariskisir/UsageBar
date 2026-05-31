@@ -53,7 +53,7 @@ internal sealed class TrayIcon : IDisposable
             throw new InvalidOperationException("Failed to create tray window.");
         }
 
-        _iconHandle = IconFactory.CreateUsageIcon(null);
+        _iconHandle = IconFactory.CreateUsageIcon(null, null);
         AddIcon(_tooltipText);
     }
 
@@ -82,9 +82,9 @@ internal sealed class TrayIcon : IDisposable
         }
     }
 
-    public void UpdateIcon(double? codexPrimaryUsedPercent)
+    public void UpdateIcon(double? codexPrimaryUsedPercent, double? codexSecondaryUsedPercent)
     {
-        var nextIcon = IconFactory.CreateUsageIcon(codexPrimaryUsedPercent);
+        var nextIcon = IconFactory.CreateUsageIcon(codexPrimaryUsedPercent, codexSecondaryUsedPercent);
         nint previousIcon;
 
         lock (_iconGate)

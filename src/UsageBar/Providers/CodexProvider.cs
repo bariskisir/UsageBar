@@ -51,7 +51,7 @@ internal sealed class CodexProvider(HttpClient httpClient) : IUsageProvider
             throw new InvalidOperationException("Codex response did not contain usable rate limit windows.");
         }
 
-        return new ProviderResult(blocks, primary?.UsedPercent);
+        return new ProviderResult(blocks, primary?.UsedPercent, secondary?.UsedPercent);
     }
 
     private static CodexAuth? ReadAuth()

@@ -147,8 +147,8 @@ The project currently has no third-party `PackageReference` entries, but restore
 
 - Tooltip text is built by `TooltipFormatter` from display-ready `UsageBlock` values.
 - Tooltip text is limited to 127 characters to fit the Win32 notification icon structure.
-- Tray icon color is generated in `IconFactory` from `CodexPrimaryUsedPercent`.
-- Only the Codex provider should return `CodexPrimaryUsedPercent`, because it drives the tray icon fill/color.
+- Tray icon color and fill are generated in `IconFactory` from Codex 5-hour and 7-day used percentages.
+- Only the Codex provider should return `CodexPrimaryUsedPercent` or `CodexSecondaryUsedPercent`, because they drive the tray icon fill/color.
 
 ### Provider Pattern
 

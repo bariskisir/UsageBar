@@ -12,6 +12,9 @@ internal sealed record ProviderCredentials(
     string OpenRouterApiKey,
     string DeepgramApiKey);
 
-internal sealed record ProviderResult(IReadOnlyList<UsageBlock> Blocks, double? CodexPrimaryUsedPercent = null);
+internal sealed record ProviderResult(
+    IReadOnlyList<UsageBlock> Blocks,
+    double? CodexPrimaryUsedPercent = null,
+    double? CodexSecondaryUsedPercent = null);
 
 internal sealed record UsageBlock(string Label, string Value, bool Inline = false);

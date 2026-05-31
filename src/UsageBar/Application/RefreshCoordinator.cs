@@ -69,7 +69,7 @@ internal sealed class RefreshCoordinator : IDisposable
                 _logger).ConfigureAwait(false);
 
             _trayIcon.UpdateTooltip(TooltipFormatter.Format(snapshot.Blocks));
-            _trayIcon.UpdateIcon(snapshot.CodexPrimaryUsedPercent);
+            _trayIcon.UpdateIcon(snapshot.CodexPrimaryUsedPercent, snapshot.CodexSecondaryUsedPercent);
         }
         catch (Exception exception)
         {
