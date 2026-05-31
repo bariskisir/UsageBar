@@ -28,10 +28,20 @@ pub struct ProviderCredentials {
 #[derive(Debug, Clone)]
 pub struct ProviderResult {
     pub blocks: Vec<UsageBlock>,
-    /// Codex 5h (primary) window usage percentage — used for icon top half.
-    pub codex_primary_used_percent: Option<f64>,
-    /// Codex 7d (secondary) window usage percentage — used for icon bottom half.
-    pub codex_secondary_used_percent: Option<f64>,
+    /// Ordered list of usage windows for the tray icon bar layout.
+    /// Each window maps to one horizontal bar segment.
+    pub windows: Vec<UsageBarWindow>,
+}
+
+/// A single horizontal bar segment in the tray icon.
+#[derive(Debug, Clone)]
+pub struct UsageBarWindow {
+    /// Provider name, e.g. "Codex" or "Claude".
+    pub provider_name: String,
+    /// Time-window label, e.g. "5h" or "7d".
+    pub window_label: String,
+    /// How much of the limit is used (0–100).
+    pub used_percent: f64,
 }
 
 /// A single line (or two lines) of usage information for the tooltip.

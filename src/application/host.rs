@@ -5,11 +5,12 @@ use tokio::sync::mpsc;
 
 use crate::application::aggregator;
 use crate::application::tooltip;
-use crate::domain::IUsageProvider;
+use crate::domain::{IUsageProvider, UsageBarWindow};
 use crate::infrastructure::logger::AppLogger;
 use crate::infrastructure::paths;
 use crate::infrastructure::settings::SettingsService;
 use crate::infrastructure::startup;
+use crate::providers::claude::ClaudeProvider;
 use crate::providers::codex::CodexProvider;
 use crate::providers::deepgram::DeepgramProvider;
 use crate::providers::deepseek::DeepSeekProvider;
@@ -39,6 +40,7 @@ impl UsageBarRustHost {
 
         let providers: Vec<Arc<dyn IUsageProvider>> = vec![
             Arc::new(CodexProvider::new(http_client.clone())),
+            Arc::new(ClaudeProvider::new(http_client.clone())),
             Arc::new(DeepSeekProvider::new(http_client.clone())),
             Arc::new(OpenRouterProvider::new(http_client.clone())),
             Arc::new(DeepgramProvider::new(http_client.clone())),
@@ -89,13 +91,7 @@ struct RefreshCoordinator {
     providers: Vec<Arc<dyn IUsageProvider>>,
     tray: Arc<TrayIcon>,
     stopped: AtomicBool,
-    last_codex_usage: Mutex<CodexUsage>,
-}
-
-#[derive(Debug, Clone, Copy, Default)]
-struct CodexUsage {
-    primary_used_percent: Option<f64>,
-    secondary_used_percent: Option<f64>,
+    previous_windows: Mutex<Vec<UsageBarWindow>>,
 }
 
 impl RefreshCoordinator {
@@ -111,7 +107,7 @@ impl RefreshCoordinator {
             providers,
             tray,
             stopped: AtomicBool::new(false),
-            last_codex_usage: Mutex::new(CodexUsage::default()),
+            previous_windows: Mutex::new(Vec::new()),
         }
     }
 
@@ -168,52 +164,53 @@ impl RefreshCoordinator {
         let snapshot = aggregator::refresh_async(&self.providers, &credentials).await;
 
         self.tray.update_tooltip(&tooltip::format(&snapshot.blocks));
-        self.tray.update_icon(
-            snapshot.codex_primary_used_percent,
-            snapshot.codex_secondary_used_percent,
-        )?;
+        self.tray.update_icon(&snapshot.windows)?;
 
-        let refreshed = self.record_codex_usage(
-            snapshot.codex_primary_used_percent,
-            snapshot.codex_secondary_used_percent,
-        );
-        if !refreshed.is_empty() {
+        let messages = self.record_windows(&snapshot.windows);
+        if !messages.is_empty() {
             self.tray
-                .show_notification("Codex limit refreshed", &refreshed.join("\n"));
+                .show_notification("Limit refreshed", &messages.join("\n"));
         }
 
         Ok(())
     }
 
-    fn record_codex_usage(
-        &self,
-        primary_used_percent: Option<f64>,
-        secondary_used_percent: Option<f64>,
-    ) -> Vec<String> {
+    fn record_windows(&self, current_windows: &[UsageBarWindow]) -> Vec<String> {
         let mut messages = Vec::new();
-        let Ok(mut previous) = self.last_codex_usage.lock() else {
+        let Ok(mut previous) = self.previous_windows.lock() else {
             return messages;
         };
 
-        if usage_decreased(previous.primary_used_percent, primary_used_percent) {
-            messages.push("Codex 5h limit refreshed".to_string());
-        }
-        if usage_decreased(previous.secondary_used_percent, secondary_used_percent) {
-            messages.push("Codex 7d limit refreshed".to_string());
+        for current in current_windows {
+            let prev = find_previous_window(&previous, &current.provider_name, &current.window_label);
+            if usage_decreased(prev.map(|w| w.used_percent), Some(current.used_percent)) {
+                messages.push(format!(
+                    "{} {} limit refreshed",
+                    current.provider_name, current.window_label
+                ));
+            }
         }
 
-        *previous = CodexUsage {
-            primary_used_percent,
-            secondary_used_percent,
-        };
+        *previous = current_windows.to_vec();
 
         messages
     }
 }
 
+fn find_previous_window<'a>(
+    windows: &'a [UsageBarWindow],
+    provider: &str,
+    label: &str,
+) -> Option<&'a UsageBarWindow> {
+    windows
+        .iter()
+        .find(|w| w.provider_name == provider && w.window_label == label)
+}
+
 fn usage_decreased(previous: Option<f64>, current: Option<f64>) -> bool {
+    const MINIMUM_DECREASE: f64 = 0.01;
     match (previous, current) {
-        (Some(previous), Some(current)) => current < previous,
+        (Some(prev), Some(curr)) => curr < prev - MINIMUM_DECREASE,
         _ => false,
     }
 }

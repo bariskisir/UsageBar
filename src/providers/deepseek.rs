@@ -70,8 +70,7 @@ impl IUsageProvider for DeepSeekProvider {
                     value: format_currency(total_balance),
                     inline: true,
                 }],
-                codex_primary_used_percent: None,
-                codex_secondary_used_percent: None,
+                windows: Vec::new(),
             }));
         }
 

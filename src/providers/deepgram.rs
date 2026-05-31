@@ -41,8 +41,7 @@ impl IUsageProvider for DeepgramProvider {
                 value: format_currency(balance),
                 inline: true,
             }],
-            codex_primary_used_percent: None,
-            codex_secondary_used_percent: None,
+            windows: Vec::new(),
         }))
     }
 }

@@ -1,6 +1,7 @@
 use std::sync::Mutex;
 use tokio::sync::mpsc;
 
+use crate::domain::UsageBarWindow;
 use crate::shell::native::{
     AppendMenuW, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyIcon, DestroyMenu,
     DestroyWindow, DispatchMessageW, GetCursorPos, GetMessageW, GetModuleHandleW, Hicon, Hmenu,
@@ -117,7 +118,7 @@ impl TrayIcon {
             );
         }
 
-        let icon_handle = Mutex::new(crate::shell::icon::create_usage_icon(None, None)?);
+        let icon_handle = Mutex::new(crate::shell::icon::create_usage_icon(&[])?);
         add_icon(
             window_handle,
             *icon_handle.lock().unwrap(),
@@ -169,13 +170,9 @@ impl TrayIcon {
     /// Replaces the tray icon (thread-safe).
     pub fn update_icon(
         &self,
-        codex_primary_used_percent: Option<f64>,
-        codex_secondary_used_percent: Option<f64>,
+        windows: &[UsageBarWindow],
     ) -> anyhow::Result<()> {
-        let next_icon = crate::shell::icon::create_usage_icon(
-            codex_primary_used_percent,
-            codex_secondary_used_percent,
-        )?;
+        let next_icon = crate::shell::icon::create_usage_icon(windows)?;
         let mut guard = self.icon_handle.lock().unwrap();
         let previous = *guard;
         *guard = next_icon;

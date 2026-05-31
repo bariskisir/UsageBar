@@ -1,27 +1,29 @@
 use async_trait::async_trait;
-use chrono::{DateTime, Local, TimeZone, Utc};
+use chrono::{DateTime, Local};
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, AUTHORIZATION};
 use serde_json::Value;
 
 use crate::domain::{IUsageProvider, ProviderCredentials, ProviderResult, UsageBarWindow, UsageBlock};
 use crate::providers::json_helpers;
 
-const USAGE_ENDPOINT: &str = "https://chatgpt.com/backend-api/wham/usage";
+const USAGE_ENDPOINT: &str = "https://api.anthropic.com/api/oauth/usage";
+const BETA_HEADER: &str = "oauth-2025-04-20";
+const USER_AGENT: &str = "claude-code/2.1.0";
 
-pub struct CodexProvider {
+pub struct ClaudeProvider {
     http_client: reqwest::Client,
 }
 
-impl CodexProvider {
+impl ClaudeProvider {
     pub fn new(http_client: reqwest::Client) -> Self {
         Self { http_client }
     }
 }
 
 #[async_trait]
-impl IUsageProvider for CodexProvider {
+impl IUsageProvider for ClaudeProvider {
     fn name(&self) -> &str {
-        "Codex"
+        "Claude"
     }
 
     async fn get_usage(
@@ -40,59 +42,62 @@ impl IUsageProvider for CodexProvider {
             AUTHORIZATION,
             HeaderValue::from_str(&format!("Bearer {}", auth.access_token))?,
         );
-        headers.insert("originator", HeaderValue::from_static("codex_cli_rs"));
         headers.insert(
-            "chatgpt-account-id",
-            HeaderValue::from_str(&auth.account_id)?,
+            "anthropic-beta",
+            HeaderValue::from_static(BETA_HEADER),
+        );
+        headers.insert(
+            "User-Agent",
+            HeaderValue::from_static(USER_AGENT),
         );
 
         let response = tokio::select! {
             r = self.http_client.get(USAGE_ENDPOINT).headers(headers).send() => r?,
             _ = cancellation_token.cancelled() => {
-                anyhow::bail!("Codex request cancelled.");
+                anyhow::bail!("Claude request cancelled.");
             }
         };
 
         let status = response.status();
         if !status.is_success() {
-            anyhow::bail!("Codex returned HTTP {}", status);
+            anyhow::bail!("Claude returned HTTP {}", status);
         }
 
         let body: Value = response.json().await?;
-        let rate_limit = get_rate_limit(&body)?;
-        let primary = get_window(&rate_limit, "primary_window");
-        let secondary = get_window(&rate_limit, "secondary_window");
+        let five_hour = get_window(&body, "five_hour");
+        let seven_day = get_window(&body, "seven_day");
 
         let mut blocks = Vec::new();
         let mut windows = Vec::new();
 
-        if let Some(ref pw) = primary {
+        if let Some(ref w) = five_hour {
             blocks.push(UsageBlock {
-                label: "Codex 5h:".to_string(),
-                value: format_usage_line(pw),
+                label: "Claude 5h:".to_string(),
+                value: format_usage_line(w),
                 inline: true,
             });
             windows.push(UsageBarWindow {
-                provider_name: "Codex".to_string(),
+                provider_name: "Claude".to_string(),
                 window_label: "5h".to_string(),
-                used_percent: pw.used_percent,
+                used_percent: w.used_percent.clamp(0.0, 100.0),
             });
         }
-        if let Some(ref sw) = secondary {
+
+        if let Some(ref w) = seven_day {
             blocks.push(UsageBlock {
-                label: "Codex 7d:".to_string(),
-                value: format_usage_line(sw),
+                label: "Claude 7d:".to_string(),
+                value: format_usage_line(w),
                 inline: true,
             });
             windows.push(UsageBarWindow {
-                provider_name: "Codex".to_string(),
+                provider_name: "Claude".to_string(),
                 window_label: "7d".to_string(),
-                used_percent: sw.used_percent,
+                used_percent: w.used_percent.clamp(0.0, 100.0),
             });
         }
 
         if blocks.is_empty() {
-            anyhow::bail!("Codex response did not contain usable rate limit windows.");
+            anyhow::bail!("Claude response did not contain usable rate limit windows.");
         }
 
         Ok(Some(ProviderResult { blocks, windows }))
@@ -103,108 +108,81 @@ impl IUsageProvider for CodexProvider {
 // Auth
 // ---------------------------------------------------------------------------
 
-struct CodexAuth {
+struct ClaudeAuth {
     access_token: String,
-    account_id: String,
 }
 
-fn read_auth() -> Option<CodexAuth> {
+fn read_auth() -> Option<ClaudeAuth> {
     let user_profile = std::env::var("USERPROFILE").ok()?;
     let auth_path = std::path::PathBuf::from(&user_profile)
-        .join(".codex")
-        .join("auth.json");
+        .join(".claude")
+        .join(".credentials.json");
 
     let json_text = std::fs::read_to_string(&auth_path).ok()?;
     let root: Value = serde_json::from_str(&json_text).ok()?;
 
-    let token_source = json_helpers::try_get_property(&root, "tokens").unwrap_or(&root);
-    let access_token = json_helpers::get_string(token_source, &["access_token"])?;
-    let account_id = json_helpers::get_string(token_source, &["account_id"])?;
+    let oauth = json_helpers::try_get_property(&root, "claudeAiOauth")?;
+    let access_token = json_helpers::get_string(oauth, &["accessToken"])?;
 
-    if access_token.trim().is_empty() || account_id.trim().is_empty() {
+    if access_token.trim().is_empty() {
         return None;
     }
 
-    Some(CodexAuth {
-        access_token,
-        account_id,
-    })
+    Some(ClaudeAuth { access_token })
 }
 
 // ---------------------------------------------------------------------------
-// JSON traversal
+// JSON parsing
 // ---------------------------------------------------------------------------
 
-fn get_rate_limit(root: &Value) -> anyhow::Result<Value> {
-    // Prefer top-level "rate_limit".
-    if let Some(rl) = json_helpers::try_get_property(root, "rate_limit") {
-        if rl.is_object() {
-            return Ok(rl.clone());
-        }
-    }
-
-    // Fall back to the first nested rate_limit inside "additional_rate_limits".
-    if let Some(arr) = json_helpers::try_get_property(root, "additional_rate_limits") {
-        if let Some(items) = arr.as_array() {
-            for item in items {
-                if let Some(nested) = json_helpers::try_get_property(item, "rate_limit") {
-                    if nested.is_object() {
-                        return Ok(nested.clone());
-                    }
-                }
-            }
-        }
-    }
-
-    anyhow::bail!("Codex response did not contain rate_limit.");
-}
-
-#[derive(Debug, Clone)]
-struct CodexWindow {
+struct ClaudeWindow {
     used_percent: f64,
-    reset_at: DateTime<Local>,
+    reset_at: Option<DateTime<Local>>,
 }
 
-fn get_window(rate_limit: &Value, property_name: &str) -> Option<CodexWindow> {
-    let window = json_helpers::try_get_property(rate_limit, property_name)?;
+fn get_window(root: &Value, property_name: &str) -> Option<ClaudeWindow> {
+    let window = json_helpers::try_get_property(root, property_name)?;
     if !window.is_object() {
         return None;
     }
 
-    let used_percent = json_helpers::get_double(window, "used_percent")?;
-    let reset_at_epoch = json_helpers::get_double(window, "reset_at")?;
+    let utilization = json_helpers::get_double(window, "utilization")?;
+    let resets_at = json_helpers::get_string(window, &["resets_at"]);
+    let reset_time = parse_reset_time(resets_at.as_deref());
 
-    let used_percent = used_percent.clamp(0.0, 100.0);
-
-    Some(CodexWindow {
-        used_percent,
-        reset_at: from_epoch(reset_at_epoch),
+    Some(ClaudeWindow {
+        used_percent: utilization * 100.0,
+        reset_at: reset_time,
     })
 }
 
-fn from_epoch(epoch: f64) -> DateTime<Local> {
-    let seconds = if epoch > 10_000_000_000.0 {
-        epoch / 1000.0
-    } else {
-        epoch
-    };
-    Utc.timestamp_opt(seconds as i64, 0)
-        .single()
-        .unwrap_or_else(|| Utc.timestamp_opt(0, 0).single().unwrap())
-        .with_timezone(&Local)
+fn parse_reset_time(iso8601: Option<&str>) -> Option<DateTime<Local>> {
+    let s = iso8601?;
+    if s.trim().is_empty() {
+        return None;
+    }
+
+    // Try RFC 3339 / ISO 8601 parsing.
+    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(s) {
+        return Some(dt.with_timezone(&Local));
+    }
+
+    None
 }
 
 // ---------------------------------------------------------------------------
 // Formatting
 // ---------------------------------------------------------------------------
 
-fn format_usage_line(window: &CodexWindow) -> String {
-    let duration = window.reset_at - Local::now();
-    format!(
-        "{}%, {}",
-        format_used_percent(window.used_percent),
-        format_reset_duration(duration)
-    )
+fn format_usage_line(window: &ClaudeWindow) -> String {
+    let percent = format_used_percent(window.used_percent);
+    match window.reset_at {
+        Some(reset) => {
+            let duration = reset - Local::now();
+            format!("{}, {}", percent, format_reset_duration(duration))
+        }
+        None => percent,
+    }
 }
 
 fn format_used_percent(used_percent: f64) -> String {

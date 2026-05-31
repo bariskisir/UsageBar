@@ -2,14 +2,13 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
-use crate::domain::{IUsageProvider, ProviderCredentials, ProviderResult, UsageBlock};
+use crate::domain::{IUsageProvider, ProviderCredentials, ProviderResult, UsageBarWindow, UsageBlock};
 
 /// The result of a full refresh across all providers.
 #[derive(Debug, Clone)]
 pub struct UsageSnapshot {
     pub blocks: Vec<UsageBlock>,
-    pub codex_primary_used_percent: Option<f64>,
-    pub codex_secondary_used_percent: Option<f64>,
+    pub windows: Vec<UsageBarWindow>,
 }
 
 /// Runs all configured providers in parallel with a 45-second aggregate timeout.
@@ -38,26 +37,16 @@ pub async fn refresh_async(
     timeout_handle.abort();
 
     let mut blocks = Vec::new();
-    let mut codex_primary_used_percent: Option<f64> = None;
-    let mut codex_secondary_used_percent: Option<f64> = None;
+    let mut windows = Vec::new();
 
     for result in results {
         if let Some(r) = result {
-            if codex_primary_used_percent.is_none() {
-                codex_primary_used_percent = r.codex_primary_used_percent;
-            }
-            if codex_secondary_used_percent.is_none() {
-                codex_secondary_used_percent = r.codex_secondary_used_percent;
-            }
             blocks.extend(r.blocks);
+            windows.extend(r.windows);
         }
     }
 
-    UsageSnapshot {
-        blocks,
-        codex_primary_used_percent,
-        codex_secondary_used_percent,
-    }
+    UsageSnapshot { blocks, windows }
 }
 
 async fn refresh_provider_async(
