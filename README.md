@@ -2,6 +2,8 @@
 
 UsageBar is a minimal Windows notification-area app for showing LLM or API usage and balance information.
 
+Rust port -> https://github.com/bariskisir/UsageBarRust
+
 ![UsageBar interface](images/interface.png)
 
 ---
