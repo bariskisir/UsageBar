@@ -14,8 +14,7 @@ internal sealed class RefreshCoordinator : IDisposable
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
     private readonly Lock _timerGate = new();
     private Timer? _timer;
-    private double? _previousCodexPrimaryUsedPercent;
-    private double? _previousCodexSecondaryUsedPercent;
+    private IReadOnlyList<UsageBarWindow> _previousWindows = [];
     private bool _stopped;
 
     public RefreshCoordinator(
@@ -71,8 +70,8 @@ internal sealed class RefreshCoordinator : IDisposable
                 _logger).ConfigureAwait(false);
 
             _trayIcon.UpdateTooltip(TooltipFormatter.Format(snapshot.Blocks));
-            _trayIcon.UpdateIcon(snapshot.CodexPrimaryUsedPercent, snapshot.CodexSecondaryUsedPercent);
-            NotifyCodexLimitRefreshes(snapshot);
+            _trayIcon.UpdateIcon(snapshot.Windows);
+            NotifyLimitRefreshes(snapshot.Windows);
         }
         catch (Exception exception)
         {
@@ -87,34 +86,40 @@ internal sealed class RefreshCoordinator : IDisposable
         ScheduleNext(settings.RefreshPeriodMinute, scheduleAnchor);
     }
 
-    private void NotifyCodexLimitRefreshes(UsageSnapshot snapshot)
+    private void NotifyLimitRefreshes(IReadOnlyList<UsageBarWindow> currentWindows)
     {
-        var messages = new List<string>(capacity: 2);
+        var messages = new List<string>(capacity: 4);
 
-        if (IsLimitRefreshed(_previousCodexPrimaryUsedPercent, snapshot.CodexPrimaryUsedPercent))
+        foreach (var current in currentWindows)
         {
-            messages.Add("Codex 5h limit refreshed");
+            var previous = FindWindow(_previousWindows, current.ProviderName, current.WindowLabel);
+            if (IsLimitRefreshed(previous?.UsedPercent, current.UsedPercent))
+            {
+                messages.Add($"{current.ProviderName} {current.WindowLabel} limit refreshed");
+            }
         }
 
-        if (IsLimitRefreshed(_previousCodexSecondaryUsedPercent, snapshot.CodexSecondaryUsedPercent))
-        {
-            messages.Add("Codex 7d limit refreshed");
-        }
-
-        if (snapshot.CodexPrimaryUsedPercent is not null)
-        {
-            _previousCodexPrimaryUsedPercent = snapshot.CodexPrimaryUsedPercent;
-        }
-
-        if (snapshot.CodexSecondaryUsedPercent is not null)
-        {
-            _previousCodexSecondaryUsedPercent = snapshot.CodexSecondaryUsedPercent;
-        }
+        _previousWindows = currentWindows
+            .Select(w => new UsageBarWindow(w.ProviderName, w.WindowLabel, w.UsedPercent))
+            .ToList();
 
         if (messages.Count > 0)
         {
             _trayIcon.ShowNotification("UsageBar", string.Join(Environment.NewLine, messages));
         }
+    }
+
+    private static UsageBarWindow? FindWindow(IReadOnlyList<UsageBarWindow> windows, string provider, string label)
+    {
+        foreach (var w in windows)
+        {
+            if (w.ProviderName == provider && w.WindowLabel == label)
+            {
+                return w;
+            }
+        }
+
+        return null;
     }
 
     private static bool IsLimitRefreshed(double? previousUsedPercent, double? currentUsedPercent)

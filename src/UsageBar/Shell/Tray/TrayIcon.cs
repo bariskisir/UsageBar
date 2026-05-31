@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using UsageBar.Domain;
 
 namespace UsageBar.Shell.Tray;
 
@@ -53,7 +54,7 @@ internal sealed class TrayIcon : IDisposable
             throw new InvalidOperationException("Failed to create tray window.");
         }
 
-        _iconHandle = IconFactory.CreateUsageIcon(null, null);
+        _iconHandle = IconFactory.CreateUsageIcon([]);
         AddIcon(_tooltipText);
     }
 
@@ -82,9 +83,9 @@ internal sealed class TrayIcon : IDisposable
         }
     }
 
-    public void UpdateIcon(double? codexPrimaryUsedPercent, double? codexSecondaryUsedPercent)
+    public void UpdateIcon(IReadOnlyList<UsageBarWindow> windows)
     {
-        var nextIcon = IconFactory.CreateUsageIcon(codexPrimaryUsedPercent, codexSecondaryUsedPercent);
+        var nextIcon = IconFactory.CreateUsageIcon(windows);
         nint previousIcon;
 
         lock (_iconGate)

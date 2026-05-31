@@ -17,8 +17,7 @@ internal static class UsageAggregator
 
         var results = await Task.WhenAll(refreshTasks).ConfigureAwait(false);
         var blocks = new List<UsageBlock>();
-        double? codexPrimaryUsedPercent = null;
-        double? codexSecondaryUsedPercent = null;
+        var windows = new List<UsageBarWindow>();
 
         foreach (var result in results)
         {
@@ -28,11 +27,13 @@ internal static class UsageAggregator
             }
 
             blocks.AddRange(result.Blocks);
-            codexPrimaryUsedPercent ??= result.CodexPrimaryUsedPercent;
-            codexSecondaryUsedPercent ??= result.CodexSecondaryUsedPercent;
+            if (result.Windows is not null)
+            {
+                windows.AddRange(result.Windows);
+            }
         }
 
-        return new UsageSnapshot(blocks, codexPrimaryUsedPercent, codexSecondaryUsedPercent);
+        return new UsageSnapshot(blocks, windows);
     }
 
     private static async Task<ProviderResult?> RefreshProviderAsync(
@@ -55,5 +56,4 @@ internal static class UsageAggregator
 
 internal sealed record UsageSnapshot(
     IReadOnlyList<UsageBlock> Blocks,
-    double? CodexPrimaryUsedPercent,
-    double? CodexSecondaryUsedPercent);
+    IReadOnlyList<UsageBarWindow> Windows);

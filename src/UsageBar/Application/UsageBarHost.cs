@@ -79,6 +79,7 @@ internal sealed class UsageBarHost : IDisposable
         return
         [
             new CodexProvider(httpClient),
+            new ClaudeProvider(httpClient),
             new DeepSeekProvider(httpClient),
             new OpenRouterProvider(httpClient),
             new DeepgramProvider(httpClient)
