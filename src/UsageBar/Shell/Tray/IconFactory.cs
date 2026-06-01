@@ -4,30 +4,76 @@ namespace UsageBar.Shell.Tray;
 
 internal static class IconFactory
 {
-    private const int Size = 32;
-    private const int BorderWidth = 2;
-    private const int ContentWidth = Size - (BorderWidth * 2);
-    private const int ContentTop = BorderWidth;
-    private const int ContentBottom = Size - BorderWidth;
-    private const int ContentHeight = ContentBottom - ContentTop;
+    private const int IconSize = 32;
 
-    // Separator widths in pixels.
+    // CodexBar-style geometry: a 2px transparent margin around a dark plate,
+    // with the bars inset inside it.
+    private const int PlateInset = 2;
+    private const int BarLeft = 4;
+    private const int BarRight = IconSize - 4; // 28
+    private const int BarWidth = BarRight - BarLeft; // 24
+    private const int ContentTop = 6;
+    private const int ContentBottom = IconSize - 6; // 26
+    private const int ContentHeight = ContentBottom - ContentTop; // 20
+
+    // Separator (gap) heights between stacked bars.
     private const int SepSameProvider = 1;
     private const int SepCrossProvider = 2;
 
+    // CodexBar palette.
+    private static readonly (byte R, byte G, byte B) Plate = (60, 60, 70);
+    private static readonly (byte R, byte G, byte B) Track = (80, 80, 90);
+
     /// <summary>
-    /// Create a tray icon from provider usage windows.
-    /// Layout is determined by which windows are present (see BuildBarLayout).
+    /// Usage status level → fill colour. Ported from CodexBar's <c>UsageLevel</c>.
     /// </summary>
-    public static nint CreateUsageIcon(IReadOnlyList<UsageBarWindow> windows)
+    private enum UsageLevel
     {
-        var bars = BuildBarLayout(windows);
+        Low,      // < 50%
+        Medium,   // < 80%
+        High,     // < 95%
+        Critical  // >= 95%
+    }
+
+    private static UsageLevel LevelFromPercent(double percent)
+    {
+        return percent switch
+        {
+            < 50.0 => UsageLevel.Low,
+            < 80.0 => UsageLevel.Medium,
+            < 95.0 => UsageLevel.High,
+            _ => UsageLevel.Critical
+        };
+    }
+
+    private static (byte R, byte G, byte B) LevelColor(UsageLevel level)
+    {
+        return level switch
+        {
+            UsageLevel.Low => (76, 175, 80),      // Green  #4CAF50
+            UsageLevel.Medium => (255, 193, 7),    // Amber  #FFC107
+            UsageLevel.High => (255, 152, 0),      // Orange #FF9800
+            UsageLevel.Critical => (244, 67, 54),  // Red    #F44336
+            _ => (76, 175, 80)
+        };
+    }
+
+    /// <summary>
+    /// Create a tray icon from provider usage windows and plans.
+    /// </summary>
+    public static nint CreateUsageIcon(
+        IReadOnlyList<UsageBarWindow> windows,
+        IReadOnlyList<(string Provider, string Plan)> plans)
+    {
+        var bars = BuildBarLayout(windows, plans);
         return RenderIcon(bars);
     }
 
     private readonly record struct BarSpec(int Y, int Height, double? UsedPercent);
 
-    private static List<BarSpec> BuildBarLayout(IReadOnlyList<UsageBarWindow> windows)
+    private static List<BarSpec> BuildBarLayout(
+        IReadOnlyList<UsageBarWindow> windows,
+        IReadOnlyList<(string Provider, string Plan)> plans)
     {
         var codexWindows = new List<UsageBarWindow>();
         var claudeWindows = new List<UsageBarWindow>();
@@ -40,15 +86,19 @@ internal static class IconFactory
                 claudeWindows.Add(w);
         }
 
-        var codex5h = FindWindow(codexWindows, "5h");
-        var codex7d = FindWindow(codexWindows, "7d");
-        var claude5h = FindWindow(claudeWindows, "5h");
-        var claude7d = FindWindow(claudeWindows, "7d");
+        var codex5h = FindWindow(codexWindows, "Session");
+        var codex7d = FindWindow(codexWindows, "Weekly");
+        var claude5h = FindWindow(claudeWindows, "Session");
+        var claude7d = FindWindow(claudeWindows, "Weekly");
 
         var hasCodex = codexWindows.Count > 0;
         var hasClaude = claudeWindows.Count > 0;
-        var codexIsFree = codex5h is null && codex7d is not null;
-        var codexIsPro = codex5h is not null;
+        var codexPlanIsFree = ProviderPlanIs(plans, "Codex", "Free");
+        var codexFreeWindow = codexPlanIsFree
+            ? codex7d ?? codex5h
+            : codex7d;
+        var codexIsFree = codexFreeWindow is not null && (codexPlanIsFree || codex5h is null);
+        var codexIsPro = codex5h is not null && !codexPlanIsFree;
         var claudeIsSubscriber = claude5h is not null && claude7d is not null;
 
         // Build ordered window list with provider tags for separator logic.
@@ -65,7 +115,7 @@ internal static class IconFactory
         else if (codexIsFree && hasClaude && claudeIsSubscriber)
         {
             // Case 4: Codex free (7d only) + Claude 5h+7d → 50-25-25
-            ordered.Add((codex7d!.UsedPercent, "Codex"));
+            ordered.Add((codexFreeWindow!.UsedPercent, "Codex"));
             ordered.Add((claude5h!.UsedPercent, "Claude"));
             ordered.Add((claude7d!.UsedPercent, "Claude"));
         }
@@ -85,7 +135,7 @@ internal static class IconFactory
         else if (codexIsFree && !hasClaude)
         {
             // Case 1: Codex free (7d only) → full bar
-            ordered.Add((codex7d!.UsedPercent, "Codex"));
+            ordered.Add((codexFreeWindow!.UsedPercent, "Codex"));
         }
         else if (hasCodex && hasClaude)
         {
@@ -102,11 +152,28 @@ internal static class IconFactory
             if (claude7d is not null) ordered.Add((claude7d.UsedPercent, "Claude"));
         }
 
-        // Fallback: empty gray bar.
+        // Fallback: empty bar.
         if (ordered.Count == 0)
             ordered.Add((null, "None"));
 
         return AssignBarPositions(ordered);
+    }
+
+    private static bool ProviderPlanIs(
+        IReadOnlyList<(string Provider, string Plan)> plans,
+        string providerName,
+        string expected)
+    {
+        foreach (var (provider, plan) in plans)
+        {
+            if (string.Equals(provider, providerName, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(plan, expected, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static UsageBarWindow? FindWindow(List<UsageBarWindow> windows, string label)
@@ -120,9 +187,7 @@ internal static class IconFactory
     }
 
     /// <summary>
-    /// Assign pixel positions to ordered bars. Separators are 2 px between
-    /// different providers and 1 px within the same provider. The remaining
-    /// space is divided according to the case-dependent ratio.
+    /// Assign pixel positions to ordered bars with proportional heights.
     /// </summary>
     private static List<BarSpec> AssignBarPositions(
         List<(double? UsedPercent, string Provider)> ordered)
@@ -142,7 +207,7 @@ internal static class IconFactory
         var available = ContentHeight - totalSep;
 
         // Determine height ratio for each bar based on the case.
-        var ratios = GetHeightRatios(ordered);
+        var ratios = GetHeightRatios(n);
         var totalRatio = ratios.Sum();
 
         var y = ContentTop;
@@ -151,7 +216,7 @@ internal static class IconFactory
             var barHeight = (int)Math.Round(available * ratios[i] / totalRatio);
             // Give any rounding remainder to the last bar.
             if (i == n - 1)
-                barHeight = (ContentTop + ContentHeight) - y; // fill to bottom
+                barHeight = ContentBottom - y;
 
             bars.Add(new BarSpec(y, barHeight, ordered[i].UsedPercent));
             y += barHeight;
@@ -168,15 +233,8 @@ internal static class IconFactory
         return bars;
     }
 
-    /// <summary>
-    /// Return the relative height ratios for each bar position.
-    /// The caller divides each by the sum to get the fraction of available space.
-    /// </summary>
-    private static double[] GetHeightRatios(
-        List<(double? UsedPercent, string Provider)> ordered)
+    private static double[] GetHeightRatios(int n)
     {
-        var n = ordered.Count;
-
         return n switch
         {
             1 => [1.0],
@@ -189,133 +247,59 @@ internal static class IconFactory
 
     private static nint RenderIcon(List<BarSpec> bars)
     {
-        var hasAnyUsage = false;
+        var xor = new byte[IconSize * IconSize * 4]; // ARGB
+        var and = new byte[IconSize * IconSize / 8];
+
+        // Dark plate (fills the inset area; gaps between bars read as this colour).
+        for (var y = PlateInset; y < IconSize - PlateInset; y++)
+        {
+            for (var x = PlateInset; x < IconSize - PlateInset; x++)
+            {
+                PutPixelXor(xor, x, y, Plate.R, Plate.G, Plate.B, 255);
+            }
+        }
+
         foreach (var bar in bars)
         {
-            if (bar.UsedPercent is not null)
+            // Track (grey background of the bar).
+            for (var y = bar.Y; y < bar.Y + bar.Height; y++)
             {
-                hasAnyUsage = true;
-                break;
+                for (var x = BarLeft; x < BarRight; x++)
+                {
+                    PutPixelXor(xor, x, y, Track.R, Track.G, Track.B, 255);
+                }
+            }
+
+            // Fill — only when the window has a known percentage.
+            if (bar.UsedPercent is { } pct)
+            {
+                var (r, g, b) = LevelColor(LevelFromPercent(pct));
+                var clamped = Math.Clamp(pct, 0, 100);
+                var fillEnd = (int)Math.Min(BarRight, BarLeft + Math.Round(BarWidth * clamped / 100.0));
+                for (var y = bar.Y; y < bar.Y + bar.Height; y++)
+                {
+                    for (var x = BarLeft; x < fillEnd; x++)
+                    {
+                        PutPixelXor(xor, x, y, r, g, b, 255);
+                    }
+                }
             }
         }
 
-        var xor = new byte[Size * Size * 4];
-        var and = new byte[Size * Size / 8];
-
-        for (var y = 0; y < Size; y++)
-        {
-            for (var x = 0; x < Size; x++)
-            {
-                var index = (y * Size + x) * 4;
-                var isBorder = x < BorderWidth || y < BorderWidth ||
-                               x >= Size - BorderWidth || y >= Size - BorderWidth;
-
-                if (isBorder)
-                {
-                    xor[index] = 245;
-                    xor[index + 1] = 245;
-                    xor[index + 2] = 245;
-                    xor[index + 3] = 255;
-                    continue;
-                }
-
-                // Separator pixel?
-                if (IsSeparatorPixel(y, bars))
-                {
-                    xor[index] = 245;
-                    xor[index + 1] = 245;
-                    xor[index + 2] = 245;
-                    xor[index + 3] = 255;
-                    continue;
-                }
-
-                var bar = FindBar(y, bars);
-                if (bar is null)
-                {
-                    // Background.
-                    xor[index] = 32;
-                    xor[index + 1] = 36;
-                    xor[index + 2] = 41;
-                    xor[index + 3] = 255;
-                    continue;
-                }
-
-                var (r, g, b) = GetAccent(bar.Value.UsedPercent);
-                var filledWidth = GetFilledWidth(bar.Value.UsedPercent, !hasAnyUsage);
-                var isFilled = x < filledWidth;
-
-                xor[index] = isFilled ? b : (byte)32;
-                xor[index + 1] = isFilled ? g : (byte)36;
-                xor[index + 2] = isFilled ? r : (byte)41;
-                xor[index + 3] = 255;
-            }
-        }
-
-        var icon = NativeMethods.CreateIcon(0, Size, Size, 1, 32, and, xor);
+        var icon = NativeMethods.CreateIcon(0, IconSize, IconSize, 1, 32, and, xor);
         if (icon == 0)
             throw new InvalidOperationException("Failed to create tray icon.");
 
         return icon;
     }
 
-    private static bool IsSeparatorPixel(int y, List<BarSpec> bars)
+    /// <summary>Writes one pixel into the BGRA XOR buffer.</summary>
+    private static void PutPixelXor(byte[] xor, int x, int y, byte r, byte g, byte b, byte a)
     {
-        for (var i = 0; i < bars.Count - 1; i++)
-        {
-            var barBottom = bars[i].Y + bars[i].Height;
-            var nextBarTop = bars[i + 1].Y;
-            if (y >= barBottom && y < nextBarTop)
-                return true;
-        }
-        return false;
-    }
-
-    private static BarSpec? FindBar(int y, List<BarSpec> bars)
-    {
-        foreach (var bar in bars)
-        {
-            if (y >= bar.Y && y < bar.Y + bar.Height)
-                return bar;
-        }
-        return null;
-    }
-
-    private static int GetFilledWidth(double? usedPercent, bool fillWhenUnknown)
-    {
-        if (usedPercent is null)
-            return fillWhenUnknown ? Size - BorderWidth : BorderWidth;
-
-        var clamped = Math.Clamp(usedPercent.Value, 0, 100);
-        return BorderWidth + (int)Math.Round(ContentWidth * clamped / 100d);
-    }
-
-    // --- Dynamic color ---
-    //   0% → green  (0,   255, 0)
-    //  50% → yellow (255, 255, 0)
-    // 100% → red    (255, 0,   0)
-    // 0-50: green→yellow (R ramps up), 50-100: yellow→red (G ramps down).
-    private static readonly (byte R, byte G, byte B) Gray = (140, 145, 152);
-
-    private static (byte R, byte G, byte B) GetAccent(double? usedPercent)
-    {
-        if (usedPercent is null)
-            return Gray;
-
-        var pct = Math.Clamp(usedPercent.Value, 0, 100);
-
-        if (pct <= 50.0)
-        {
-            var t = pct / 50.0;                       // 0 → 1
-            return ((byte)Math.Round(255.0 * t),      // R: 0 → 255
-                    (byte)255,                          // G: fixed 255
-                    (byte)0);                           // B: fixed 0
-        }
-        else
-        {
-            var t = (pct - 50.0) / 50.0;               // 0 → 1
-            return ((byte)255,                          // R: fixed 255
-                    (byte)Math.Round(255.0 * (1.0 - t)), // G: 255 → 0
-                    (byte)0);                           // B: fixed 0
-        }
+        var index = (y * IconSize + x) * 4;
+        xor[index] = b;
+        xor[index + 1] = g;
+        xor[index + 2] = r;
+        xor[index + 3] = a;
     }
 }

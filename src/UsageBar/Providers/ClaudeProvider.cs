@@ -21,6 +21,8 @@ internal sealed class ClaudeProvider(HttpClient httpClient) : IUsageProvider
             return null;
         }
 
+        var plan = ClaudePlanLabel(auth.SubscriptionType ?? auth.RateLimitTier);
+
         using var request = new HttpRequestMessage(HttpMethod.Get, UsageEndpoint);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", auth.AccessToken);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
@@ -41,14 +43,14 @@ internal sealed class ClaudeProvider(HttpClient httpClient) : IUsageProvider
 
         if (fiveHour is not null)
         {
-            blocks.Add(new UsageBlock("Claude 5h:", FormatUsageLine(fiveHour.Value), Inline: true));
-            windows.Add(new UsageBarWindow("Claude", "5h", Math.Clamp(fiveHour.Value.UsedPercent, 0, 100)));
+            blocks.Add(new UsageBlock("Claude Session:", FormatUsageLine(fiveHour.Value), Inline: true));
+            windows.Add(new UsageBarWindow("Claude", "Session", Math.Clamp(fiveHour.Value.UsedPercent, 0, 100)));
         }
 
         if (sevenDay is not null)
         {
-            blocks.Add(new UsageBlock("Claude 7d:", FormatUsageLine(sevenDay.Value), Inline: true));
-            windows.Add(new UsageBarWindow("Claude", "7d", Math.Clamp(sevenDay.Value.UsedPercent, 0, 100)));
+            blocks.Add(new UsageBlock("Claude Weekly:", FormatUsageLine(sevenDay.Value), Inline: true));
+            windows.Add(new UsageBarWindow("Claude", "Weekly", Math.Clamp(sevenDay.Value.UsedPercent, 0, 100)));
         }
 
         if (blocks.Count == 0)
@@ -56,7 +58,57 @@ internal sealed class ClaudeProvider(HttpClient httpClient) : IUsageProvider
             throw new InvalidOperationException("Claude response did not contain usable rate limit windows.");
         }
 
-        return new ProviderResult(blocks, windows);
+        return new ProviderResult(blocks, windows, plan);
+    }
+
+    /// <summary>
+    /// Maps a Claude subscription tier to a short plan label shown in the tooltip.
+    /// </summary>
+    private static string? ClaudePlanLabel(string? tier)
+    {
+        if (string.IsNullOrWhiteSpace(tier))
+        {
+            return null;
+        }
+
+        var t = tier.Trim().ToLowerInvariant();
+        if (t.Length == 0)
+        {
+            return null;
+        }
+
+        if (t.Contains("max"))
+        {
+            return "Max";
+        }
+
+        if (t.Contains("pro"))
+        {
+            return "Pro";
+        }
+
+        if (t.Contains("team"))
+        {
+            return "Team";
+        }
+
+        if (t.Contains("enterprise"))
+        {
+            return "Enterprise";
+        }
+
+        if (t.Contains("free"))
+        {
+            return "Free";
+        }
+
+        if (t == "default_claude_ai")
+        {
+            return "Claude AI";
+        }
+
+        // Capitalise first character of an unknown tier id.
+        return char.ToUpperInvariant(t[0]) + t[1..];
     }
 
     private static ClaudeAuth? ReadAuth()
@@ -87,7 +139,10 @@ internal sealed class ClaudeProvider(HttpClient httpClient) : IUsageProvider
             return null;
         }
 
-        return new ClaudeAuth(accessToken);
+        var subscriptionType = ProviderJson.GetString(oauth, "subscriptionType");
+        var rateLimitTier = ProviderJson.GetString(oauth, "rateLimitTier");
+
+        return new ClaudeAuth(accessToken, subscriptionType, rateLimitTier);
     }
 
     private static ClaudeWindow? GetWindow(JsonElement root, string propertyName)
@@ -163,7 +218,7 @@ internal sealed class ClaudeProvider(HttpClient httpClient) : IUsageProvider
         return $"{minutes}m";
     }
 
-    private sealed record ClaudeAuth(string AccessToken);
+    private sealed record ClaudeAuth(string AccessToken, string? SubscriptionType = null, string? RateLimitTier = null);
 
     private readonly record struct ClaudeWindow(double UsedPercent, DateTimeOffset? ResetAt);
 }

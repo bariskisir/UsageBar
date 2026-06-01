@@ -4,7 +4,7 @@ UsageBar is a minimal Windows notification-area app for showing LLM or API usage
 
 Rust port -> https://github.com/bariskisir/UsageBarRust
 
-![UsageBar interface](images/interface.png)
+<img src="images/interface.png" alt="UsageBar interface" width="60%">
 
 ---
 
@@ -31,6 +31,9 @@ C:\Users\USERNAME\AppData\Roaming\UsageBar\settings.json
 ```json
 {
   "refreshPeriodMinute": 5,
+  "useLegacyTooltip": false,
+  "highPercentage": 70,
+  "criticalPercentage": 90,
   "DEEPSEEK_API_KEY": "",
   "OPENROUTER_API_KEY": "",
   "DEEPGRAM_API_KEY": ""

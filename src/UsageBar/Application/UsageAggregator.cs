@@ -11,19 +11,31 @@ internal static class UsageAggregator
         AppLogger logger)
     {
         using var cancellationSource = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+        var providerNames = new List<string>(providers.Count);
         var refreshTasks = providers
-            .Select(provider => RefreshProviderAsync(provider, credentials, logger, cancellationSource.Token))
+            .Select(provider =>
+            {
+                providerNames.Add(provider.Name);
+                return RefreshProviderAsync(provider, credentials, logger, cancellationSource.Token);
+            })
             .ToArray();
 
         var results = await Task.WhenAll(refreshTasks).ConfigureAwait(false);
         var blocks = new List<UsageBlock>();
         var windows = new List<UsageBarWindow>();
+        var plans = new List<(string Provider, string Plan)>();
 
-        foreach (var result in results)
+        for (var i = 0; i < results.Length; i++)
         {
+            var result = results[i];
             if (result is null)
             {
                 continue;
+            }
+
+            if (result.Plan is not null)
+            {
+                plans.Add((providerNames[i], result.Plan));
             }
 
             blocks.AddRange(result.Blocks);
@@ -33,7 +45,7 @@ internal static class UsageAggregator
             }
         }
 
-        return new UsageSnapshot(blocks, windows);
+        return new UsageSnapshot(blocks, windows, plans);
     }
 
     private static async Task<ProviderResult?> RefreshProviderAsync(
@@ -56,4 +68,5 @@ internal static class UsageAggregator
 
 internal sealed record UsageSnapshot(
     IReadOnlyList<UsageBlock> Blocks,
-    IReadOnlyList<UsageBarWindow> Windows);
+    IReadOnlyList<UsageBarWindow> Windows,
+    IReadOnlyList<(string Provider, string Plan)> Plans);

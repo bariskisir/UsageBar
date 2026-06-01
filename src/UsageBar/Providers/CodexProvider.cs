@@ -31,6 +31,8 @@ internal sealed class CodexProvider(HttpClient httpClient) : IUsageProvider
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
 
+        var plan = CodexPlanLabel(ProviderJson.GetString(document.RootElement, "plan_type"));
+
         var rateLimit = GetRateLimit(document.RootElement);
         var primary = GetWindow(rateLimit, "primary_window");
         var secondary = GetWindow(rateLimit, "secondary_window");
@@ -38,12 +40,12 @@ internal sealed class CodexProvider(HttpClient httpClient) : IUsageProvider
         var blocks = new List<UsageBlock>();
         if (primary is not null)
         {
-            blocks.Add(new UsageBlock("Codex 5h:", FormatUsageLine(primary.Value), Inline: true));
+            blocks.Add(new UsageBlock("Codex Session:", FormatUsageLine(primary.Value), Inline: true));
         }
 
         if (secondary is not null)
         {
-            blocks.Add(new UsageBlock("Codex 7d:", FormatUsageLine(secondary.Value), Inline: true));
+            blocks.Add(new UsageBlock("Codex Weekly:", FormatUsageLine(secondary.Value), Inline: true));
         }
 
         if (blocks.Count == 0)
@@ -54,15 +56,52 @@ internal sealed class CodexProvider(HttpClient httpClient) : IUsageProvider
         var windows = new List<UsageBarWindow>();
         if (primary is not null)
         {
-            windows.Add(new UsageBarWindow("Codex", "5h", Math.Clamp(primary.Value.UsedPercent, 0, 100)));
+            windows.Add(new UsageBarWindow("Codex", "Session", Math.Clamp(primary.Value.UsedPercent, 0, 100)));
         }
 
         if (secondary is not null)
         {
-            windows.Add(new UsageBarWindow("Codex", "7d", Math.Clamp(secondary.Value.UsedPercent, 0, 100)));
+            windows.Add(new UsageBarWindow("Codex", "Weekly", Math.Clamp(secondary.Value.UsedPercent, 0, 100)));
         }
 
-        return new ProviderResult(blocks, windows);
+        return new ProviderResult(blocks, windows, plan);
+    }
+
+    /// <summary>
+    /// Maps a Codex <c>plan_type</c> to a short plan/tier label shown in the tooltip.
+    /// </summary>
+    private static string? CodexPlanLabel(string? planType)
+    {
+        if (string.IsNullOrWhiteSpace(planType))
+        {
+            return null;
+        }
+
+        return planType.ToLowerInvariant() switch
+        {
+            "free" => "Free",
+            "plus" => "Plus",
+            "pro" => "Pro",
+            "pro_lite" or "prolite" or "pro-lite" => "Pro Lite",
+            "go" => "Go",
+            "team" => "Team",
+            "business" => "Business",
+            "enterprise" => "Enterprise",
+            "education" or "edu" => "Education",
+            "guest" => "Guest",
+            _ => Capitalize(planType)
+        };
+    }
+
+    /// <summary>Capitalises the first character of <paramref name="s"/>.</summary>
+    private static string Capitalize(string s)
+    {
+        if (s.Length == 0)
+        {
+            return s;
+        }
+
+        return char.ToUpperInvariant(s[0]) + s[1..];
     }
 
     private static CodexAuth? ReadAuth()

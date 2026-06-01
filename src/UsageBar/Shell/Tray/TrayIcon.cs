@@ -1,23 +1,49 @@
 using System.Runtime.InteropServices;
 using UsageBar.Domain;
+using UsageBar.Infrastructure.Configuration;
 
 namespace UsageBar.Shell.Tray;
 
 internal sealed class TrayIcon : IDisposable
 {
     private const uint IconId = 1;
+
+    // ── Command IDs ──────────────────────────────────────
     private const uint RefreshCommandId = 1001;
     private const uint ExitCommandId = 1002;
+
+    private const uint RefreshEveryBase = 2001;
+    private static readonly int[] RefreshEveryValues = [1, 5, 15, 60];
+
+    private const uint HighLevelBase = 3001;
+    private const uint CriticalLevelBase = 4001;
+    private static readonly int[] LevelValues = [10, 20, 30, 40, 50, 60, 70, 80, 90];
+
     private readonly NativeMethods.WndProc _wndProc;
     private readonly nint _instance;
     private readonly nint _windowHandle;
     private readonly Lock _iconGate = new();
+    private readonly WebViewTooltip? _tooltip;
+    private readonly bool _useLegacyTooltip;
     private string _tooltipText = "UsageBar\nLoading...";
     private nint _iconHandle;
     private bool _disposed;
 
-    public TrayIcon()
+    /// <summary>The hidden tray message-loop window handle.</summary>
+    public nint Hwnd => _windowHandle;
+
+    /// <summary>
+    /// Static reference so the window proc (UI thread) can read/write settings
+    /// without async.
+    /// </summary>
+    private static SettingsService? s_settingsService;
+
+    public TrayIcon(WebViewTooltip? tooltip = null, SettingsService? settingsService = null)
     {
+        s_settingsService = settingsService;
+        _tooltip = tooltip;
+        _useLegacyTooltip = tooltip is null || tooltip.UseLegacyTooltip;
+
         _wndProc = WindowProc;
         _instance = NativeMethods.GetModuleHandle(null);
         var className = $"UsageBarTrayWindow-{Guid.NewGuid():N}";
@@ -54,7 +80,7 @@ internal sealed class TrayIcon : IDisposable
             throw new InvalidOperationException("Failed to create tray window.");
         }
 
-        _iconHandle = IconFactory.CreateUsageIcon([]);
+        _iconHandle = IconFactory.CreateUsageIcon([], []);
         AddIcon(_tooltipText);
     }
 
@@ -73,6 +99,12 @@ internal sealed class TrayIcon : IDisposable
 
     public void UpdateTooltip(string tooltip)
     {
+        if (!_useLegacyTooltip)
+        {
+            _tooltipText = tooltip;
+            return;
+        }
+
         lock (_iconGate)
         {
             var data = CreateNotifyIconData();
@@ -83,9 +115,22 @@ internal sealed class TrayIcon : IDisposable
         }
     }
 
-    public void UpdateIcon(IReadOnlyList<UsageBarWindow> windows)
+    /// <summary>
+    /// Pushes tooltip cards to the WebView2 popup. No-op in legacy mode.
+    /// </summary>
+    public void UpdateCards(IReadOnlyList<TooltipCard> cards)
     {
-        var nextIcon = IconFactory.CreateUsageIcon(windows);
+        if (_useLegacyTooltip || _tooltip is null)
+        {
+            return;
+        }
+
+        _tooltip.SetContent(cards);
+    }
+
+    public void UpdateIcon(IReadOnlyList<UsageBarWindow> windows, IReadOnlyList<(string Provider, string Plan)> plans)
+    {
+        var nextIcon = IconFactory.CreateUsageIcon(windows, plans);
         nint previousIcon;
 
         lock (_iconGate)
@@ -105,13 +150,13 @@ internal sealed class TrayIcon : IDisposable
         }
     }
 
-    public void ShowNotification(string title, string message)
+    public void ShowNotification(string message)
     {
         lock (_iconGate)
         {
             var data = CreateNotifyIconData();
             data.uFlags = NativeMethods.NifInfo;
-            data.szInfoTitle = LimitBalloonTitle(title);
+            data.szInfoTitle = "Usage Bar";
             data.szInfo = LimitBalloonText(message);
             data.dwInfoFlags = NativeMethods.NiifInfo;
             NativeMethods.ShellNotifyIcon(NativeMethods.NimModify, ref data);
@@ -123,7 +168,14 @@ internal sealed class TrayIcon : IDisposable
         switch (message)
         {
             case NativeMethods.CallbackMessage:
-                HandleTrayCallback(lParam);
+                HandleTrayCallback(lParam, wParam);
+                return 0;
+
+            case NativeMethods.WmRunDelegate:
+                if (SynchronizationContext.Current is TrayUiSyncContext ctx)
+                {
+                    ctx.Drain();
+                }
                 return 0;
 
             case NativeMethods.WmDestroy:
@@ -134,13 +186,67 @@ internal sealed class TrayIcon : IDisposable
         return NativeMethods.DefWindowProc(hWnd, message, wParam, lParam);
     }
 
-    private void HandleTrayCallback(nint lParam)
+    private void HandleTrayCallback(nint lParam, nint wParam)
     {
-        var mouseMessage = (uint)(lParam.ToInt64() & 0xffff);
-        if (mouseMessage is NativeMethods.WmRButtonUp or NativeMethods.WmContextMenu)
+        var eventId = (uint)(lParam.ToInt64() & 0xffff);
+
+        switch (eventId)
         {
-            ShowContextMenu();
+            case NativeMethods.WmRButtonUp:
+            case NativeMethods.WmContextMenu:
+                ShowContextMenu();
+                break;
+
+            case NativeMethods.NinPopupOpen:
+                if (_tooltip is not null)
+                {
+                    var rect = TryGetIconRect();
+                    var (x, y) = HoverAnchor(wParam);
+                    _tooltip.ShowNearIcon(rect, x, y);
+                }
+                break;
+
+            case NativeMethods.NinPopupClose:
+                _tooltip?.Hide();
+                break;
         }
+    }
+
+    private static (int x, int y) HoverAnchor(nint wParam)
+    {
+        var raw = wParam.ToInt64();
+        var x = (short)(raw & 0xffff);
+        var y = (short)((raw >> 16) & 0xffff);
+        if (x != 0 || y != 0)
+        {
+            return (x, y);
+        }
+
+        if (NativeMethods.GetCursorPos(out var point))
+        {
+            return (point.X, point.Y);
+        }
+
+        return (0, 0);
+    }
+
+    private NativeMethods.Rect? TryGetIconRect()
+    {
+        var identifier = new NativeMethods.NotifyIconIdentifier
+        {
+            cbSize = (uint)Marshal.SizeOf<NativeMethods.NotifyIconIdentifier>(),
+            hWnd = _windowHandle,
+            uID = IconId,
+            guidItem = Guid.Empty
+        };
+
+        var hr = NativeMethods.Shell_NotifyIconGetRect(ref identifier, out var rect);
+        if (hr == 0 && rect.Right > rect.Left && rect.Bottom > rect.Top)
+        {
+            return rect;
+        }
+
+        return null;
     }
 
     private void ShowContextMenu()
@@ -158,6 +264,35 @@ internal sealed class TrayIcon : IDisposable
 
         try
         {
+            var settings = ReadCurrentSettings();
+
+            // ── Refresh every submenu ──
+            var refreshEveryMenu = SubmenuWithCheckedInt(
+                RefreshEveryBase,
+                RefreshEveryValues,
+                settings.RefreshPeriodMinute,
+                v => $"{v} min");
+            NativeMethods.AppendMenu(menu, NativeMethods.MfPopup, (nuint)refreshEveryMenu, "Refresh every");
+
+            // ── High Level submenu ──
+            var highMenu = SubmenuWithCheckedInt(
+                HighLevelBase,
+                LevelValues,
+                (int)settings.HighPercentage,
+                v => $"{v}%");
+            NativeMethods.AppendMenu(menu, NativeMethods.MfPopup, (nuint)highMenu, "High Level");
+
+            // ── Critical Level submenu ──
+            var criticalMenu = SubmenuWithCheckedInt(
+                CriticalLevelBase,
+                LevelValues,
+                (int)settings.CriticalPercentage,
+                v => $"{v}%");
+            NativeMethods.AppendMenu(menu, NativeMethods.MfPopup, (nuint)criticalMenu, "Critical Level");
+
+            // ── Separator ──
+            NativeMethods.AppendMenu(menu, NativeMethods.MfSeparator, 0, null!);
+
             NativeMethods.AppendMenu(menu, NativeMethods.MfString, RefreshCommandId, "Refresh");
             NativeMethods.AppendMenu(menu, NativeMethods.MfString, ExitCommandId, "Exit");
             NativeMethods.SetForegroundWindow(_windowHandle);
@@ -196,13 +331,81 @@ internal sealed class TrayIcon : IDisposable
                 Dispose();
                 NativeMethods.PostQuitMessage(0);
                 break;
+
+            // ── Refresh period ──
+            case >= RefreshEveryBase and < RefreshEveryBase + 4:
+            {
+                var idx = (int)(commandId - RefreshEveryBase);
+                var s = ReadCurrentSettings() with { RefreshPeriodMinute = RefreshEveryValues[idx] };
+                ApplySettings(s);
+                break;
+            }
+
+            // ── High level threshold ──
+            case >= HighLevelBase and < HighLevelBase + 9:
+            {
+                var idx = (int)(commandId - HighLevelBase);
+                var s = ReadCurrentSettings() with { HighPercentage = LevelValues[idx] };
+                ApplySettings(s);
+                break;
+            }
+
+            // ── Critical level threshold ──
+            case >= CriticalLevelBase and < CriticalLevelBase + 9:
+            {
+                var idx = (int)(commandId - CriticalLevelBase);
+                var s = ReadCurrentSettings() with { CriticalPercentage = LevelValues[idx] };
+                ApplySettings(s);
+                break;
+            }
         }
+    }
+
+    private static AppSettings ReadCurrentSettings()
+    {
+        if (s_settingsService is not null)
+        {
+            return s_settingsService.ReadSync();
+        }
+
+        return AppSettings.Default;
+    }
+
+    private void ApplySettings(AppSettings settings)
+    {
+        s_settingsService?.WriteSync(settings);
+        RefreshRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    private static nint SubmenuWithCheckedInt(uint baseId, int[] values, int selected, Func<int, string> labelFor)
+    {
+        var hMenu = NativeMethods.CreatePopupMenu();
+        if (hMenu == 0)
+        {
+            return 0;
+        }
+
+        for (var i = 0; i < values.Length; i++)
+        {
+            var id = (nuint)(baseId + (uint)i);
+            var flags = values[i] == selected
+                ? NativeMethods.MfString | NativeMethods.MfChecked
+                : NativeMethods.MfString;
+            NativeMethods.AppendMenu(hMenu, flags, id, labelFor(values[i]));
+        }
+
+        return hMenu;
     }
 
     private void AddIcon(string tooltip)
     {
         var data = CreateNotifyIconData();
-        data.uFlags = NativeMethods.NifMessage | NativeMethods.NifIcon | NativeMethods.NifTip | NativeMethods.NifShowTip;
+        data.uFlags = NativeMethods.NifMessage | NativeMethods.NifIcon | NativeMethods.NifTip;
+        if (_useLegacyTooltip)
+        {
+            data.uFlags |= NativeMethods.NifShowTip;
+        }
+
         data.uCallbackMessage = NativeMethods.CallbackMessage;
         data.hIcon = _iconHandle;
         data.szTip = LimitTooltip(tooltip);
@@ -210,6 +413,14 @@ internal sealed class TrayIcon : IDisposable
         if (!NativeMethods.ShellNotifyIcon(NativeMethods.NimAdd, ref data))
         {
             throw new InvalidOperationException("Failed to add tray icon.");
+        }
+
+        // Request version 4 so the shell sends NIN_POPUPOPEN / NIN_POPUPCLOSE.
+        if (!_useLegacyTooltip)
+        {
+            data.uFlags = 0;
+            data.uTimeoutOrVersion = NativeMethods.NotifyIconVersion4;
+            NativeMethods.ShellNotifyIcon(NativeMethods.NimSetVersion, ref data);
         }
     }
 
@@ -229,11 +440,6 @@ internal sealed class TrayIcon : IDisposable
     private static string LimitTooltip(string tooltip)
     {
         return tooltip.Length <= 127 ? tooltip : tooltip[..127];
-    }
-
-    private static string LimitBalloonTitle(string title)
-    {
-        return title.Length <= 63 ? title : title[..63];
     }
 
     private static string LimitBalloonText(string text)

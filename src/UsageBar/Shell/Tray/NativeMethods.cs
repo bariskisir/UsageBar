@@ -10,6 +10,45 @@ internal static class NativeMethods
     public const int WmRButtonUp = 0x0205;
     public const int WmNull = 0x0000;
 
+    // ── Window styles ───────────────────────────────────────
+    public const uint WS_POPUP = 0x80000000;
+    public const uint WS_EX_TOOLWINDOW = 0x00000080;
+    public const uint WS_EX_TOPMOST = 0x00000008;
+    public const uint WS_EX_NOACTIVATE = 0x08000000;
+
+    // ── SetWindowPos ────────────────────────────────────────
+    public static readonly nint HWND_TOPMOST = -1;
+    public const uint SWP_NOSIZE = 0x0001;
+    public const uint SWP_NOMOVE = 0x0002;
+    public const uint SWP_NOZORDER = 0x0004;
+    public const uint SWP_NOACTIVATE = 0x0010;
+
+    // ── ShowWindow ──────────────────────────────────────────
+    public const int SW_HIDE = 0;
+    public const int SW_SHOWNOACTIVATE = 4;
+
+    // ── SystemParametersInfo ────────────────────────────────
+    public const uint SPI_GETWORKAREA = 0x0030;
+
+    // ── Tray version 4 + popup events (requires NOTIFYICON_VERSION_4) ─
+    public const uint NimSetVersion = 0x00000004;
+    public const uint NotifyIconVersion4 = 4;
+    public const uint NinPopupOpen = 0x0406;
+    public const uint NinPopupClose = 0x0407;
+
+    // ── Custom messages ─────────────────────────────────────
+    public const uint WM_APP = 0x8000;
+    public const uint WmTooltipSetData = WM_APP + 3;   // re-render trigger
+    public const uint WmRunDelegate = WM_APP + 4;      // pump SynchronizationContext
+
+    // ── Menu flags ──────────────────────────────────────────
+    public const uint MfString = 0x00000000;
+    public const uint MfChecked = 0x00000008;
+    public const uint MfPopup = 0x00000010;
+    public const uint MfSeparator = 0x00000800;
+    public const uint TpmRightButton = 0x0002;
+    public const uint TpmReturnCmd = 0x0100;
+
     public const uint NifMessage = 0x00000001;
     public const uint NifIcon = 0x00000002;
     public const uint NifTip = 0x00000004;
@@ -20,9 +59,6 @@ internal static class NativeMethods
     public const uint NimAdd = 0x00000000;
     public const uint NimModify = 0x00000001;
     public const uint NimDelete = 0x00000002;
-    public const uint MfString = 0x00000000;
-    public const uint TpmRightButton = 0x0002;
-    public const uint TpmReturnCmd = 0x0100;
 
     public delegate nint WndProc(nint hWnd, uint message, nint wParam, nint lParam);
 
@@ -73,10 +109,28 @@ internal static class NativeMethods
     }
 
     [StructLayout(LayoutKind.Sequential)]
+    public struct NotifyIconIdentifier
+    {
+        public uint cbSize;
+        public nint hWnd;
+        public uint uID;
+        public Guid guidItem;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
     public struct Point
     {
         public int X;
         public int Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct Rect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -136,6 +190,19 @@ internal static class NativeMethods
     [DllImport("user32.dll")]
     public static extern bool SetForegroundWindow(nint hWnd);
 
+    [DllImport("user32.dll")]
+    public static extern uint GetDpiForWindow(nint hWnd);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool SetWindowPos(
+        nint hWnd, nint hWndInsertAfter, int x, int y, int cx, int cy, uint uFlags);
+
+    [DllImport("user32.dll")]
+    public static extern bool ShowWindow(nint hWnd, int nCmdShow);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool SystemParametersInfo(uint uiAction, uint uiParam, ref Rect pvParam, uint fWinIni);
+
     [DllImport("user32.dll", SetLastError = true)]
     public static extern nint CreatePopupMenu();
 
@@ -154,9 +221,18 @@ internal static class NativeMethods
     [DllImport("user32.dll", SetLastError = true)]
     public static extern bool DestroyIcon(nint hIcon);
 
-    [DllImport("kernel32.dll", EntryPoint = "GetModuleHandleW", SetLastError = true, CharSet = CharSet.Unicode)]
-    public static extern nint GetModuleHandle(string? lpModuleName);
+    [DllImport("gdi32.dll")]
+    public static extern nint CreateRoundRectRgn(int x1, int y1, int x2, int y2, int w, int h);
+
+    [DllImport("user32.dll")]
+    public static extern int SetWindowRgn(nint hWnd, nint hRgn, bool bRedraw);
 
     [DllImport("shell32.dll", EntryPoint = "Shell_NotifyIconW", SetLastError = true, CharSet = CharSet.Unicode)]
     public static extern bool ShellNotifyIcon(uint dwMessage, ref NotifyIconData lpData);
+
+    [DllImport("shell32.dll", EntryPoint = "Shell_NotifyIconGetRect")]
+    public static extern int Shell_NotifyIconGetRect(ref NotifyIconIdentifier identifier, out Rect iconLocation);
+
+    [DllImport("kernel32.dll", EntryPoint = "GetModuleHandleW", SetLastError = true, CharSet = CharSet.Unicode)]
+    public static extern nint GetModuleHandle(string? lpModuleName);
 }

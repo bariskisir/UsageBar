@@ -14,7 +14,8 @@ internal sealed record ProviderCredentials(
 
 internal sealed record ProviderResult(
     IReadOnlyList<UsageBlock> Blocks,
-    IReadOnlyList<UsageBarWindow> Windows = null!)
+    IReadOnlyList<UsageBarWindow> Windows = null!,
+    string? Plan = null)
 {
     public static ProviderResult FromLegacy(
         IReadOnlyList<UsageBlock> blocks,
