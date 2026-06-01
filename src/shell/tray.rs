@@ -1,21 +1,41 @@
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 
-use crate::domain::UsageBarWindow;
+use crate::domain::{UsageBarWindow, UsageBlock};
 use crate::shell::native::{
-    AppendMenuW, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyIcon, DestroyMenu,
-    DestroyWindow, DispatchMessageW, GetCursorPos, GetMessageW, GetModuleHandleW, Hicon, Hmenu,
-    Hwnd, Msg, NotifyIconDataW, Point, PostMessageW, PostQuitMessage, RegisterClassExW,
-    SetForegroundWindow, Shell_NotifyIconW, TrackPopupMenuEx, TranslateMessage, WndClassExW,
-    MF_STRING, NIF_ICON, NIF_INFO, NIF_MESSAGE, NIF_SHOWTIP, NIF_TIP, NIIF_INFO, NIM_ADD,
-    NIM_DELETE, NIM_MODIFY, TPM_RETURNCMD, TPM_RIGHTBUTTON, WM_APP, WM_CONTEXTMENU, WM_DESTROY,
-    WM_NULL, WM_RBUTTONUP,
+    AppendMenuW, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyIcon,
+    DestroyMenu, DestroyWindow, DispatchMessageW, GetCursorPos, GetMessageW, GetModuleHandleW,
+    Hicon, Hmenu, Hwnd, Msg, NotifyIconDataW, NotifyIconIdentifier, Point, PostMessageW,
+    PostQuitMessage, Rect, RegisterClassExW, SetForegroundWindow, Shell_NotifyIconGetRect,
+    Shell_NotifyIconW, TrackPopupMenuEx, TranslateMessage, WndClassExW,
+    MF_CHECKED, MF_POPUP, MF_STRING, NIF_ICON, NIF_INFO, NIF_MESSAGE, NIF_SHOWTIP,
+    NIF_TIP, NIIF_INFO, NIM_ADD, NIM_DELETE, NIM_MODIFY, NIM_SETVERSION, NIN_POPUPCLOSE,
+    NIN_POPUPOPEN, NOTIFYICON_VERSION_4, TPM_RETURNCMD, TPM_RIGHTBUTTON, WM_APP, WM_CONTEXTMENU,
+    WM_DESTROY, WM_NULL, WM_RBUTTONUP,
 };
 
 const ICON_ID: u32 = 1;
-const REFRESH_COMMAND_ID: usize = 1001;
-const EXIT_COMMAND_ID: usize = 1002;
 const CALLBACK_MESSAGE: u32 = WM_APP + 1;
+
+// Right-click context menu command IDs.
+const REFRESH_NOW_ID: u32 = 1001;
+const EXIT_ID: u32 = 1002;
+
+// "Refresh every" submenu: 2001–2004.
+const REFRESH_EVERY_BASE: u32 = 2001;
+const REFRESH_EVERY_VALUES: &[i32] = &[1, 5, 15, 60];
+
+// "High Level" submenu: 3001–3009.
+const HIGH_LEVEL_BASE: u32 = 3001;
+// "Critical Level" submenu: 4001–4009.
+const CRITICAL_LEVEL_BASE: u32 = 4001;
+const LEVEL_VALUES: &[i32] = &[10, 20, 30, 40, 50, 60, 70, 80, 90];
+
+// Settings service is placed here so the window proc can read/write settings
+// synchronously when menu items are selected.
+static SETTINGS_SVC: std::sync::OnceLock<
+    std::sync::Mutex<Option<Arc<crate::infrastructure::settings::SettingsService>>>,
+> = std::sync::OnceLock::new();
 
 // ---------------------------------------------------------------------------
 // Static channel — the Win32 window proc pushes events through this sender.
@@ -41,6 +61,9 @@ pub enum TrayEvent {
 pub struct TrayIcon {
     window_handle: Hwnd,
     icon_handle: Mutex<Hicon>,
+    /// When `true`, the native Win32 tooltip is used; otherwise usage is shown
+    /// in the custom [`crate::shell::webview_tooltip`] popup.
+    use_legacy_tooltip: bool,
 }
 
 // SAFETY: Win32 handles (HWND, HICON) are safe to send and share between
@@ -51,7 +74,14 @@ unsafe impl Sync for TrayIcon {}
 impl TrayIcon {
     /// Creates the hidden window, registers the tray icon, and returns both the
     /// `TrayIcon` and the receiver for tray events.
-    pub fn new() -> anyhow::Result<(Self, mpsc::UnboundedReceiver<TrayEvent>)> {
+    ///
+    /// When `use_legacy_tooltip` is `false`, the custom tooltip window is
+    /// initialised and the tray icon is switched to `NOTIFYICON_VERSION_4` so
+    /// the shell delivers `NIN_POPUPOPEN` / `NIN_POPUPCLOSE` hover events.
+    pub fn new(
+        use_legacy_tooltip: bool,
+        settings_svc: Arc<crate::infrastructure::settings::SettingsService>,
+    ) -> anyhow::Result<(Self, mpsc::UnboundedReceiver<TrayEvent>)> {
         let (tx, rx) = mpsc::unbounded_channel();
         EVENT_TX
             .set(Mutex::new(Some(tx)))
@@ -118,17 +148,33 @@ impl TrayIcon {
             );
         }
 
+        // In custom-tooltip mode, create the WebView popup before registering
+        // the icon so it is ready by the time the first hover arrives. If
+        // WebView2 is unavailable, fall back to the native tooltip.
+        let mut effective_legacy = use_legacy_tooltip;
+        if !effective_legacy {
+            if let Err(_err) = crate::shell::webview_tooltip::init() {
+                effective_legacy = true;
+            }
+        }
+
         let icon_handle = Mutex::new(crate::shell::icon::create_usage_icon(&[])?);
         add_icon(
             window_handle,
             *icon_handle.lock().unwrap(),
             "UsageBarRust\nLoading...",
+            effective_legacy,
         )?;
+
+        // Make the settings service available from the window proc (the proc
+        // runs on the main thread, so it can read/write synchronously).
+        let _ = SETTINGS_SVC.set(Mutex::new(Some(Arc::clone(&settings_svc))));
 
         Ok((
             Self {
                 window_handle,
                 icon_handle,
+                use_legacy_tooltip: effective_legacy,
             },
             rx,
         ))
@@ -150,8 +196,28 @@ impl TrayIcon {
         }
     }
 
-    /// Updates the tooltip text (thread-safe, truncates to 127 chars).
-    pub fn update_tooltip(&self, tooltip: &str) {
+    /// Updates the tooltip from the current usage snapshot.
+    ///
+    /// In legacy mode this writes the native, 127-character-capped
+    /// `NOTIFYICONDATA.szTip`. Otherwise it feeds the custom tooltip window,
+    /// which has no length limit.
+    pub fn update_tooltip(
+        &self,
+        blocks: &[UsageBlock],
+        windows: &[UsageBarWindow],
+        plans: &[(String, String)],
+    ) {
+        if self.use_legacy_tooltip {
+            let text = crate::application::tooltip::format(blocks);
+            self.set_native_tip(&text);
+        } else {
+            let cards = crate::application::tooltip::build_cards(blocks, windows, plans);
+            crate::shell::webview_tooltip::set_content(cards);
+        }
+    }
+
+    /// Writes the native Win32 tray tooltip (thread-safe, truncates to 127 chars).
+    fn set_native_tip(&self, tooltip: &str) {
         let limited = limit_tooltip(tooltip);
         let mut data = notify_icon_data(self.window_handle);
         data.uFlags = NIF_TIP | NIF_SHOWTIP;
@@ -242,9 +308,22 @@ impl Drop for TrayIcon {
 
 extern "system" fn window_proc(hwnd: Hwnd, msg: u32, wparam: usize, lparam: isize) -> isize {
     if msg == CALLBACK_MESSAGE {
-        let mouse_msg = (lparam as u64 & 0xffff) as u32;
-        if mouse_msg == WM_RBUTTONUP || mouse_msg == WM_CONTEXTMENU {
-            let _ = show_context_menu(hwnd);
+        // With NOTIFYICON_VERSION_4 the notification event id is in the low
+        // word of lParam; this is also true for the legacy mouse-message form.
+        let event = (lparam as u64 & 0xffff) as u32;
+        match event {
+            WM_RBUTTONUP | WM_CONTEXTMENU => {
+                let _ = show_context_menu(hwnd);
+            }
+            NIN_POPUPOPEN => {
+                let rect = icon_rect(hwnd);
+                let (x, y) = hover_anchor(wparam);
+                crate::shell::webview_tooltip::show_near_icon(rect, x, y);
+            }
+            NIN_POPUPCLOSE => {
+                crate::shell::webview_tooltip::hide();
+            }
+            _ => {}
         }
         return 0;
     }
@@ -259,8 +338,7 @@ extern "system" fn window_proc(hwnd: Hwnd, msg: u32, wparam: usize, lparam: isiz
 
 fn show_context_menu(hwnd: Hwnd) -> anyhow::Result<()> {
     let mut point = Point { x: 0, y: 0 };
-    let got_pos = unsafe { GetCursorPos(&mut point) };
-    if got_pos == 0 {
+    if unsafe { GetCursorPos(&mut point) } == 0 {
         return Ok(());
     }
 
@@ -269,13 +347,56 @@ fn show_context_menu(hwnd: Hwnd) -> anyhow::Result<()> {
         return Ok(());
     }
 
+    // Read current settings so we can check the active items.
+    let settings = current_settings();
+
     let result = (|| -> anyhow::Result<i32> {
+        // ── "Refresh every" submenu ────────────────────────────────────
+        let sub_refresh = submenu_with_checked_int(
+            REFRESH_EVERY_BASE,
+            REFRESH_EVERY_VALUES,
+            settings.refresh_period_minute,
+            |v| format!("{} min", v),
+        );
+
+        let label: Vec<u16> = "Refresh every\0".encode_utf16().collect();
+        unsafe {
+            AppendMenuW(menu, MF_POPUP, sub_refresh.0 as usize, label.as_ptr());
+        }
+
+        // ── "High Level" submenu ───────────────────────────────────────
+        let sub_high = submenu_with_checked_int(
+            HIGH_LEVEL_BASE,
+            LEVEL_VALUES,
+            settings.high_percentage.round() as i32,
+            |v| format!("{}%", v),
+        );
+        let label_h: Vec<u16> = "High Level\0".encode_utf16().collect();
+        unsafe {
+            AppendMenuW(menu, MF_POPUP, sub_high.0 as usize, label_h.as_ptr());
+        }
+
+        // ── "Critical Level" submenu ───────────────────────────────────
+        let sub_critical = submenu_with_checked_int(
+            CRITICAL_LEVEL_BASE,
+            LEVEL_VALUES,
+            settings.critical_percentage.round() as i32,
+            |v| format!("{}%", v),
+        );
+        let label_c: Vec<u16> = "Critical Level\0".encode_utf16().collect();
+        unsafe {
+            AppendMenuW(menu, MF_POPUP, sub_critical.0 as usize, label_c.as_ptr());
+        }
+
+        // ── Separator, Refresh, Exit ───────────────────────────────────
+        let sep: Vec<u16> = "────────\0".encode_utf16().collect();
         let refresh_label: Vec<u16> = "Refresh\0".encode_utf16().collect();
         let exit_label: Vec<u16> = "Exit\0".encode_utf16().collect();
 
         unsafe {
-            AppendMenuW(menu, MF_STRING, REFRESH_COMMAND_ID, refresh_label.as_ptr());
-            AppendMenuW(menu, MF_STRING, EXIT_COMMAND_ID, exit_label.as_ptr());
+            AppendMenuW(menu, MF_STRING | 0x800, 0, sep.as_ptr()); // MF_SEPARATOR = 0x800
+            AppendMenuW(menu, MF_STRING, REFRESH_NOW_ID as usize, refresh_label.as_ptr());
+            AppendMenuW(menu, MF_STRING, EXIT_ID as usize, exit_label.as_ptr());
             SetForegroundWindow(hwnd);
 
             let cmd = TrackPopupMenuEx(
@@ -287,34 +408,104 @@ fn show_context_menu(hwnd: Hwnd) -> anyhow::Result<()> {
                 std::ptr::null(),
             );
 
-            // Post a benign message so the menu dismissal is processed.
             PostMessageW(hwnd, WM_NULL, 0, 0);
             Ok(cmd)
         }
     })();
 
+    // Submenus are destroyed together with the parent menu.
     unsafe {
         DestroyMenu(menu);
     }
 
     if let Ok(cmd) = result {
         if cmd != 0 {
-            match cmd as usize {
-                REFRESH_COMMAND_ID => {
-                    send_event(TrayEvent::Refresh);
-                }
-                EXIT_COMMAND_ID => {
-                    send_event(TrayEvent::Exit);
-                    // PostQuitMessage MUST be called from the thread that
-                    // owns the message loop (this thread, inside window_proc).
-                    unsafe { PostQuitMessage(0) };
-                }
-                _ => {}
-            }
+            handle_menu_command(cmd as u32);
         }
     }
 
     Ok(())
+}
+
+/// Reads the current `AppSettings` synchronously (this is the UI thread).
+fn current_settings() -> crate::infrastructure::settings::AppSettings {
+    SETTINGS_SVC
+        .get()
+        .and_then(|lock| lock.lock().ok())
+        .and_then(|guard| guard.as_ref().map(|svc| svc.read_sync()))
+        .unwrap_or_default()
+}
+
+/// Writes updated settings synchronously and fires a refresh event so the
+/// coordinator wakes up with the new period.
+fn apply_settings(settings: &crate::infrastructure::settings::AppSettings) {
+    if let Some(lock) = SETTINGS_SVC.get() {
+        if let Ok(guard) = lock.lock() {
+            if let Some(svc) = guard.as_ref() {
+                let _ = svc.write_sync(settings);
+            }
+        }
+    }
+    send_event(TrayEvent::Refresh);
+}
+
+/// Routes a menu command id to the appropriate action.
+fn handle_menu_command(cmd: u32) {
+    match cmd {
+        REFRESH_NOW_ID => {
+            send_event(TrayEvent::Refresh);
+        }
+        EXIT_ID => {
+            send_event(TrayEvent::Exit);
+            unsafe { PostQuitMessage(0) };
+        }
+        id if id >= REFRESH_EVERY_BASE && id < REFRESH_EVERY_BASE + REFRESH_EVERY_VALUES.len() as u32 => {
+            let idx = (id - REFRESH_EVERY_BASE) as usize;
+            let mut s = current_settings();
+            s.refresh_period_minute = REFRESH_EVERY_VALUES[idx];
+            apply_settings(&s);
+        }
+        id if id >= HIGH_LEVEL_BASE && id < HIGH_LEVEL_BASE + LEVEL_VALUES.len() as u32 => {
+            let idx = (id - HIGH_LEVEL_BASE) as usize;
+            let mut s = current_settings();
+            s.high_percentage = LEVEL_VALUES[idx] as f64;
+            apply_settings(&s);
+        }
+        id if id >= CRITICAL_LEVEL_BASE && id < CRITICAL_LEVEL_BASE + LEVEL_VALUES.len() as u32 => {
+            let idx = (id - CRITICAL_LEVEL_BASE) as usize;
+            let mut s = current_settings();
+            s.critical_percentage = LEVEL_VALUES[idx] as f64;
+            apply_settings(&s);
+        }
+        _ => {}
+    }
+}
+
+/// Builds a submenu with integer-option items. The one matching `selected`
+/// gets a check-mark.
+fn submenu_with_checked_int(
+    base_id: u32,
+    values: &[i32],
+    selected: i32,
+    label_for: impl Fn(i32) -> String,
+) -> Hmenu {
+    let hmenu = unsafe { CreatePopupMenu() };
+    if hmenu.0 == 0 {
+        return hmenu;
+    }
+    for (i, &v) in values.iter().enumerate() {
+        let id = (base_id + i as u32) as usize;
+        let text: Vec<u16> = format!("{}\0", label_for(v)).encode_utf16().collect();
+        let flags = if v == selected {
+            MF_STRING | MF_CHECKED
+        } else {
+            MF_STRING
+        };
+        unsafe {
+            AppendMenuW(hmenu, flags, id, text.as_ptr());
+        }
+    }
+    hmenu
 }
 
 fn send_event(event: TrayEvent) {
@@ -350,9 +541,16 @@ fn notify_icon_data(hwnd: Hwnd) -> NotifyIconDataW {
     }
 }
 
-fn add_icon(hwnd: Hwnd, icon: Hicon, tooltip: &str) -> anyhow::Result<()> {
+fn add_icon(hwnd: Hwnd, icon: Hicon, tooltip: &str, legacy: bool) -> anyhow::Result<()> {
     let mut data = notify_icon_data(hwnd);
-    data.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP;
+    // In custom-tooltip mode we keep NIF_TIP (so the shell tracks hover and
+    // sends NIN_POPUPOPEN) but omit NIF_SHOWTIP so the standard tooltip never
+    // appears — our own popup is shown instead.
+    data.uFlags = if legacy {
+        NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP
+    } else {
+        NIF_MESSAGE | NIF_ICON | NIF_TIP
+    };
     data.uCallbackMessage = CALLBACK_MESSAGE;
     data.hIcon = icon;
 
@@ -368,7 +566,55 @@ fn add_icon(hwnd: Hwnd, icon: Hicon, tooltip: &str) -> anyhow::Result<()> {
         anyhow::bail!("Failed to add tray icon.");
     }
 
+    // Opt into version 4 so the shell delivers NIN_POPUPOPEN / NIN_POPUPCLOSE
+    // hover notifications for the custom tooltip.
+    if !legacy {
+        let mut version = notify_icon_data(hwnd);
+        version.uTimeoutOrVersion = NOTIFYICON_VERSION_4;
+        unsafe {
+            Shell_NotifyIconW(NIM_SETVERSION, &version);
+        }
+    }
+
     Ok(())
+}
+
+/// Returns the tray icon's bounding rectangle in screen coordinates, so the
+/// custom tooltip can be anchored directly above it (like the native tooltip).
+/// Returns `None` if the shell can't resolve the icon position.
+fn icon_rect(hwnd: Hwnd) -> Option<Rect> {
+    let identifier = NotifyIconIdentifier {
+        cbSize: std::mem::size_of::<NotifyIconIdentifier>() as u32,
+        hWnd: hwnd,
+        uID: ICON_ID,
+        guidItem: [0u8; 16],
+    };
+    let mut rect = Rect::default();
+    let hr = unsafe { Shell_NotifyIconGetRect(&identifier, &mut rect) };
+    if hr == 0 && rect.right > rect.left && rect.bottom > rect.top {
+        Some(rect)
+    } else {
+        None
+    }
+}
+
+/// Resolves the screen-space anchor for a hover popup. With
+/// `NOTIFYICON_VERSION_4`, `wParam` carries the anchor point (x in the low
+/// word, y in the high word). Falls back to the cursor position when those
+/// coordinates are unavailable.
+fn hover_anchor(wparam: usize) -> (i32, i32) {
+    let x = (wparam & 0xffff) as u16 as i16 as i32;
+    let y = ((wparam >> 16) & 0xffff) as u16 as i16 as i32;
+    if x != 0 || y != 0 {
+        return (x, y);
+    }
+
+    let mut point = Point { x: 0, y: 0 };
+    if unsafe { GetCursorPos(&mut point) } != 0 {
+        (point.x, point.y)
+    } else {
+        (x, y)
+    }
 }
 
 fn limit_tooltip(tooltip: &str) -> String {

@@ -67,6 +67,7 @@ impl IUsageProvider for OpenRouterProvider {
                 inline: true,
             }],
             windows: Vec::new(),
+            plan: None,
         }))
     }
 }

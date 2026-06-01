@@ -11,6 +11,15 @@ use application::host::UsageBarRustHost;
 use infrastructure::logger::FatalErrorLogger;
 
 fn main() {
+    // Declare the process per-monitor DPI aware (before any window is created)
+    // so the WebView2 tooltip renders text at native resolution instead of
+    // being bitmap-scaled (which looks blurry on HiDPI displays).
+    unsafe {
+        let _ = shell::native::SetProcessDpiAwarenessContext(
+            shell::native::DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
+        );
+    }
+
     // Build a multi-threaded Tokio runtime so the refresh coordinator can
     // run on worker threads while the main thread services the Win32 message
     // pump (matching the C# STA thread + thread-pool model).

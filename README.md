@@ -1,7 +1,10 @@
 # UsageBarRust
 
-UsageBarRust is a minimal Windows notification-area app for showing LLM or API usage and balance information.
-This project is ported from C# -> https://github.com/bariskisir/UsageBar
+UsageBarRust is a system-tray application for Windows that displays LLM and API usage/balance information.
+Originally ported from C#: https://github.com/bariskisir/UsageBar
+
+The tray panel UI (tooltip design, icon colour palette, CSS, and bar rendering) is taken from
+[Win-CodexBar](https://github.com/Finesssee/Win-CodexBar) (MIT-licensed).
 
 ![UsageBarRust interface](images/interface.png)
 
@@ -30,6 +33,9 @@ C:\Users\USERNAME\AppData\Roaming\UsageBarRust\settings.json
 ```json
 {
   "refreshPeriodMinute": 5,
+  "useLegacyTooltip": false,
+  "highPercentage": 70,
+  "criticalPercentage": 90,
   "DEEPSEEK_API_KEY": "",
   "OPENROUTER_API_KEY": "",
   "DEEPGRAM_API_KEY": ""
@@ -44,6 +50,19 @@ C:\Users\USERNAME\AppData\Roaming\UsageBarRust\settings.json
 ```
 
 Providers with blank or missing API keys will not be enabled
+
+## Notifications
+
+When usage climbs above the configured thresholds, a Windows toast notification is shown:
+
+- **High usage** — usage crosses `highPercentage` (default 70 %) upward.
+- **Critical usage** — usage crosses `criticalPercentage` (default 90 %) upward.
+- **Limit reset** — when usage drops back below the threshold, the tracking state resets
+  so a fresh notification can fire on the next upward crossing.
+
+Each threshold fires only once per cycle (no repeat spam). The thresholds can be changed
+from the tray icon's right-click menu (`High Level` / `Critical Level`) or by editing
+`settings.json`.
 
 ## Development
 

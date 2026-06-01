@@ -100,8 +100,46 @@ impl IUsageProvider for ClaudeProvider {
             anyhow::bail!("Claude response did not contain usable rate limit windows.");
         }
 
-        Ok(Some(ProviderResult { blocks, windows }))
+        let plan = auth
+            .subscription_type
+            .as_deref()
+            .and_then(claude_plan_label);
+
+        Ok(Some(ProviderResult {
+            blocks,
+            windows,
+            plan,
+        }))
     }
+}
+
+/// Maps a Claude subscription tier to a short plan label shown in the tooltip.
+fn claude_plan_label(tier: &str) -> Option<String> {
+    let t = tier.trim().to_lowercase();
+    if t.is_empty() {
+        return None;
+    }
+    let label = if t.contains("max") {
+        "Max"
+    } else if t.contains("pro") {
+        "Pro"
+    } else if t.contains("team") {
+        "Team"
+    } else if t.contains("enterprise") {
+        "Enterprise"
+    } else if t.contains("free") {
+        "Free"
+    } else if t == "default_claude_ai" {
+        return Some("Claude AI".to_string());
+    } else {
+        // Capitalise the first character of an unknown tier id.
+        let mut chars = t.chars();
+        return Some(match chars.next() {
+            None => return None,
+            Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+        });
+    };
+    Some(label.to_string())
 }
 
 // ---------------------------------------------------------------------------
@@ -110,6 +148,7 @@ impl IUsageProvider for ClaudeProvider {
 
 struct ClaudeAuth {
     access_token: String,
+    subscription_type: Option<String>,
 }
 
 fn read_auth() -> Option<ClaudeAuth> {
@@ -128,7 +167,12 @@ fn read_auth() -> Option<ClaudeAuth> {
         return None;
     }
 
-    Some(ClaudeAuth { access_token })
+    let subscription_type = json_helpers::get_string(oauth, &["subscriptionType", "rateLimitTier"]);
+
+    Some(ClaudeAuth {
+        access_token,
+        subscription_type,
+    })
 }
 
 // ---------------------------------------------------------------------------

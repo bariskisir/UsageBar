@@ -9,6 +9,8 @@ use crate::domain::{IUsageProvider, ProviderCredentials, ProviderResult, UsageBa
 pub struct UsageSnapshot {
     pub blocks: Vec<UsageBlock>,
     pub windows: Vec<UsageBarWindow>,
+    /// Provider name → plan/tier label, for providers that report one.
+    pub plans: Vec<(String, String)>,
 }
 
 /// Runs all configured providers in parallel with a 45-second aggregate timeout.
@@ -29,24 +31,37 @@ pub async fn refresh_async(
         let creds = credentials.clone();
         let ct = cancellation_source.clone();
         let provider = Arc::clone(provider);
-        async move { refresh_provider_async(provider.as_ref(), &creds, ct).await }
+        async move {
+            let name = provider.name().to_string();
+            let result = refresh_provider_async(provider.as_ref(), &creds, ct).await;
+            (name, result)
+        }
     });
 
-    let results: Vec<Option<ProviderResult>> = futures::future::join_all(refresh_tasks).await;
+    let results: Vec<(String, Option<ProviderResult>)> =
+        futures::future::join_all(refresh_tasks).await;
 
     timeout_handle.abort();
 
     let mut blocks = Vec::new();
     let mut windows = Vec::new();
+    let mut plans = Vec::new();
 
-    for result in results {
+    for (name, result) in results {
         if let Some(r) = result {
+            if let Some(plan) = r.plan {
+                plans.push((name, plan));
+            }
             blocks.extend(r.blocks);
             windows.extend(r.windows);
         }
     }
 
-    UsageSnapshot { blocks, windows }
+    UsageSnapshot {
+        blocks,
+        windows,
+        plans,
+    }
 }
 
 async fn refresh_provider_async(

@@ -71,6 +71,7 @@ impl IUsageProvider for DeepSeekProvider {
                     inline: true,
                 }],
                 windows: Vec::new(),
+                plan: None,
             }));
         }
 

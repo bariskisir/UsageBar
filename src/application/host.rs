@@ -1,10 +1,10 @@
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::mpsc;
 
 use crate::application::aggregator;
-use crate::application::tooltip;
 use crate::domain::{IUsageProvider, UsageBarWindow};
 use crate::infrastructure::logger::AppLogger;
 use crate::infrastructure::paths;
@@ -57,7 +57,11 @@ impl UsageBarRustHost {
     /// Starts the refresh cycle and enters the Win32 message loop.
     /// Blocks until the user selects "Exit" from the context menu.
     pub fn run(self) -> anyhow::Result<()> {
-        let (tray, event_rx) = TrayIcon::new()?;
+        // Resolve the tooltip mode synchronously before the tray is created,
+        // since it decides how the tray icon and its hover behaviour are set up.
+        let use_legacy_tooltip = self.settings.read_sync().use_legacy_tooltip;
+
+        let (tray, event_rx) = TrayIcon::new(use_legacy_tooltip, Arc::clone(&self.settings))?;
         let tray = Arc::new(tray);
 
         // Spawn the async refresh coordinator onto the Tokio runtime.
@@ -91,7 +95,12 @@ struct RefreshCoordinator {
     providers: Vec<Arc<dyn IUsageProvider>>,
     tray: Arc<TrayIcon>,
     stopped: AtomicBool,
-    previous_windows: Mutex<Vec<UsageBarWindow>>,
+    /// Previous windows (provider, label, percent) for threshold-crossing detection.
+    prev_windows: Mutex<Vec<UsageBarWindow>>,
+    /// Per-window highest threshold notified this cycle.
+    /// 0 = none, 1 = high warned, 2 = critical warned.
+    /// Key: `"provider|label"`.  Reset to 0 when usage drops below `high_percentage`.
+    notified_level: Mutex<HashMap<String, u8>>,
 }
 
 impl RefreshCoordinator {
@@ -107,7 +116,8 @@ impl RefreshCoordinator {
             providers,
             tray,
             stopped: AtomicBool::new(false),
-            previous_windows: Mutex::new(Vec::new()),
+            prev_windows: Mutex::new(Vec::new()),
+            notified_level: Mutex::new(HashMap::new()),
         }
     }
 
@@ -163,54 +173,111 @@ impl RefreshCoordinator {
 
         let snapshot = aggregator::refresh_async(&self.providers, &credentials).await;
 
-        self.tray.update_tooltip(&tooltip::format(&snapshot.blocks));
+        self.tray
+            .update_tooltip(&snapshot.blocks, &snapshot.windows, &snapshot.plans);
         self.tray.update_icon(&snapshot.windows)?;
 
-        let messages = self.record_windows(&snapshot.windows);
+        let messages = self.check_threshold_crossings(&snapshot.windows);
         if !messages.is_empty() {
             self.tray
-                .show_notification("Limit refreshed", &messages.join("\n"));
+                .show_notification("Usage Bar", &messages.join("\n"));
         }
 
         Ok(())
     }
 
-    fn record_windows(&self, current_windows: &[UsageBarWindow]) -> Vec<String> {
+    /// Checks every window against its previous value.  When usage climbs
+    /// above `high_percentage` or `critical_percentage` (and was below it
+    /// before), a matching notification line is produced.  Once notified,
+    /// the same threshold will not fire again until usage drops back below
+    /// the threshold (which resets the tracking flag).
+    fn check_threshold_crossings(&self, windows: &[UsageBarWindow]) -> Vec<String> {
         let mut messages = Vec::new();
-        let Ok(mut previous) = self.previous_windows.lock() else {
+        let high = self.settings.read_sync().high_percentage;
+        let critical = self.settings.read_sync().critical_percentage;
+
+        if high <= 0.0 && critical <= 0.0 {
+            return messages;
+        }
+
+        let Ok(mut prev) = self.prev_windows.lock() else {
+            return messages;
+        };
+        let Ok(mut noted) = self.notified_level.lock() else {
             return messages;
         };
 
-        for current in current_windows {
-            let prev = find_previous_window(&previous, &current.provider_name, &current.window_label);
-            if usage_decreased(prev.map(|w| w.used_percent), Some(current.used_percent)) {
+        for current in windows {
+            let key = format!("{}|{}", current.provider_name, current.window_label);
+
+            // Find the matching previous window; `None` means this is the first
+            // time we see this window (e.g. fresh start or new provider).
+            let prev_pct = prev
+                .iter()
+                .find(|w| {
+                    w.provider_name == current.provider_name
+                        && w.window_label == current.window_label
+                })
+                .map(|w| w.used_percent);
+
+            let curr_pct = current.used_percent;
+
+            // On first sight of a window we only record the value; no
+            // notification can fire without a real prior data point.
+            let Some(prev_pct) = prev_pct else {
+                continue;
+            };
+
+            let level = noted.get(&key).copied().unwrap_or(0);
+
+            // Step down tracking when usage drops below a threshold.
+            let mut next_level = level;
+            if level >= 2 && curr_pct < critical {
+                next_level = 1; // critical → high
+            }
+            if next_level >= 1 && curr_pct < high {
+                next_level = 0; // high → none
+            }
+
+            // Step up: did we just cross a threshold?
+            if next_level < 2 && prev_pct < critical && curr_pct >= critical {
+                let label = friendly_window_label(&current.window_label);
                 messages.push(format!(
-                    "{} {} limit refreshed",
-                    current.provider_name, current.window_label
+                    "{} {} at {}% — critically high!",
+                    current.provider_name,
+                    label,
+                    curr_pct.round() as i64
                 ));
+                next_level = 2;
+            } else if next_level < 1 && prev_pct < high && curr_pct >= high {
+                let label = friendly_window_label(&current.window_label);
+                messages.push(format!(
+                    "{} {} at {}% — approaching limit",
+                    current.provider_name,
+                    label,
+                    curr_pct.round() as i64
+                ));
+                next_level = 1;
+            }
+
+            if next_level == 0 {
+                noted.remove(&key);
+            } else {
+                noted.insert(key, next_level);
             }
         }
 
-        *previous = current_windows.to_vec();
-
+        *prev = windows.to_vec();
         messages
     }
 }
 
-fn find_previous_window<'a>(
-    windows: &'a [UsageBarWindow],
-    provider: &str,
-    label: &str,
-) -> Option<&'a UsageBarWindow> {
-    windows
-        .iter()
-        .find(|w| w.provider_name == provider && w.window_label == label)
-}
-
-fn usage_decreased(previous: Option<f64>, current: Option<f64>) -> bool {
-    const MINIMUM_DECREASE: f64 = 0.01;
-    match (previous, current) {
-        (Some(prev), Some(curr)) => curr < prev - MINIMUM_DECREASE,
-        _ => false,
+/// Returns a short, user-facing label for a window id (matches the tooltip
+/// display names).
+fn friendly_window_label(label: &str) -> &str {
+    match label {
+        "5h" => "Session",
+        "7d" => "Weekly",
+        other => other,
     }
 }

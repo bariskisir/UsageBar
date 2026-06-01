@@ -59,6 +59,8 @@ impl IUsageProvider for CodexProvider {
         }
 
         let body: Value = response.json().await?;
+        let plan = json_helpers::get_string(&body, &["plan_type"])
+            .map(|plan_type| codex_plan_label(&plan_type));
         let rate_limit = get_rate_limit(&body)?;
         let primary = get_window(&rate_limit, "primary_window");
         let secondary = get_window(&rate_limit, "secondary_window");
@@ -95,7 +97,37 @@ impl IUsageProvider for CodexProvider {
             anyhow::bail!("Codex response did not contain usable rate limit windows.");
         }
 
-        Ok(Some(ProviderResult { blocks, windows }))
+        Ok(Some(ProviderResult {
+            blocks,
+            windows,
+            plan,
+        }))
+    }
+}
+
+/// Maps a Codex `plan_type` to a short plan/tier label shown in the tooltip.
+fn codex_plan_label(plan_type: &str) -> String {
+    match plan_type.to_lowercase().as_str() {
+        "free" => "Free".to_string(),
+        "plus" => "Plus".to_string(),
+        "pro" => "Pro".to_string(),
+        "pro_lite" | "prolite" | "pro-lite" => "Pro Lite".to_string(),
+        "go" => "Go".to_string(),
+        "team" => "Team".to_string(),
+        "business" => "Business".to_string(),
+        "enterprise" => "Enterprise".to_string(),
+        "education" | "edu" => "Education".to_string(),
+        "guest" => "Guest".to_string(),
+        other => capitalize(other),
+    }
+}
+
+/// Capitalises the first character of `s`.
+fn capitalize(s: &str) -> String {
+    let mut chars = s.chars();
+    match chars.next() {
+        None => String::new(),
+        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
     }
 }
 

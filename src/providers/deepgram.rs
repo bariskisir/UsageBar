@@ -42,6 +42,7 @@ impl IUsageProvider for DeepgramProvider {
                 inline: true,
             }],
             windows: Vec::new(),
+            plan: None,
         }))
     }
 }

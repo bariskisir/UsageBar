@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use serde::Serialize;
 
 /// Interface that every usage provider must implement.
 #[async_trait]
@@ -31,6 +32,9 @@ pub struct ProviderResult {
     /// Ordered list of usage windows for the tray icon bar layout.
     /// Each window maps to one horizontal bar segment.
     pub windows: Vec<UsageBarWindow>,
+    /// Optional plan/tier name, e.g. "Plus", "Pro", "Max". Shown next to the
+    /// provider name in the tooltip.
+    pub plan: Option<String>,
 }
 
 /// A single horizontal bar segment in the tray icon.
@@ -51,4 +55,33 @@ pub struct UsageBlock {
     pub value: String,
     /// When `true`, label and value are shown on a single line separated by a space.
     pub inline: bool,
+}
+
+/// A provider card in the custom (non-legacy) tooltip.
+///
+/// Mirrors the CodexBar tray-panel `MenuCard`: a provider name header, then a
+/// stack of metric rows (one per rate-limit window) and/or plain value lines
+/// (balances / credits).
+#[derive(Debug, Clone, Serialize)]
+pub struct TooltipCard {
+    /// Provider name shown as the card header, e.g. "Codex".
+    pub title: String,
+    /// Optional plan/tier shown next to the title, e.g. "Plus", "Max".
+    pub plan: Option<String>,
+    /// Progress-bar metric rows (rate-limit windows).
+    pub metrics: Vec<TooltipMetric>,
+    /// Plain value lines (e.g. a "$12.34" balance) with no progress bar.
+    pub lines: Vec<String>,
+}
+
+/// A single metric row inside a [`TooltipCard`], mirroring CodexBar's
+/// `MetricRow`: a window label, a usage bar, and a "N% used ·· reset" line.
+#[derive(Debug, Clone, Serialize)]
+pub struct TooltipMetric {
+    /// Window label, e.g. "5h" or "7d".
+    pub label: String,
+    /// Used percentage, clamped to 0–100.
+    pub percent: f64,
+    /// Right-aligned reset hint, e.g. "2h 10m". Empty when unknown.
+    pub detail: String,
 }
