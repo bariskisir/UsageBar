@@ -56,6 +56,8 @@ pub const NIM_DELETE: u32 = 0x00000002;
 pub const NIM_SETVERSION: u32 = 0x00000004;
 pub const NOTIFYICON_VERSION_4: u32 = 4;
 pub const NIIF_INFO: u32 = 0x00000001;
+pub const NIIF_WARNING: u32 = 0x00000002;
+pub const NIIF_ERROR: u32 = 0x00000003;
 
 // Tray notification events delivered via the callback message when the icon
 // uses NOTIFYICON_VERSION_4. The event id is in the low word of `lParam`.

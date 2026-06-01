@@ -15,7 +15,7 @@ use crate::providers::codex::CodexProvider;
 use crate::providers::deepgram::DeepgramProvider;
 use crate::providers::deepseek::DeepSeekProvider;
 use crate::providers::openrouter::OpenRouterProvider;
-use crate::shell::tray::{TrayEvent, TrayIcon};
+use crate::shell::tray::{NotificationLevel, TrayEvent, TrayIcon};
 
 /// Top-level orchestrator — equivalent to `UsageBarRustHost` in the C# codebase.
 pub struct UsageBarRustHost {
@@ -177,9 +177,22 @@ impl RefreshCoordinator {
             .update_tooltip(&snapshot.blocks, &snapshot.windows, &snapshot.plans);
         self.tray.update_icon(&snapshot.windows, &snapshot.plans)?;
 
-        let messages = self.check_threshold_crossings(&snapshot.windows);
-        if !messages.is_empty() {
-            self.tray.show_notification(&messages.join("\n"));
+        let notifications = self.check_threshold_crossings(&snapshot.windows);
+        // Group by severity so each level gets its own balloon glyph, emitting
+        // the most severe first.
+        for level in [
+            NotificationLevel::Critical,
+            NotificationLevel::High,
+            NotificationLevel::Reset,
+        ] {
+            let lines: Vec<&str> = notifications
+                .iter()
+                .filter(|(l, _)| *l == level)
+                .map(|(_, m)| m.as_str())
+                .collect();
+            if !lines.is_empty() {
+                self.tray.show_notification(level, &lines.join("\n"));
+            }
         }
 
         Ok(())
@@ -190,7 +203,10 @@ impl RefreshCoordinator {
     /// before), a matching notification line is produced.  Once notified,
     /// the same threshold will not fire again until usage drops back below
     /// the threshold (which resets the tracking flag).
-    fn check_threshold_crossings(&self, windows: &[UsageBarWindow]) -> Vec<String> {
+    fn check_threshold_crossings(
+        &self,
+        windows: &[UsageBarWindow],
+    ) -> Vec<(NotificationLevel, String)> {
         let mut messages = Vec::new();
         let settings = self.settings.read_sync();
         let high = settings.high_percentage;
@@ -221,7 +237,7 @@ fn check_threshold_crossings_for_windows(
     critical: f64,
     prev: &mut [UsageBarWindow],
     noted: &mut HashMap<String, u8>,
-) -> Vec<String> {
+) -> Vec<(NotificationLevel, String)> {
     let mut messages = Vec::new();
 
     for current in windows {
@@ -250,21 +266,27 @@ fn check_threshold_crossings_for_windows(
         let pct = curr_pct.round() as i64;
         let mut next_level = level;
         if curr_pct < prev_pct {
-            messages.push(format!(
-                "{} {} reset to {}%",
-                current.provider_name, label, pct
+            messages.push((
+                NotificationLevel::Reset,
+                format!("{} {} reset to {}%", current.provider_name, label, pct),
             ));
             next_level = 0;
         } else if next_level < 2 && prev_pct < critical && curr_pct >= critical {
-            messages.push(format!(
-                "{} {} at {}% — critically high!",
-                current.provider_name, label, pct
+            messages.push((
+                NotificationLevel::Critical,
+                format!(
+                    "{} {} at {}% — critically high!",
+                    current.provider_name, label, pct
+                ),
             ));
             next_level = 2;
         } else if next_level < 1 && prev_pct < high && curr_pct >= high {
-            messages.push(format!(
-                "{} {} at {}% — approaching limit",
-                current.provider_name, label, pct
+            messages.push((
+                NotificationLevel::High,
+                format!(
+                    "{} {} at {}% — approaching limit",
+                    current.provider_name, label, pct
+                ),
             ));
             next_level = 1;
         }
@@ -304,7 +326,13 @@ mod tests {
             &mut noted,
         );
 
-        assert_eq!(messages, vec!["Codex Session reset to 88%"]);
+        assert_eq!(
+            messages,
+            vec![(
+                NotificationLevel::Reset,
+                "Codex Session reset to 88%".to_string()
+            )]
+        );
         assert!(!noted.contains_key("Codex|5h"));
 
         prev = vec![window("Codex", "5h", 4.0)];
@@ -316,7 +344,13 @@ mod tests {
             &mut noted,
         );
 
-        assert_eq!(messages, vec!["Codex Session at 72% — approaching limit"]);
+        assert_eq!(
+            messages,
+            vec![(
+                NotificationLevel::High,
+                "Codex Session at 72% — approaching limit".to_string()
+            )]
+        );
         assert_eq!(noted.get("Codex|5h"), Some(&1));
     }
 
@@ -333,7 +367,13 @@ mod tests {
             &mut noted,
         );
 
-        assert_eq!(messages, vec!["Codex Session reset to 40%"]);
+        assert_eq!(
+            messages,
+            vec![(
+                NotificationLevel::Reset,
+                "Codex Session reset to 40%".to_string()
+            )]
+        );
         assert!(noted.is_empty());
     }
 

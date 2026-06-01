@@ -8,7 +8,8 @@ use crate::shell::native::{
     NotifyIconDataW, NotifyIconIdentifier, Point, PostMessageW, PostQuitMessage, Rect,
     SetForegroundWindow, Shell_NotifyIconGetRect, Shell_NotifyIconW, TrackPopupMenuEx,
     TranslateMessage, MF_CHECKED, MF_POPUP, MF_SEPARATOR, MF_STRING, NIF_ICON, NIF_INFO,
-    NIF_MESSAGE, NIF_SHOWTIP, NIF_TIP, NIIF_INFO, NIM_ADD, NIM_DELETE, NIM_MODIFY, NIM_SETVERSION,
+    NIF_MESSAGE, NIF_SHOWTIP, NIF_TIP, NIIF_ERROR, NIIF_INFO, NIIF_WARNING, NIM_ADD, NIM_DELETE,
+    NIM_MODIFY, NIM_SETVERSION,
     NIN_POPUPCLOSE, NIN_POPUPOPEN, NOTIFYICON_VERSION_4, TPM_RETURNCMD, TPM_RIGHTBUTTON, WM_APP,
     WM_CONTEXTMENU, WM_DESTROY, WM_NULL, WM_RBUTTONUP,
 };
@@ -52,6 +53,17 @@ static EVENT_TX: std::sync::OnceLock<Mutex<Option<mpsc::UnboundedSender<TrayEven
 pub enum TrayEvent {
     Refresh,
     Exit,
+}
+
+/// Severity of a threshold notification, selecting the balloon glyph.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NotificationLevel {
+    /// Usage dropped — positive event, shows the custom success (green check) symbol.
+    Reset,
+    /// Crossed the high threshold — shows the info symbol.
+    High,
+    /// Crossed the critical threshold — shows the critical (error) symbol.
+    Critical,
 }
 
 /// A system-tray icon backed by a hidden Win32 window.
@@ -222,13 +234,19 @@ impl TrayIcon {
         Ok(())
     }
 
-    /// Shows a short Windows notification from the tray icon.
-    pub fn show_notification(&self, message: &str) {
+    /// Shows a short Windows notification from the tray icon. The balloon glyph
+    /// is one of Windows' built-in notification symbols, chosen from `level`:
+    /// reset → info, high → warning, critical → error.
+    pub fn show_notification(&self, level: NotificationLevel, message: &str) {
         let mut data = notify_icon_data(self.window_handle);
         data.uFlags = NIF_INFO;
         data.szInfo = to_wide_array(message);
-        data.szInfoTitle = to_wide_array::<64>("Usage Bar");
-        data.dwInfoFlags = NIIF_INFO;
+        //data.szInfoTitle = to_wide_array::<64>("Usage Bar");
+        data.dwInfoFlags = match level {
+            NotificationLevel::Reset => NIIF_INFO,
+            NotificationLevel::High => NIIF_WARNING,
+            NotificationLevel::Critical => NIIF_ERROR,
+        };
 
         unsafe {
             Shell_NotifyIconW(NIM_MODIFY, &data);
