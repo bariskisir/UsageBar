@@ -104,7 +104,7 @@ internal sealed class RefreshCoordinator : IDisposable
     {
         var high = settings.HighPercentage / 100.0;
         var critical = settings.CriticalPercentage / 100.0;
-        var messages = new List<string>(capacity: 4);
+        var messages = new List<(NotificationLevel Level, string Text)>(capacity: 4);
 
         foreach (var current in currentWindows)
         {
@@ -127,7 +127,7 @@ internal sealed class RefreshCoordinator : IDisposable
             if (currPct < prevPct)
             {
                 var pctDisplay = (int)Math.Round(currPct * 100);
-                messages.Add($"{current.ProviderName} {current.WindowLabel} reset to {pctDisplay}%");
+                messages.Add((NotificationLevel.Reset, $"{current.ProviderName} {current.WindowLabel} reset to {pctDisplay}%"));
                 _notifiedLevel.Remove(key);
                 continue;
             }
@@ -136,14 +136,14 @@ internal sealed class RefreshCoordinator : IDisposable
             if (level < 2 && prevPct < critical && currPct >= critical)
             {
                 var pctDisplay = (int)Math.Round(currPct * 100);
-                messages.Add($"{current.ProviderName} {current.WindowLabel} at {pctDisplay}% — critically high!");
+                messages.Add((NotificationLevel.Critical, $"{current.ProviderName} {current.WindowLabel} at {pctDisplay}% — critically high!"));
                 _notifiedLevel[key] = 2;
             }
             // Climb to high.
             else if (level < 1 && prevPct < high && currPct >= high)
             {
                 var pctDisplay = (int)Math.Round(currPct * 100);
-                messages.Add($"{current.ProviderName} {current.WindowLabel} at {pctDisplay}% — approaching limit");
+                messages.Add((NotificationLevel.High, $"{current.ProviderName} {current.WindowLabel} at {pctDisplay}% — approaching limit"));
                 _notifiedLevel[key] = 1;
             }
         }
@@ -152,9 +152,15 @@ internal sealed class RefreshCoordinator : IDisposable
             .Select(w => new UsageBarWindow(w.ProviderName, w.WindowLabel, w.UsedPercent))
             .ToList();
 
-        if (messages.Count > 0)
+        // Group by severity so each level gets its own balloon glyph, emitting
+        // the most severe first.
+        foreach (var level in new[] { NotificationLevel.Critical, NotificationLevel.High, NotificationLevel.Reset })
         {
-            _trayIcon.ShowNotification(string.Join(Environment.NewLine, messages));
+            var lines = messages.Where(m => m.Level == level).Select(m => m.Text).ToList();
+            if (lines.Count > 0)
+            {
+                _trayIcon.ShowNotification(level, string.Join(Environment.NewLine, lines));
+            }
         }
     }
 

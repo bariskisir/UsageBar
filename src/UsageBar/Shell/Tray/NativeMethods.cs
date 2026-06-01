@@ -55,6 +55,8 @@ internal static class NativeMethods
     public const uint NifInfo = 0x00000010;
     public const uint NifShowTip = 0x00000080;
     public const uint NiifInfo = 0x00000001;
+    public const uint NiifWarning = 0x00000002;
+    public const uint NiifError = 0x00000003;
 
     public const uint NimAdd = 0x00000000;
     public const uint NimModify = 0x00000001;

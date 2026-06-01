@@ -150,15 +150,25 @@ internal sealed class TrayIcon : IDisposable
         }
     }
 
-    public void ShowNotification(string message)
+    public void ShowNotification(NotificationLevel level, string message)
     {
+        // Pick one of Windows' built-in balloon glyphs: reset → info,
+        // high → warning, critical → error.
+        var infoFlag = level switch
+        {
+            NotificationLevel.Reset => NativeMethods.NiifInfo,
+            NotificationLevel.High => NativeMethods.NiifWarning,
+            NotificationLevel.Critical => NativeMethods.NiifError,
+            _ => NativeMethods.NiifInfo,
+        };
+
         lock (_iconGate)
         {
             var data = CreateNotifyIconData();
             data.uFlags = NativeMethods.NifInfo;
             data.szInfoTitle = "Usage Bar";
             data.szInfo = LimitBalloonText(message);
-            data.dwInfoFlags = NativeMethods.NiifInfo;
+            data.dwInfoFlags = infoFlag;
             NativeMethods.ShellNotifyIcon(NativeMethods.NimModify, ref data);
         }
     }
