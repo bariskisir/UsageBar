@@ -6,7 +6,7 @@ Originally ported from C#: https://github.com/bariskisir/UsageBar
 The tray panel UI (tooltip design, icon colour palette, CSS, and bar rendering) is taken from
 [Win-CodexBar](https://github.com/Finesssee/Win-CodexBar) (MIT-licensed).
 
-![UsageBarRust interface](images/interface.png)
+<img src="images/interface.png" alt="UsageBarRust interface" width="60%">
 
 ---
 
