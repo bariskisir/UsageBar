@@ -105,7 +105,7 @@ internal sealed class ClaudeProvider(HttpClient httpClient) : IUsageProvider
             return null;
         }
 
-        var usedPercent = utilization.Value * 100.0;
+        var usedPercent = utilization.Value;
         var resetTime = ParseResetTime(resetsAt);
 
         return new ClaudeWindow(usedPercent, resetTime);

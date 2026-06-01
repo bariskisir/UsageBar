@@ -180,7 +180,7 @@ Current providers:
 | Provider | Credential source | API behavior |
 | -------- | ----------------- | ------------ |
 | Codex | `%USERPROFILE%\.codex\auth.json` with `access_token` and `account_id` | Calls `https://chatgpt.com/backend-api/wham/usage`; returns 5-hour and 7-day usage windows when present. Provides `UsageBarWindow` values for icon rendering. |
-| Claude | `%USERPROFILE%\.claude\.credentials.json` under `claudeAiOauth.accessToken` | Calls `https://api.anthropic.com/api/oauth/usage` with `anthropic-beta: oauth-2025-04-20` header and `claude-code/2.1.0` user agent; returns `five_hour` and `seven_day` windows with `utilization` fraction and optional `resets_at` timestamp. Provides `UsageBarWindow` values for icon rendering. |
+| Claude | `%USERPROFILE%\.claude\.credentials.json` under `claudeAiOauth.accessToken` | Calls `https://api.anthropic.com/api/oauth/usage` with `anthropic-beta: oauth-2025-04-20` header and `claude-code/2.1.0` user agent; returns `five_hour` and `seven_day` windows with `utilization` as a 0-100 percentage and optional `resets_at` timestamp. Provides `UsageBarWindow` values for icon rendering. |
 | DeepSeek | `DEEPSEEK_API_KEY` from settings or environment | Calls `https://api.deepseek.com/user/balance`; displays USD total balance. |
 | OpenRouter | `OPENROUTER_API_KEY` from settings or environment | Calls `https://openrouter.ai/api/v1/credits`; displays remaining credits. |
 | Deepgram | `DEEPGRAM_API_KEY` from settings or environment | Calls projects endpoint, then project balances endpoint; displays USD balance total. |
