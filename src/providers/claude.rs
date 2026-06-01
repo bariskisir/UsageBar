@@ -151,7 +151,7 @@ fn get_window(root: &Value, property_name: &str) -> Option<ClaudeWindow> {
     let reset_time = parse_reset_time(resets_at.as_deref());
 
     Some(ClaudeWindow {
-        used_percent: utilization * 100.0,
+        used_percent: utilization,
         reset_at: reset_time,
     })
 }
