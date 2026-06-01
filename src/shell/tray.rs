@@ -121,7 +121,7 @@ impl TrayIcon {
             );
         }
 
-        let window_name: Vec<u16> = "UsageBarRust\0".encode_utf16().collect();
+        let window_name: Vec<u16> = "Usage Bar\0".encode_utf16().collect();
 
         let window_handle = unsafe {
             CreateWindowExW(
@@ -261,10 +261,9 @@ impl TrayIcon {
     }
 
     /// Shows a short Windows notification from the tray icon.
-    pub fn show_notification(&self, title: &str, message: &str) {
+    pub fn show_notification(&self, message: &str) {
         let mut data = notify_icon_data(self.window_handle);
         data.uFlags = NIF_INFO;
-        data.szInfoTitle = to_wide_array(title);
         data.szInfo = to_wide_array(message);
         data.dwInfoFlags = NIIF_INFO;
 

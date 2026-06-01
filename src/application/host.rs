@@ -179,8 +179,7 @@ impl RefreshCoordinator {
 
         let messages = self.check_threshold_crossings(&snapshot.windows);
         if !messages.is_empty() {
-            self.tray
-                .show_notification("Usage Bar", &messages.join("\n"));
+            self.tray.show_notification(&messages.join("\n"));
         }
 
         Ok(())
@@ -207,69 +206,83 @@ impl RefreshCoordinator {
             return messages;
         };
 
-        for current in windows {
-            let key = format!("{}|{}", current.provider_name, current.window_label);
-
-            // Find the matching previous window; `None` means this is the first
-            // time we see this window (e.g. fresh start or new provider).
-            let prev_pct = prev
-                .iter()
-                .find(|w| {
-                    w.provider_name == current.provider_name
-                        && w.window_label == current.window_label
-                })
-                .map(|w| w.used_percent);
-
-            let curr_pct = current.used_percent;
-
-            // On first sight of a window we only record the value; no
-            // notification can fire without a real prior data point.
-            let Some(prev_pct) = prev_pct else {
-                continue;
-            };
-
-            let level = noted.get(&key).copied().unwrap_or(0);
-
-            // Step down tracking when usage drops below a threshold.
-            let mut next_level = level;
-            if level >= 2 && curr_pct < critical {
-                next_level = 1; // critical → high
-            }
-            if next_level >= 1 && curr_pct < high {
-                next_level = 0; // high → none
-            }
-
-            // Step up: did we just cross a threshold?
-            if next_level < 2 && prev_pct < critical && curr_pct >= critical {
-                let label = friendly_window_label(&current.window_label);
-                messages.push(format!(
-                    "{} {} at {}% — critically high!",
-                    current.provider_name,
-                    label,
-                    curr_pct.round() as i64
-                ));
-                next_level = 2;
-            } else if next_level < 1 && prev_pct < high && curr_pct >= high {
-                let label = friendly_window_label(&current.window_label);
-                messages.push(format!(
-                    "{} {} at {}% — approaching limit",
-                    current.provider_name,
-                    label,
-                    curr_pct.round() as i64
-                ));
-                next_level = 1;
-            }
-
-            if next_level == 0 {
-                noted.remove(&key);
-            } else {
-                noted.insert(key, next_level);
-            }
-        }
+        messages =
+            check_threshold_crossings_for_windows(windows, high, critical, &mut prev, &mut noted);
 
         *prev = windows.to_vec();
         messages
     }
+}
+
+fn check_threshold_crossings_for_windows(
+    windows: &[UsageBarWindow],
+    high: f64,
+    critical: f64,
+    prev: &mut [UsageBarWindow],
+    noted: &mut HashMap<String, u8>,
+) -> Vec<String> {
+    let mut messages = Vec::new();
+
+    for current in windows {
+        let key = format!("{}|{}", current.provider_name, current.window_label);
+
+        // Find the matching previous window; `None` means this is the first
+        // time we see this window (e.g. fresh start or new provider).
+        let prev_pct = prev
+            .iter()
+            .find(|w| {
+                w.provider_name == current.provider_name && w.window_label == current.window_label
+            })
+            .map(|w| w.used_percent);
+
+        let curr_pct = current.used_percent;
+
+        // On first sight of a window we only record the value; no notification
+        // can fire without a real prior data point.
+        let Some(prev_pct) = prev_pct else {
+            continue;
+        };
+
+        let level = noted.get(&key).copied().unwrap_or(0);
+
+        let mut next_level = level;
+        if curr_pct < prev_pct {
+            let label = friendly_window_label(&current.window_label);
+            messages.push(format!(
+                "{} {} reset to {}%",
+                current.provider_name,
+                label,
+                curr_pct.round() as i64
+            ));
+            next_level = 0;
+        } else if next_level < 2 && prev_pct < critical && curr_pct >= critical {
+            let label = friendly_window_label(&current.window_label);
+            messages.push(format!(
+                "{} {} at {}% — critically high!",
+                current.provider_name,
+                label,
+                curr_pct.round() as i64
+            ));
+            next_level = 2;
+        } else if next_level < 1 && prev_pct < high && curr_pct >= high {
+            let label = friendly_window_label(&current.window_label);
+            messages.push(format!(
+                "{} {} at {}% — approaching limit",
+                current.provider_name,
+                label,
+                curr_pct.round() as i64
+            ));
+            next_level = 1;
+        }
+
+        if next_level == 0 {
+            noted.remove(&key);
+        } else {
+            noted.insert(key, next_level);
+        }
+    }
+
+    messages
 }
 
 /// Returns a short, user-facing label for a window id (matches the tooltip
@@ -279,5 +292,81 @@ fn friendly_window_label(label: &str) -> &str {
         "5h" => "Session",
         "7d" => "Weekly",
         other => other,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn window(provider: &str, label: &str, percent: f64) -> UsageBarWindow {
+        UsageBarWindow {
+            provider_name: provider.to_string(),
+            window_label: label.to_string(),
+            used_percent: percent,
+        }
+    }
+
+    #[test]
+    fn threshold_reset_on_decrease_emits_message_and_allows_future_warning() {
+        let mut prev = vec![window("Codex", "5h", 95.0)];
+        let mut noted = HashMap::from([("Codex|5h".to_string(), 2)]);
+
+        let messages = check_threshold_crossings_for_windows(
+            &[window("Codex", "5h", 88.0)],
+            70.0,
+            90.0,
+            &mut prev,
+            &mut noted,
+        );
+
+        assert_eq!(messages, vec!["Codex Session reset to 88%"]);
+        assert!(!noted.contains_key("Codex|5h"));
+
+        prev = vec![window("Codex", "5h", 4.0)];
+        let messages = check_threshold_crossings_for_windows(
+            &[window("Codex", "5h", 72.0)],
+            70.0,
+            90.0,
+            &mut prev,
+            &mut noted,
+        );
+
+        assert_eq!(messages, vec!["Codex Session at 72% — approaching limit"]);
+        assert_eq!(noted.get("Codex|5h"), Some(&1));
+    }
+
+    #[test]
+    fn decrease_without_prior_limit_notification_still_emits_reset() {
+        let mut prev = vec![window("Codex", "5h", 50.0)];
+        let mut noted = HashMap::new();
+
+        let messages = check_threshold_crossings_for_windows(
+            &[window("Codex", "5h", 40.0)],
+            70.0,
+            90.0,
+            &mut prev,
+            &mut noted,
+        );
+
+        assert_eq!(messages, vec!["Codex Session reset to 40%"]);
+        assert!(noted.is_empty());
+    }
+
+    #[test]
+    fn missing_previous_window_does_not_emit_notification() {
+        let mut prev = Vec::new();
+        let mut noted = HashMap::new();
+
+        let messages = check_threshold_crossings_for_windows(
+            &[window("Codex", "5h", 95.0)],
+            70.0,
+            90.0,
+            &mut prev,
+            &mut noted,
+        );
+
+        assert!(messages.is_empty());
+        assert!(noted.is_empty());
     }
 }
