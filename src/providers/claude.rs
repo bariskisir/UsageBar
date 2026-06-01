@@ -3,8 +3,10 @@ use chrono::{DateTime, Local};
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, AUTHORIZATION};
 use serde_json::Value;
 
-use crate::domain::{IUsageProvider, ProviderCredentials, ProviderResult, UsageBarWindow, UsageBlock};
-use crate::providers::json_helpers;
+use crate::domain::{
+    IUsageProvider, ProviderCredentials, ProviderResult, UsageBarWindow, UsageBlock,
+};
+use crate::providers::{capitalize_first, json_helpers};
 
 const USAGE_ENDPOINT: &str = "https://api.anthropic.com/api/oauth/usage";
 const BETA_HEADER: &str = "oauth-2025-04-20";
@@ -42,14 +44,8 @@ impl IUsageProvider for ClaudeProvider {
             AUTHORIZATION,
             HeaderValue::from_str(&format!("Bearer {}", auth.access_token))?,
         );
-        headers.insert(
-            "anthropic-beta",
-            HeaderValue::from_static(BETA_HEADER),
-        );
-        headers.insert(
-            "User-Agent",
-            HeaderValue::from_static(USER_AGENT),
-        );
+        headers.insert("anthropic-beta", HeaderValue::from_static(BETA_HEADER));
+        headers.insert("User-Agent", HeaderValue::from_static(USER_AGENT));
 
         let response = tokio::select! {
             r = self.http_client.get(USAGE_ENDPOINT).headers(headers).send() => r?,
@@ -132,12 +128,8 @@ fn claude_plan_label(tier: &str) -> Option<String> {
     } else if t == "default_claude_ai" {
         return Some("Claude AI".to_string());
     } else {
-        // Capitalise the first character of an unknown tier id.
-        let mut chars = t.chars();
-        return Some(match chars.next() {
-            None => return None,
-            Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
-        });
+        // Unknown tier id: fall back to its capitalised form (`t` is non-empty).
+        return Some(capitalize_first(&t));
     };
     Some(label.to_string())
 }

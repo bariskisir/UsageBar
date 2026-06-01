@@ -51,12 +51,10 @@ impl IUsageProvider for OpenRouterProvider {
         let data = json_helpers::try_get_property(&body, "data")
             .ok_or_else(|| anyhow::anyhow!("OpenRouter response did not contain data."))?;
 
-        let total_credits = json_helpers::get_decimal(data, "total_credits").ok_or_else(|| {
-            anyhow::anyhow!("OpenRouter response did not contain total_credits.")
-        })?;
-        let total_usage = json_helpers::get_decimal(data, "total_usage").ok_or_else(|| {
-            anyhow::anyhow!("OpenRouter response did not contain total_usage.")
-        })?;
+        let total_credits = json_helpers::get_decimal(data, "total_credits")
+            .ok_or_else(|| anyhow::anyhow!("OpenRouter response did not contain total_credits."))?;
+        let total_usage = json_helpers::get_decimal(data, "total_usage")
+            .ok_or_else(|| anyhow::anyhow!("OpenRouter response did not contain total_usage."))?;
 
         let remaining = total_credits - total_usage;
 
@@ -66,8 +64,7 @@ impl IUsageProvider for OpenRouterProvider {
                 value: format_currency(remaining),
                 inline: true,
             }],
-            windows: Vec::new(),
-            plan: None,
+            ..Default::default()
         }))
     }
 }

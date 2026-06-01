@@ -2,7 +2,9 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
-use crate::domain::{IUsageProvider, ProviderCredentials, ProviderResult, UsageBarWindow, UsageBlock};
+use crate::domain::{
+    IUsageProvider, ProviderCredentials, ProviderResult, UsageBarWindow, UsageBlock,
+};
 
 /// The result of a full refresh across all providers.
 #[derive(Debug, Clone)]

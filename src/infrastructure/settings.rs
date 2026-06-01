@@ -164,8 +164,8 @@ impl SettingsService {
         if Path::new(&self.settings_file_path).exists() {
             return;
         }
-        let json =
-            serde_json::to_string_pretty(&AppSettings::default()).unwrap_or_else(|_| "{}".to_string());
+        let json = serde_json::to_string_pretty(&AppSettings::default())
+            .unwrap_or_else(|_| "{}".to_string());
         let _ = std::fs::write(&self.settings_file_path, json);
     }
 }

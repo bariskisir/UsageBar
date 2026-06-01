@@ -1,5 +1,5 @@
-use std::io::Write;
 use chrono::Local;
+use std::io::Write;
 
 /// Async file logger that writes timestamped messages to `app.log`.
 pub struct AppLogger {

@@ -1,4 +1,4 @@
-use crate::domain::{TooltipCard, TooltipMetric, UsageBarWindow, UsageBlock};
+use crate::domain::{window_display_label, TooltipCard, TooltipMetric, UsageBarWindow, UsageBlock};
 
 /// Formats a list of `UsageBlock` values into a multi-line tooltip string,
 /// truncating to 127 characters (the Win32 `NOTIFYICONDATA.szTip` limit).
@@ -62,7 +62,7 @@ pub fn build_cards(
         }
 
         let metric = TooltipMetric {
-            label: window_display_label(&window.window_label),
+            label: window_display_label(&window.window_label).to_string(),
             percent: window.used_percent.clamp(0.0, 100.0),
             detail,
         };
@@ -100,7 +100,7 @@ pub fn build_cards(
         });
     }
 
-    cards.sort_by_key(|card| card_order(card));
+    cards.sort_by_key(card_order);
     cards
 }
 
@@ -112,16 +112,6 @@ fn card_order(card: &TooltipCard) -> (u8, u8) {
         _ => 2,
     };
     (kind, provider)
-}
-
-/// Maps an internal window label to the user-facing metric title shown in the
-/// tooltip, matching CodexBar's "Session" / "Weekly" wording.
-fn window_display_label(label: &str) -> String {
-    match label {
-        "5h" => "Session".to_string(),
-        "7d" => "Weekly".to_string(),
-        other => other.to_string(),
-    }
 }
 
 /// Extracts the reset hint from a usage value string such as

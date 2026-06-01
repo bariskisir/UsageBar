@@ -5,7 +5,7 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 
 use crate::application::aggregator;
-use crate::domain::{IUsageProvider, UsageBarWindow};
+use crate::domain::{window_display_label, IUsageProvider, UsageBarWindow};
 use crate::infrastructure::logger::AppLogger;
 use crate::infrastructure::paths;
 use crate::infrastructure::settings::SettingsService;
@@ -192,8 +192,9 @@ impl RefreshCoordinator {
     /// the threshold (which resets the tracking flag).
     fn check_threshold_crossings(&self, windows: &[UsageBarWindow]) -> Vec<String> {
         let mut messages = Vec::new();
-        let high = self.settings.read_sync().high_percentage;
-        let critical = self.settings.read_sync().critical_percentage;
+        let settings = self.settings.read_sync();
+        let high = settings.high_percentage;
+        let critical = settings.critical_percentage;
 
         if high <= 0.0 && critical <= 0.0 {
             return messages;
@@ -245,32 +246,25 @@ fn check_threshold_crossings_for_windows(
 
         let level = noted.get(&key).copied().unwrap_or(0);
 
+        let label = window_display_label(&current.window_label);
+        let pct = curr_pct.round() as i64;
         let mut next_level = level;
         if curr_pct < prev_pct {
-            let label = friendly_window_label(&current.window_label);
             messages.push(format!(
                 "{} {} reset to {}%",
-                current.provider_name,
-                label,
-                curr_pct.round() as i64
+                current.provider_name, label, pct
             ));
             next_level = 0;
         } else if next_level < 2 && prev_pct < critical && curr_pct >= critical {
-            let label = friendly_window_label(&current.window_label);
             messages.push(format!(
                 "{} {} at {}% — critically high!",
-                current.provider_name,
-                label,
-                curr_pct.round() as i64
+                current.provider_name, label, pct
             ));
             next_level = 2;
         } else if next_level < 1 && prev_pct < high && curr_pct >= high {
-            let label = friendly_window_label(&current.window_label);
             messages.push(format!(
                 "{} {} at {}% — approaching limit",
-                current.provider_name,
-                label,
-                curr_pct.round() as i64
+                current.provider_name, label, pct
             ));
             next_level = 1;
         }
@@ -283,16 +277,6 @@ fn check_threshold_crossings_for_windows(
     }
 
     messages
-}
-
-/// Returns a short, user-facing label for a window id (matches the tooltip
-/// display names).
-fn friendly_window_label(label: &str) -> &str {
-    match label {
-        "5h" => "Session",
-        "7d" => "Weekly",
-        other => other,
-    }
 }
 
 #[cfg(test)]

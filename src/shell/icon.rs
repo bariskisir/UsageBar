@@ -118,47 +118,47 @@ fn build_bar_layout(windows: &[UsageBarWindow], plans: &[(String, String)]) -> V
         codex_pro_windows.filter(|_| has_claude && claude_is_subscriber)
     {
         // Codex 5h+7d + Claude 5h+7d → 25-25-25-25
-        ordered.push((codex_5h.used_percent.into(), "Codex"));
-        ordered.push((codex_7d.used_percent.into(), "Codex"));
-        ordered.push((claude_5h.unwrap().used_percent.into(), "Claude"));
-        ordered.push((claude_7d.unwrap().used_percent.into(), "Claude"));
+        ordered.push((Some(codex_5h.used_percent), "Codex"));
+        ordered.push((Some(codex_7d.used_percent), "Codex"));
+        ordered.push((Some(claude_5h.unwrap().used_percent), "Claude"));
+        ordered.push((Some(claude_7d.unwrap().used_percent), "Claude"));
     } else if codex_is_free && has_claude && claude_is_subscriber {
         // Codex free (7d only) + Claude 5h+7d → 50-25-25
-        ordered.push((codex_free_window.unwrap().used_percent.into(), "Codex"));
-        ordered.push((claude_5h.unwrap().used_percent.into(), "Claude"));
-        ordered.push((claude_7d.unwrap().used_percent.into(), "Claude"));
+        ordered.push((Some(codex_free_window.unwrap().used_percent), "Codex"));
+        ordered.push((Some(claude_5h.unwrap().used_percent), "Claude"));
+        ordered.push((Some(claude_7d.unwrap().used_percent), "Claude"));
     } else if !has_codex && claude_is_subscriber {
         // Claude only 5h+7d → 50-50
-        ordered.push((claude_5h.unwrap().used_percent.into(), "Claude"));
-        ordered.push((claude_7d.unwrap().used_percent.into(), "Claude"));
+        ordered.push((Some(claude_5h.unwrap().used_percent), "Claude"));
+        ordered.push((Some(claude_7d.unwrap().used_percent), "Claude"));
     } else if codex_is_pro && !has_claude {
         // Codex pro 5h+7d only → 50-50
-        ordered.push((codex_5h.unwrap().used_percent.into(), "Codex"));
+        ordered.push((Some(codex_5h.unwrap().used_percent), "Codex"));
         if let Some(w) = codex_7d {
-            ordered.push((w.used_percent.into(), "Codex"));
+            ordered.push((Some(w.used_percent), "Codex"));
         }
     } else if codex_is_free && !has_claude {
         // Codex free (7d only) → full bar
-        ordered.push((codex_free_window.unwrap().used_percent.into(), "Codex"));
+        ordered.push((Some(codex_free_window.unwrap().used_percent), "Codex"));
     } else if has_codex && has_claude {
         if let Some(w) = codex_5h {
-            ordered.push((w.used_percent.into(), "Codex"));
+            ordered.push((Some(w.used_percent), "Codex"));
         }
         if let Some(w) = codex_7d {
-            ordered.push((w.used_percent.into(), "Codex"));
+            ordered.push((Some(w.used_percent), "Codex"));
         }
         if let Some(w) = claude_5h {
-            ordered.push((w.used_percent.into(), "Claude"));
+            ordered.push((Some(w.used_percent), "Claude"));
         }
         if let Some(w) = claude_7d {
-            ordered.push((w.used_percent.into(), "Claude"));
+            ordered.push((Some(w.used_percent), "Claude"));
         }
     } else if has_claude {
         if let Some(w) = claude_5h {
-            ordered.push((w.used_percent.into(), "Claude"));
+            ordered.push((Some(w.used_percent), "Claude"));
         }
         if let Some(w) = claude_7d {
-            ordered.push((w.used_percent.into(), "Claude"));
+            ordered.push((Some(w.used_percent), "Claude"));
         }
     }
 

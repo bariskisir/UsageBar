@@ -14,8 +14,7 @@ function el(tag, className, text) {
 }
 
 // Usage level mirrors MenuCard.levelOf (keyed off remaining capacity).
-function levelOf(remainPct, exhausted) {
-  if (exhausted) return "exhausted";
+function levelOf(remainPct) {
   if (remainPct <= 5) return "critical";
   if (remainPct <= 25) return "high";
   return "normal";
@@ -32,7 +31,7 @@ function resetText(detail) {
 function metricRow(m) {
   const pct = Math.min(100, Math.max(0, m.percent));
   const remain = 100 - pct;
-  const level = levelOf(remain, !!m.exhausted);
+  const level = levelOf(remain);
 
   const wrap = el("div", "menu-metric");
   wrap.appendChild(el("span", "menu-metric__title", m.label));
@@ -59,9 +58,13 @@ function menuCard(card) {
   const isBalance = !hasMetrics && card.lines && card.lines.length > 0;
   const art = el(
     "article",
-    "menu-card " +
-      (hasMetrics ? "menu-card--with-details" : "menu-card--header-only") +
-      (isBalance ? " menu-card--balance" : ""),
+    [
+      "menu-card",
+      hasMetrics ? "menu-card--with-details" : "menu-card--header-only",
+      isBalance ? "menu-card--balance" : "",
+    ]
+      .filter(Boolean)
+      .join(" "),
   );
 
   const header = el("header", "menu-card__header");

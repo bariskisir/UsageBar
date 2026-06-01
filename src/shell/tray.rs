@@ -4,14 +4,15 @@ use tokio::sync::mpsc;
 use crate::domain::{UsageBarWindow, UsageBlock};
 use crate::shell::native::{
     AppendMenuW, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyIcon, DestroyMenu,
-    DestroyWindow, DispatchMessageW, GetCursorPos, GetMessageW, GetModuleHandleW, Hicon, Hmenu,
-    Hwnd, Msg, NotifyIconDataW, NotifyIconIdentifier, Point, PostMessageW, PostQuitMessage, Rect,
-    RegisterClassExW, SetForegroundWindow, Shell_NotifyIconGetRect, Shell_NotifyIconW,
-    TrackPopupMenuEx, TranslateMessage, WndClassExW, MF_CHECKED, MF_POPUP, MF_STRING, NIF_ICON,
-    NIF_INFO, NIF_MESSAGE, NIF_SHOWTIP, NIF_TIP, NIIF_INFO, NIM_ADD, NIM_DELETE, NIM_MODIFY,
-    NIM_SETVERSION, NIN_POPUPCLOSE, NIN_POPUPOPEN, NOTIFYICON_VERSION_4, TPM_RETURNCMD,
-    TPM_RIGHTBUTTON, WM_APP, WM_CONTEXTMENU, WM_DESTROY, WM_NULL, WM_RBUTTONUP,
+    DestroyWindow, DispatchMessageW, GetCursorPos, GetMessageW, Hicon, Hmenu, Hwnd, Msg,
+    NotifyIconDataW, NotifyIconIdentifier, Point, PostMessageW, PostQuitMessage, Rect,
+    SetForegroundWindow, Shell_NotifyIconGetRect, Shell_NotifyIconW, TrackPopupMenuEx,
+    TranslateMessage, MF_CHECKED, MF_POPUP, MF_SEPARATOR, MF_STRING, NIF_ICON, NIF_INFO,
+    NIF_MESSAGE, NIF_SHOWTIP, NIF_TIP, NIIF_INFO, NIM_ADD, NIM_DELETE, NIM_MODIFY, NIM_SETVERSION,
+    NIN_POPUPCLOSE, NIN_POPUPOPEN, NOTIFYICON_VERSION_4, TPM_RETURNCMD, TPM_RIGHTBUTTON, WM_APP,
+    WM_CONTEXTMENU, WM_DESTROY, WM_NULL, WM_RBUTTONUP,
 };
+use crate::shell::wide::{register_window_class, to_wide_array, wide_nul};
 
 const ICON_ID: u32 = 1;
 const CALLBACK_MESSAGE: u32 = WM_APP + 1;
@@ -86,42 +87,9 @@ impl TrayIcon {
             .set(Mutex::new(Some(tx)))
             .map_err(|_| anyhow::anyhow!("TrayIcon already initialised."))?;
 
-        let instance = unsafe { GetModuleHandleW(std::ptr::null()) };
-        if instance.0 == 0 {
-            anyhow::bail!("Failed to get module handle.");
-        }
+        let (class_name, instance) = register_window_class(window_proc, "UsageBarRustTrayWindow")?;
 
-        let class_name: Vec<u16> = format!(
-            "UsageBarRustTrayWindow-{}\0",
-            uuid::Uuid::new_v4().to_string().replace('-', "")
-        )
-        .encode_utf16()
-        .collect();
-
-        let wc = WndClassExW {
-            cbSize: std::mem::size_of::<WndClassExW>() as u32,
-            style: 0,
-            lpfnWndProc: Some(window_proc),
-            cbClsExtra: 0,
-            cbWndExtra: 0,
-            hInstance: instance,
-            hIcon: Hicon(0),
-            hCursor: 0,
-            hbrBackground: 0,
-            lpszMenuName: std::ptr::null(),
-            lpszClassName: class_name.as_ptr(),
-            hIconSm: Hicon(0),
-        };
-
-        let atom = unsafe { RegisterClassExW(&wc) };
-        if atom == 0 {
-            anyhow::bail!(
-                "Failed to register tray window class. Error: {}",
-                std::io::Error::last_os_error()
-            );
-        }
-
-        let window_name: Vec<u16> = "Usage Bar\0".encode_utf16().collect();
+        let window_name = wide_nul("Usage Bar");
 
         let window_handle = unsafe {
             CreateWindowExW(
@@ -217,15 +185,9 @@ impl TrayIcon {
 
     /// Writes the native Win32 tray tooltip (thread-safe, truncates to 127 chars).
     fn set_native_tip(&self, tooltip: &str) {
-        let limited = limit_tooltip(tooltip);
         let mut data = notify_icon_data(self.window_handle);
         data.uFlags = NIF_TIP | NIF_SHOWTIP;
-
-        let mut tip_buf = [0u16; 128];
-        let tip_wide: Vec<u16> = limited.encode_utf16().take(127).collect();
-        let len = tip_wide.len().min(127);
-        tip_buf[..len].copy_from_slice(&tip_wide[..len]);
-        data.szTip = tip_buf;
+        data.szTip = to_wide_array::<128>(tooltip);
 
         unsafe {
             Shell_NotifyIconW(NIM_MODIFY, &data);
@@ -265,6 +227,7 @@ impl TrayIcon {
         let mut data = notify_icon_data(self.window_handle);
         data.uFlags = NIF_INFO;
         data.szInfo = to_wide_array(message);
+        data.szInfoTitle = to_wide_array::<64>("Usage Bar");
         data.dwInfoFlags = NIIF_INFO;
 
         unsafe {
@@ -349,86 +312,89 @@ fn show_context_menu(hwnd: Hwnd) -> anyhow::Result<()> {
     // Read current settings so we can check the active items.
     let settings = current_settings();
 
-    let result = (|| -> anyhow::Result<i32> {
-        // ── "Refresh every" submenu ────────────────────────────────────
-        let sub_refresh = submenu_with_checked_int(
+    append_submenu(
+        menu,
+        submenu_with_checked_int(
             REFRESH_EVERY_BASE,
             REFRESH_EVERY_VALUES,
             settings.refresh_period_minute,
             |v| format!("{} min", v),
-        );
-
-        let label: Vec<u16> = "Refresh every\0".encode_utf16().collect();
-        unsafe {
-            AppendMenuW(menu, MF_POPUP, sub_refresh.0 as usize, label.as_ptr());
-        }
-
-        // ── "High Level" submenu ───────────────────────────────────────
-        let sub_high = submenu_with_checked_int(
+        ),
+        "Refresh every",
+    );
+    append_submenu(
+        menu,
+        submenu_with_checked_int(
             HIGH_LEVEL_BASE,
             LEVEL_VALUES,
             settings.high_percentage.round() as i32,
             |v| format!("{}%", v),
-        );
-        let label_h: Vec<u16> = "High Level\0".encode_utf16().collect();
-        unsafe {
-            AppendMenuW(menu, MF_POPUP, sub_high.0 as usize, label_h.as_ptr());
-        }
-
-        // ── "Critical Level" submenu ───────────────────────────────────
-        let sub_critical = submenu_with_checked_int(
+        ),
+        "High Level",
+    );
+    append_submenu(
+        menu,
+        submenu_with_checked_int(
             CRITICAL_LEVEL_BASE,
             LEVEL_VALUES,
             settings.critical_percentage.round() as i32,
             |v| format!("{}%", v),
+        ),
+        "Critical Level",
+    );
+
+    append_separator(menu);
+    append_item(menu, MF_STRING, REFRESH_NOW_ID, "Refresh");
+    append_item(menu, MF_STRING, EXIT_ID, "Exit");
+
+    let cmd = unsafe {
+        SetForegroundWindow(hwnd);
+        let cmd = TrackPopupMenuEx(
+            menu,
+            TPM_RIGHTBUTTON | TPM_RETURNCMD,
+            point.x,
+            point.y,
+            hwnd,
+            std::ptr::null(),
         );
-        let label_c: Vec<u16> = "Critical Level\0".encode_utf16().collect();
-        unsafe {
-            AppendMenuW(menu, MF_POPUP, sub_critical.0 as usize, label_c.as_ptr());
-        }
-
-        // ── Separator, Refresh, Exit ───────────────────────────────────
-        let sep: Vec<u16> = "────────\0".encode_utf16().collect();
-        let refresh_label: Vec<u16> = "Refresh\0".encode_utf16().collect();
-        let exit_label: Vec<u16> = "Exit\0".encode_utf16().collect();
-
-        unsafe {
-            AppendMenuW(menu, MF_STRING | 0x800, 0, sep.as_ptr()); // MF_SEPARATOR = 0x800
-            AppendMenuW(
-                menu,
-                MF_STRING,
-                REFRESH_NOW_ID as usize,
-                refresh_label.as_ptr(),
-            );
-            AppendMenuW(menu, MF_STRING, EXIT_ID as usize, exit_label.as_ptr());
-            SetForegroundWindow(hwnd);
-
-            let cmd = TrackPopupMenuEx(
-                menu,
-                TPM_RIGHTBUTTON | TPM_RETURNCMD,
-                point.x,
-                point.y,
-                hwnd,
-                std::ptr::null(),
-            );
-
-            PostMessageW(hwnd, WM_NULL, 0, 0);
-            Ok(cmd)
-        }
-    })();
+        // Per Win32 docs, post a benign message so the menu dismisses cleanly.
+        PostMessageW(hwnd, WM_NULL, 0, 0);
+        cmd
+    };
 
     // Submenus are destroyed together with the parent menu.
     unsafe {
         DestroyMenu(menu);
     }
 
-    if let Ok(cmd) = result {
-        if cmd != 0 {
-            handle_menu_command(cmd as u32);
-        }
+    if cmd != 0 {
+        handle_menu_command(cmd as u32);
     }
 
     Ok(())
+}
+
+/// Appends a clickable string item with command id `id`.
+fn append_item(menu: Hmenu, flags: u32, id: u32, text: &str) {
+    let text = wide_nul(text);
+    unsafe {
+        AppendMenuW(menu, flags, id as usize, text.as_ptr());
+    }
+}
+
+/// Appends `sub` as a labelled popup submenu of `menu`.
+fn append_submenu(menu: Hmenu, sub: Hmenu, text: &str) {
+    let text = wide_nul(text);
+    unsafe {
+        AppendMenuW(menu, MF_POPUP, sub.0 as usize, text.as_ptr());
+    }
+}
+
+/// Appends a horizontal separator line.
+fn append_separator(menu: Hmenu) {
+    unsafe {
+        AppendMenuW(menu, MF_SEPARATOR, 0, std::ptr::null());
+    }
 }
 
 /// Reads the current `AppSettings` synchronously (this is the UI thread).
@@ -456,35 +422,40 @@ fn apply_settings(settings: &crate::infrastructure::settings::AppSettings) {
 /// Routes a menu command id to the appropriate action.
 fn handle_menu_command(cmd: u32) {
     match cmd {
-        REFRESH_NOW_ID => {
-            send_event(TrayEvent::Refresh);
-        }
+        REFRESH_NOW_ID => send_event(TrayEvent::Refresh),
         EXIT_ID => {
             send_event(TrayEvent::Exit);
             unsafe { PostQuitMessage(0) };
         }
-        id if id >= REFRESH_EVERY_BASE
-            && id < REFRESH_EVERY_BASE + REFRESH_EVERY_VALUES.len() as u32 =>
-        {
-            let idx = (id - REFRESH_EVERY_BASE) as usize;
-            let mut s = current_settings();
-            s.refresh_period_minute = REFRESH_EVERY_VALUES[idx];
-            apply_settings(&s);
+        _ => {
+            let _ = apply_ranged_setting(cmd, REFRESH_EVERY_BASE, REFRESH_EVERY_VALUES, |s, v| {
+                s.refresh_period_minute = v;
+            }) || apply_ranged_setting(cmd, HIGH_LEVEL_BASE, LEVEL_VALUES, |s, v| {
+                s.high_percentage = v as f64;
+            }) || apply_ranged_setting(cmd, CRITICAL_LEVEL_BASE, LEVEL_VALUES, |s, v| {
+                s.critical_percentage = v as f64;
+            });
         }
-        id if id >= HIGH_LEVEL_BASE && id < HIGH_LEVEL_BASE + LEVEL_VALUES.len() as u32 => {
-            let idx = (id - HIGH_LEVEL_BASE) as usize;
-            let mut s = current_settings();
-            s.high_percentage = LEVEL_VALUES[idx] as f64;
-            apply_settings(&s);
-        }
-        id if id >= CRITICAL_LEVEL_BASE && id < CRITICAL_LEVEL_BASE + LEVEL_VALUES.len() as u32 => {
-            let idx = (id - CRITICAL_LEVEL_BASE) as usize;
-            let mut s = current_settings();
-            s.critical_percentage = LEVEL_VALUES[idx] as f64;
-            apply_settings(&s);
-        }
-        _ => {}
     }
+}
+
+/// If `cmd` selects an item from the `[base, base + values.len())` submenu,
+/// reads the current settings, applies `set` with the chosen value, persists,
+/// and returns `true`. Returns `false` when `cmd` is out of range.
+fn apply_ranged_setting(
+    cmd: u32,
+    base: u32,
+    values: &[i32],
+    set: impl FnOnce(&mut crate::infrastructure::settings::AppSettings, i32),
+) -> bool {
+    if cmd < base || cmd >= base + values.len() as u32 {
+        return false;
+    }
+    let value = values[(cmd - base) as usize];
+    let mut s = current_settings();
+    set(&mut s, value);
+    apply_settings(&s);
+    true
 }
 
 /// Builds a submenu with integer-option items. The one matching `selected`
@@ -559,13 +530,7 @@ fn add_icon(hwnd: Hwnd, icon: Hicon, tooltip: &str, legacy: bool) -> anyhow::Res
     };
     data.uCallbackMessage = CALLBACK_MESSAGE;
     data.hIcon = icon;
-
-    let limited = limit_tooltip(tooltip);
-    let mut tip_buf = [0u16; 128];
-    let tip_wide: Vec<u16> = limited.encode_utf16().take(127).collect();
-    let len = tip_wide.len().min(127);
-    tip_buf[..len].copy_from_slice(&tip_wide[..len]);
-    data.szTip = tip_buf;
+    data.szTip = to_wide_array::<128>(tooltip);
 
     let ok = unsafe { Shell_NotifyIconW(NIM_ADD, &data) };
     if ok == 0 {
@@ -621,20 +586,4 @@ fn hover_anchor(wparam: usize) -> (i32, i32) {
     } else {
         (x, y)
     }
-}
-
-fn limit_tooltip(tooltip: &str) -> String {
-    if tooltip.len() <= 127 {
-        tooltip.to_string()
-    } else {
-        tooltip[..127].to_string()
-    }
-}
-
-fn to_wide_array<const N: usize>(text: &str) -> [u16; N] {
-    let mut buf = [0u16; N];
-    let wide: Vec<u16> = text.encode_utf16().take(N.saturating_sub(1)).collect();
-    let len = wide.len().min(N.saturating_sub(1));
-    buf[..len].copy_from_slice(&wide[..len]);
-    buf
 }

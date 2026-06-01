@@ -50,9 +50,7 @@ impl IUsageProvider for DeepSeekProvider {
 
         let balance_infos = json_helpers::try_get_property(&body, "balance_infos")
             .and_then(|v| v.as_array())
-            .ok_or_else(|| {
-                anyhow::anyhow!("DeepSeek response did not contain balance_infos.")
-            })?;
+            .ok_or_else(|| anyhow::anyhow!("DeepSeek response did not contain balance_infos."))?;
 
         for info in balance_infos {
             let currency = json_helpers::get_string(info, &["currency"]);
@@ -60,9 +58,10 @@ impl IUsageProvider for DeepSeekProvider {
                 continue;
             }
 
-            let total_balance = json_helpers::get_decimal(info, "total_balance").ok_or_else(|| {
-                anyhow::anyhow!("DeepSeek USD balance did not contain total_balance.")
-            })?;
+            let total_balance =
+                json_helpers::get_decimal(info, "total_balance").ok_or_else(|| {
+                    anyhow::anyhow!("DeepSeek USD balance did not contain total_balance.")
+                })?;
 
             return Ok(Some(ProviderResult {
                 blocks: vec![UsageBlock {
@@ -70,8 +69,7 @@ impl IUsageProvider for DeepSeekProvider {
                     value: format_currency(total_balance),
                     inline: true,
                 }],
-                windows: Vec::new(),
-                plan: None,
+                ..Default::default()
             }));
         }
 

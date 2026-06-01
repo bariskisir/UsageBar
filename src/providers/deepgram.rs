@@ -32,8 +32,10 @@ impl IUsageProvider for DeepgramProvider {
             return Ok(None);
         }
 
-        let project_id = get_first_project_id(&self.http_client, api_key, &cancellation_token).await?;
-        let balance = get_balance(&self.http_client, api_key, &project_id, &cancellation_token).await?;
+        let project_id =
+            get_first_project_id(&self.http_client, api_key, &cancellation_token).await?;
+        let balance =
+            get_balance(&self.http_client, api_key, &project_id, &cancellation_token).await?;
 
         Ok(Some(ProviderResult {
             blocks: vec![UsageBlock {
@@ -41,8 +43,7 @@ impl IUsageProvider for DeepgramProvider {
                 value: format_currency(balance),
                 inline: true,
             }],
-            windows: Vec::new(),
-            plan: None,
+            ..Default::default()
         }))
     }
 }

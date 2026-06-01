@@ -23,12 +23,13 @@ use wry::WebViewBuilder;
 
 use crate::domain::TooltipCard;
 use crate::shell::native::{
-    CoInitializeEx, CreateRoundRectRgn, CreateWindowExW, DefWindowProcW, GetDpiForWindow,
-    GetModuleHandleW, Hicon, Hmenu, Hwnd, PostMessageW, Rect, RegisterClassExW, SetWindowPos,
-    SetWindowRgn, ShowWindow, SystemParametersInfoW, WndClassExW, COINIT_APARTMENTTHREADED,
-    HWND_TOPMOST, SPI_GETWORKAREA, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOZORDER, SW_HIDE,
-    SW_SHOWNOACTIVATE, WM_APP, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
+    CoInitializeEx, CreateRoundRectRgn, CreateWindowExW, DefWindowProcW, GetDpiForWindow, Hmenu,
+    Hwnd, PostMessageW, Rect, SetWindowPos, SetWindowRgn, ShowWindow, SystemParametersInfoW,
+    COINIT_APARTMENTTHREADED, HWND_TOPMOST, SPI_GETWORKAREA, SWP_NOACTIVATE, SWP_NOMOVE,
+    SWP_NOZORDER, SW_HIDE, SW_SHOWNOACTIVATE, WM_APP, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
+    WS_EX_TOPMOST, WS_POPUP,
 };
+use crate::shell::wide::{register_window_class, wide_nul};
 
 /// Re-render request, posted to the popup when new content arrives.
 const WM_TT_SETDATA: u32 = WM_APP + 3;
@@ -101,40 +102,9 @@ pub fn init() -> anyhow::Result<()> {
         CoInitializeEx(std::ptr::null(), COINIT_APARTMENTTHREADED);
     }
 
-    let instance = unsafe { GetModuleHandleW(std::ptr::null()) };
-    if instance.0 == 0 {
-        anyhow::bail!("Failed to get module handle for tooltip window.");
-    }
+    let (class_name, instance) = register_window_class(tooltip_proc, "UsageBarRustWebTooltip")?;
 
-    let class_name: Vec<u16> = format!(
-        "UsageBarRustWebTooltip-{}\0",
-        uuid::Uuid::new_v4().to_string().replace('-', "")
-    )
-    .encode_utf16()
-    .collect();
-
-    let wc = WndClassExW {
-        cbSize: std::mem::size_of::<WndClassExW>() as u32,
-        style: 0,
-        lpfnWndProc: Some(tooltip_proc),
-        cbClsExtra: 0,
-        cbWndExtra: 0,
-        hInstance: instance,
-        hIcon: Hicon(0),
-        hCursor: 0,
-        hbrBackground: 0,
-        lpszMenuName: std::ptr::null(),
-        lpszClassName: class_name.as_ptr(),
-        hIconSm: Hicon(0),
-    };
-    if unsafe { RegisterClassExW(&wc) } == 0 {
-        anyhow::bail!(
-            "Failed to register tooltip window class. Error: {}",
-            std::io::Error::last_os_error()
-        );
-    }
-
-    let window_name: Vec<u16> = "UsageBarRustWebTooltip\0".encode_utf16().collect();
+    let window_name = wide_nul("UsageBarRustWebTooltip");
     let hwnd = unsafe {
         CreateWindowExW(
             WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE,
@@ -168,8 +138,8 @@ pub fn init() -> anyhow::Result<()> {
             0,
             0,
             0,
-            (WIDTH as f64 * scale).round() as i32,
-            (MIN_HEIGHT as f64 * scale).round() as i32,
+            scaled(WIDTH, scale),
+            scaled(MIN_HEIGHT, scale),
             SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOZORDER,
         );
     }
@@ -274,6 +244,11 @@ fn handle_ipc(body: &str) {
     }
 }
 
+/// Scales a logical (CSS) pixel length by the monitor DPI factor.
+fn scaled(value: i32, scale: f64) -> i32 {
+    (value as f64 * scale).round() as i32
+}
+
 /// Reads the DPI scale factor for the window (1.0 at 96 DPI / 100%).
 fn window_scale(hwnd: Hwnd) -> f64 {
     let dpi = unsafe { GetDpiForWindow(hwnd) };
@@ -294,10 +269,10 @@ fn reposition() {
     };
     let scale = window_scale(hwnd);
     let height_css = HEIGHT.load(Ordering::SeqCst).max(MIN_HEIGHT);
-    let width = (WIDTH as f64 * scale).round() as i32;
-    let height = (height_css as f64 * scale).round() as i32;
-    let gap = (8.0 * scale).round() as i32;
-    let radius = (CORNER_RADIUS as f64 * scale).round() as i32;
+    let width = scaled(WIDTH, scale);
+    let height = scaled(height_css, scale);
+    let gap = scaled(8, scale);
+    let radius = scaled(CORNER_RADIUS, scale);
 
     let icon = *last_icon_rect().lock().unwrap();
     let work = work_area();
@@ -354,8 +329,8 @@ extern "system" fn tooltip_proc(hwnd: Hwnd, msg: u32, wparam: usize, lparam: isi
         let json = pending().lock().unwrap().clone();
         WEBVIEW.with(|cell| {
             if let Some(webview) = cell.borrow().as_ref() {
-                let _ = webview
-                    .evaluate_script(&format!("window.__render && window.__render({json})"));
+                let _ =
+                    webview.evaluate_script(&format!("window.__render && window.__render({json})"));
             }
         });
         return 0;

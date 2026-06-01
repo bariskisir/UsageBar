@@ -28,10 +28,8 @@ pub fn ensure_registered(logger: &super::logger::AppLogger) {
 fn try_ensure_registered() -> anyhow::Result<()> {
     let executable_path = get_executable_path()?;
 
-    let run_key = RegKey::predef(HKEY_CURRENT_USER).open_subkey_with_flags(
-        RUN_KEY_PATH,
-        KEY_READ | KEY_SET_VALUE | KEY_WRITE,
-    );
+    let run_key = RegKey::predef(HKEY_CURRENT_USER)
+        .open_subkey_with_flags(RUN_KEY_PATH, KEY_READ | KEY_SET_VALUE | KEY_WRITE);
 
     match run_key {
         Ok(key) => {

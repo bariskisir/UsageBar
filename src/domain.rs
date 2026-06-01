@@ -26,7 +26,7 @@ pub struct ProviderCredentials {
 }
 
 /// The result returned by a successful provider query.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ProviderResult {
     pub blocks: Vec<UsageBlock>,
     /// Ordered list of usage windows for the tray icon bar layout.
@@ -35,6 +35,17 @@ pub struct ProviderResult {
     /// Optional plan/tier name, e.g. "Plus", "Pro", "Max". Shown next to the
     /// provider name in the tooltip.
     pub plan: Option<String>,
+}
+
+/// Maps an internal window label (`"5h"` / `"7d"`) to the user-facing name
+/// shown in the tray tooltip and notifications (`"Session"` / `"Weekly"`).
+/// Unknown labels pass through unchanged.
+pub fn window_display_label(label: &str) -> &str {
+    match label {
+        "5h" => "Session",
+        "7d" => "Weekly",
+        other => other,
+    }
 }
 
 /// A single horizontal bar segment in the tray icon.

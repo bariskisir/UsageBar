@@ -3,9 +3,6 @@
 UsageBarRust is a system-tray application for Windows that displays LLM and API usage/balance information.
 Originally ported from C#: https://github.com/bariskisir/UsageBar
 
-The tray panel UI (tooltip design, icon colour palette, CSS, and bar rendering) is taken from
-[Win-CodexBar](https://github.com/Finesssee/Win-CodexBar) (MIT-licensed).
-
 <img src="images/interface.png" alt="UsageBarRust interface" width="60%">
 
 ---

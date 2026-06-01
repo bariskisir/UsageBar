@@ -3,8 +3,10 @@ use chrono::{DateTime, Local, TimeZone, Utc};
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, AUTHORIZATION};
 use serde_json::Value;
 
-use crate::domain::{IUsageProvider, ProviderCredentials, ProviderResult, UsageBarWindow, UsageBlock};
-use crate::providers::json_helpers;
+use crate::domain::{
+    IUsageProvider, ProviderCredentials, ProviderResult, UsageBarWindow, UsageBlock,
+};
+use crate::providers::{capitalize_first, json_helpers};
 
 const USAGE_ENDPOINT: &str = "https://chatgpt.com/backend-api/wham/usage";
 
@@ -118,16 +120,7 @@ fn codex_plan_label(plan_type: &str) -> String {
         "enterprise" => "Enterprise".to_string(),
         "education" | "edu" => "Education".to_string(),
         "guest" => "Guest".to_string(),
-        other => capitalize(other),
-    }
-}
-
-/// Capitalises the first character of `s`.
-fn capitalize(s: &str) -> String {
-    let mut chars = s.chars();
-    match chars.next() {
-        None => String::new(),
-        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+        other => capitalize_first(other),
     }
 }
 

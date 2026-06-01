@@ -65,6 +65,7 @@ pub const NIN_POPUPOPEN: u32 = WM_USER + 6; // 0x0406
 pub const NIN_POPUPCLOSE: u32 = WM_USER + 7; // 0x0407
 
 pub const MF_STRING: u32 = 0x00000000;
+pub const MF_SEPARATOR: u32 = 0x00000800;
 pub const MF_CHECKED: u32 = 0x00000008;
 pub const MF_UNCHECKED: u32 = 0x00000000;
 pub const MF_POPUP: u32 = 0x00000010;
@@ -294,8 +295,15 @@ extern "system" {
         -> i32;
     pub fn CreateRoundRectRgn(x1: i32, y1: i32, x2: i32, y2: i32, w: i32, h: i32) -> isize;
     pub fn CreatePen(iStyle: i32, cWidth: i32, color: u32) -> isize;
-    pub fn RoundRect(hDC: isize, left: i32, top: i32, right: i32, bottom: i32, width: i32, height: i32)
-        -> i32;
+    pub fn RoundRect(
+        hDC: isize,
+        left: i32,
+        top: i32,
+        right: i32,
+        bottom: i32,
+        width: i32,
+        height: i32,
+    ) -> i32;
     #[allow(clippy::too_many_arguments)]
     pub fn CreateFontW(
         cHeight: i32,
