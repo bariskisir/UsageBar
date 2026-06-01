@@ -60,8 +60,11 @@ impl UsageLevel {
 }
 
 /// Creates the 32×32 tray icon from provider usage windows.
-pub fn create_usage_icon(windows: &[UsageBarWindow]) -> anyhow::Result<Hicon> {
-    let bars = build_bar_layout(windows);
+pub fn create_usage_icon(
+    windows: &[UsageBarWindow],
+    plans: &[(String, String)],
+) -> anyhow::Result<Hicon> {
+    let bars = build_bar_layout(windows, plans);
     render_icon(&bars)
 }
 
@@ -77,11 +80,15 @@ struct BarSpec {
 
 /// Determines the ordered bar layout based on which Codex / Claude windows
 /// exist (mirrors the original `BuildBarLayout` cases).
-fn build_bar_layout(windows: &[UsageBarWindow]) -> Vec<BarSpec> {
-    let codex_windows: Vec<&UsageBarWindow> =
-        windows.iter().filter(|w| w.provider_name == "Codex").collect();
-    let claude_windows: Vec<&UsageBarWindow> =
-        windows.iter().filter(|w| w.provider_name == "Claude").collect();
+fn build_bar_layout(windows: &[UsageBarWindow], plans: &[(String, String)]) -> Vec<BarSpec> {
+    let codex_windows: Vec<&UsageBarWindow> = windows
+        .iter()
+        .filter(|w| w.provider_name == "Codex")
+        .collect();
+    let claude_windows: Vec<&UsageBarWindow> = windows
+        .iter()
+        .filter(|w| w.provider_name == "Claude")
+        .collect();
 
     let codex_5h = find_window(&codex_windows, "5h");
     let codex_7d = find_window(&codex_windows, "7d");
@@ -90,21 +97,34 @@ fn build_bar_layout(windows: &[UsageBarWindow]) -> Vec<BarSpec> {
 
     let has_codex = !codex_windows.is_empty();
     let has_claude = !claude_windows.is_empty();
-    let codex_is_free = codex_5h.is_none() && codex_7d.is_some();
-    let codex_is_pro = codex_5h.is_some();
+    let codex_plan_is_free = provider_plan_is(plans, "Codex", "Free");
+    let codex_free_window = if codex_plan_is_free {
+        codex_7d.or(codex_5h)
+    } else {
+        codex_7d
+    };
+    let codex_is_free = codex_free_window.is_some() && (codex_plan_is_free || codex_5h.is_none());
+    let codex_is_pro = codex_5h.is_some() && !codex_plan_is_free;
+    let codex_pro_windows = if codex_is_pro {
+        codex_5h.zip(codex_7d)
+    } else {
+        None
+    };
     let claude_is_subscriber = claude_5h.is_some() && claude_7d.is_some();
 
     let mut ordered: Vec<(Option<f64>, &str)> = Vec::new();
 
-    if codex_is_pro && has_claude && claude_is_subscriber {
+    if let Some((codex_5h, codex_7d)) =
+        codex_pro_windows.filter(|_| has_claude && claude_is_subscriber)
+    {
         // Codex 5h+7d + Claude 5h+7d → 25-25-25-25
-        ordered.push((codex_5h.unwrap().used_percent.into(), "Codex"));
-        ordered.push((codex_7d.unwrap().used_percent.into(), "Codex"));
+        ordered.push((codex_5h.used_percent.into(), "Codex"));
+        ordered.push((codex_7d.used_percent.into(), "Codex"));
         ordered.push((claude_5h.unwrap().used_percent.into(), "Claude"));
         ordered.push((claude_7d.unwrap().used_percent.into(), "Claude"));
     } else if codex_is_free && has_claude && claude_is_subscriber {
         // Codex free (7d only) + Claude 5h+7d → 50-25-25
-        ordered.push((codex_7d.unwrap().used_percent.into(), "Codex"));
+        ordered.push((codex_free_window.unwrap().used_percent.into(), "Codex"));
         ordered.push((claude_5h.unwrap().used_percent.into(), "Claude"));
         ordered.push((claude_7d.unwrap().used_percent.into(), "Claude"));
     } else if !has_codex && claude_is_subscriber {
@@ -119,7 +139,7 @@ fn build_bar_layout(windows: &[UsageBarWindow]) -> Vec<BarSpec> {
         }
     } else if codex_is_free && !has_claude {
         // Codex free (7d only) → full bar
-        ordered.push((codex_7d.unwrap().used_percent.into(), "Codex"));
+        ordered.push((codex_free_window.unwrap().used_percent.into(), "Codex"));
     } else if has_codex && has_claude {
         if let Some(w) = codex_5h {
             ordered.push((w.used_percent.into(), "Codex"));
@@ -151,6 +171,12 @@ fn build_bar_layout(windows: &[UsageBarWindow]) -> Vec<BarSpec> {
 
 fn find_window<'a>(windows: &[&'a UsageBarWindow], label: &str) -> Option<&'a UsageBarWindow> {
     windows.iter().find(|w| w.window_label == label).copied()
+}
+
+fn provider_plan_is(plans: &[(String, String)], provider_name: &str, expected: &str) -> bool {
+    plans
+        .iter()
+        .any(|(provider, plan)| provider == provider_name && plan.eq_ignore_ascii_case(expected))
 }
 
 /// Assigns pixel positions to ordered bars. Separators are 2px between
@@ -208,8 +234,8 @@ fn assign_bar_positions(ordered: &[(Option<f64>, &str)]) -> Vec<BarSpec> {
 fn get_height_ratios(n: usize) -> Vec<f64> {
     match n {
         1 => vec![1.0],
-        2 => vec![1.0, 1.0],          // 50-50
-        3 => vec![2.0, 1.0, 1.0],     // 50-25-25
+        2 => vec![1.0, 1.0],           // 50-50
+        3 => vec![2.0, 1.0, 1.0],      // 50-25-25
         4 => vec![1.0, 1.0, 1.0, 1.0], // 25-25-25-25
         _ => vec![1.0; n],
     }
@@ -241,8 +267,8 @@ fn render_icon(bars: &[BarSpec]) -> anyhow::Result<Hicon> {
         if let Some(pct) = bar.used_percent {
             let (r, g, b) = UsageLevel::from_percent(pct).color();
             let clamped = pct.clamp(0.0, 100.0);
-            let fill_end = (BAR_LEFT + (BAR_WIDTH as f64 * clamped / 100.0).round() as i32)
-                .min(BAR_RIGHT);
+            let fill_end =
+                (BAR_LEFT + (BAR_WIDTH as f64 * clamped / 100.0).round() as i32).min(BAR_RIGHT);
             for y in bar.y..bar.y + bar.height {
                 for x in BAR_LEFT..fill_end {
                     put_pixel(&mut xor, x, y, r, g, b, 255);
@@ -308,25 +334,37 @@ mod tests {
             window("Claude", "5h", 30.0),
             window("Claude", "7d", 40.0),
         ];
-        assert_eq!(build_bar_layout(&windows).len(), 4);
+        assert_eq!(build_bar_layout(&windows, &[]).len(), 4);
     }
 
     #[test]
     fn claude_subscriber_produces_two_bars() {
         let windows = vec![window("Claude", "5h", 30.0), window("Claude", "7d", 40.0)];
-        assert_eq!(build_bar_layout(&windows).len(), 2);
+        assert_eq!(build_bar_layout(&windows, &[]).len(), 2);
+    }
+
+    #[test]
+    fn codex_free_plan_with_primary_window_and_claude_subscriber_produces_three_bars() {
+        let windows = vec![
+            window("Codex", "5h", 10.0),
+            window("Claude", "5h", 30.0),
+            window("Claude", "7d", 40.0),
+        ];
+        let plans = vec![("Codex".to_string(), "Free".to_string())];
+
+        assert_eq!(build_bar_layout(&windows, &plans).len(), 3);
     }
 
     #[test]
     fn empty_windows_produce_single_unknown_bar() {
-        let bars = build_bar_layout(&[]);
+        let bars = build_bar_layout(&[], &[]);
         assert_eq!(bars.len(), 1);
         assert!(bars[0].used_percent.is_none());
     }
 
     #[test]
     fn render_icon_succeeds() {
-        let bars = build_bar_layout(&[window("Codex", "5h", 50.0)]);
+        let bars = build_bar_layout(&[window("Codex", "5h", 50.0)], &[]);
         assert!(render_icon(&bars).is_ok());
     }
 }

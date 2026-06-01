@@ -3,15 +3,14 @@ use tokio::sync::mpsc;
 
 use crate::domain::{UsageBarWindow, UsageBlock};
 use crate::shell::native::{
-    AppendMenuW, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyIcon,
-    DestroyMenu, DestroyWindow, DispatchMessageW, GetCursorPos, GetMessageW, GetModuleHandleW,
-    Hicon, Hmenu, Hwnd, Msg, NotifyIconDataW, NotifyIconIdentifier, Point, PostMessageW,
-    PostQuitMessage, Rect, RegisterClassExW, SetForegroundWindow, Shell_NotifyIconGetRect,
-    Shell_NotifyIconW, TrackPopupMenuEx, TranslateMessage, WndClassExW,
-    MF_CHECKED, MF_POPUP, MF_STRING, NIF_ICON, NIF_INFO, NIF_MESSAGE, NIF_SHOWTIP,
-    NIF_TIP, NIIF_INFO, NIM_ADD, NIM_DELETE, NIM_MODIFY, NIM_SETVERSION, NIN_POPUPCLOSE,
-    NIN_POPUPOPEN, NOTIFYICON_VERSION_4, TPM_RETURNCMD, TPM_RIGHTBUTTON, WM_APP, WM_CONTEXTMENU,
-    WM_DESTROY, WM_NULL, WM_RBUTTONUP,
+    AppendMenuW, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyIcon, DestroyMenu,
+    DestroyWindow, DispatchMessageW, GetCursorPos, GetMessageW, GetModuleHandleW, Hicon, Hmenu,
+    Hwnd, Msg, NotifyIconDataW, NotifyIconIdentifier, Point, PostMessageW, PostQuitMessage, Rect,
+    RegisterClassExW, SetForegroundWindow, Shell_NotifyIconGetRect, Shell_NotifyIconW,
+    TrackPopupMenuEx, TranslateMessage, WndClassExW, MF_CHECKED, MF_POPUP, MF_STRING, NIF_ICON,
+    NIF_INFO, NIF_MESSAGE, NIF_SHOWTIP, NIF_TIP, NIIF_INFO, NIM_ADD, NIM_DELETE, NIM_MODIFY,
+    NIM_SETVERSION, NIN_POPUPCLOSE, NIN_POPUPOPEN, NOTIFYICON_VERSION_4, TPM_RETURNCMD,
+    TPM_RIGHTBUTTON, WM_APP, WM_CONTEXTMENU, WM_DESTROY, WM_NULL, WM_RBUTTONUP,
 };
 
 const ICON_ID: u32 = 1;
@@ -158,7 +157,7 @@ impl TrayIcon {
             }
         }
 
-        let icon_handle = Mutex::new(crate::shell::icon::create_usage_icon(&[])?);
+        let icon_handle = Mutex::new(crate::shell::icon::create_usage_icon(&[], &[])?);
         add_icon(
             window_handle,
             *icon_handle.lock().unwrap(),
@@ -237,8 +236,9 @@ impl TrayIcon {
     pub fn update_icon(
         &self,
         windows: &[UsageBarWindow],
+        plans: &[(String, String)],
     ) -> anyhow::Result<()> {
-        let next_icon = crate::shell::icon::create_usage_icon(windows)?;
+        let next_icon = crate::shell::icon::create_usage_icon(windows, plans)?;
         let mut guard = self.icon_handle.lock().unwrap();
         let previous = *guard;
         *guard = next_icon;
@@ -395,7 +395,12 @@ fn show_context_menu(hwnd: Hwnd) -> anyhow::Result<()> {
 
         unsafe {
             AppendMenuW(menu, MF_STRING | 0x800, 0, sep.as_ptr()); // MF_SEPARATOR = 0x800
-            AppendMenuW(menu, MF_STRING, REFRESH_NOW_ID as usize, refresh_label.as_ptr());
+            AppendMenuW(
+                menu,
+                MF_STRING,
+                REFRESH_NOW_ID as usize,
+                refresh_label.as_ptr(),
+            );
             AppendMenuW(menu, MF_STRING, EXIT_ID as usize, exit_label.as_ptr());
             SetForegroundWindow(hwnd);
 
@@ -459,7 +464,9 @@ fn handle_menu_command(cmd: u32) {
             send_event(TrayEvent::Exit);
             unsafe { PostQuitMessage(0) };
         }
-        id if id >= REFRESH_EVERY_BASE && id < REFRESH_EVERY_BASE + REFRESH_EVERY_VALUES.len() as u32 => {
+        id if id >= REFRESH_EVERY_BASE
+            && id < REFRESH_EVERY_BASE + REFRESH_EVERY_VALUES.len() as u32 =>
+        {
             let idx = (id - REFRESH_EVERY_BASE) as usize;
             let mut s = current_settings();
             s.refresh_period_minute = REFRESH_EVERY_VALUES[idx];

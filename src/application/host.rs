@@ -175,7 +175,7 @@ impl RefreshCoordinator {
 
         self.tray
             .update_tooltip(&snapshot.blocks, &snapshot.windows, &snapshot.plans);
-        self.tray.update_icon(&snapshot.windows)?;
+        self.tray.update_icon(&snapshot.windows, &snapshot.plans)?;
 
         let messages = self.check_threshold_crossings(&snapshot.windows);
         if !messages.is_empty() {

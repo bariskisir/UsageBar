@@ -49,6 +49,8 @@ const OVERRIDE_CSS: &str = "html,body{margin:0;padding:0;overflow:hidden;backgro
 .menu-surface--tray .menu-card--balance{padding-top:3px;padding-bottom:3px;gap:0;}\
 .menu-surface--tray .menu-card--balance .menu-card__name{font-size:12px;font-weight:500;}\
 .menu-surface--tray .menu-card--balance .menu-card__email{font-size:12px;}\
+/* More breathing room between Session and Weekly metric rows. */\
+.menu-surface--tray .menu-card__metrics{display:flex;flex-direction:column;gap:10px;}\
 /* Plan/tier label shown next to the provider name. */\
 .menu-surface--tray .menu-card__plan-inline{margin-left:auto;font-size:11px;font-weight:500;color:var(--text-secondary);white-space:nowrap;}";
 
