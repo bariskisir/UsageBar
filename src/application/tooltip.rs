@@ -100,7 +100,18 @@ pub fn build_cards(
         });
     }
 
+    cards.sort_by_key(|card| card_order(card));
     cards
+}
+
+fn card_order(card: &TooltipCard) -> (u8, u8) {
+    let kind = if card.metrics.is_empty() { 1 } else { 0 };
+    let provider = match card.title.as_str() {
+        "Codex" => 0,
+        "Claude" => 1,
+        _ => 2,
+    };
+    (kind, provider)
 }
 
 /// Maps an internal window label to the user-facing metric title shown in the
@@ -204,6 +215,21 @@ mod tests {
         assert!(!cards[0].metrics.is_empty());
         assert_eq!(cards[1].title, "OpenRouter");
         assert!(cards[1].metrics.is_empty());
+    }
+
+    #[test]
+    fn build_cards_orders_codex_before_claude() {
+        let blocks = vec![
+            block("Claude 5h:", "20%, 1h"),
+            block("Codex 5h:", "30%, 2h"),
+        ];
+        let windows = vec![window("Claude", "5h", 20.0), window("Codex", "5h", 30.0)];
+
+        let cards = build_cards(&blocks, &windows, &[]);
+
+        assert_eq!(cards.len(), 2);
+        assert_eq!(cards[0].title, "Codex");
+        assert_eq!(cards[1].title, "Claude");
     }
 
     #[test]
