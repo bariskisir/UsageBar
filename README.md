@@ -17,7 +17,7 @@ This project is ported from C# -> https://github.com/bariskisir/UsageBar
 
 ## Install
 
-1. Download the latest release for your platform from [Releases](https://github.com/bariskisir/usagebar/releases/latest).
+1. Download the latest release for your platform from [Releases](https://github.com/bariskisir/usagebarrust/releases/latest).
 2. Install or extract the package.
 3. Run **UsageBarRust**.
 
