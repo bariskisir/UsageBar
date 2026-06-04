@@ -444,7 +444,7 @@ internal sealed class WebViewTooltip : IDisposable
 
     private static string BuildHtml()
     {
-        var css = ReadEmbeddedResource("UsageBar.Assets.codexbar.css");
+        var css = ReadEmbeddedResource("UsageBar.Assets.usagebar.css");
         var js = ReadEmbeddedResource("UsageBar.Assets.tooltip.js");
 
         const string overrideCss =

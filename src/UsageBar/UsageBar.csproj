@@ -25,7 +25,7 @@
   </Target>
 
   <ItemGroup>
-    <EmbeddedResource Include="Assets\codexbar.css" />
+    <EmbeddedResource Include="Assets\usagebar.css" />
     <EmbeddedResource Include="Assets\tooltip.js" />
   </ItemGroup>
 

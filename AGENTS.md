@@ -43,7 +43,7 @@ UsageBar is a small Windows notification-area application for showing LLM/API us
         |-- Assets/
         |   |-- AppIcon.ico
         |   |-- AppIcon.png
-        |   |-- codexbar.css
+        |   |-- usagebar.css
         |   `-- tooltip.js
         `-- Shell/Tray/
 ```
@@ -65,7 +65,7 @@ Important files and directories:
 | `src/UsageBar/Infrastructure/Startup/` | Current-user Windows startup registration through the registry. |
 | `src/UsageBar/Providers/` | Codex, Claude, DeepSeek, OpenRouter, Deepgram provider implementations and JSON helpers. Providers now also extract plan/tier information (`plan_type`, `subscriptionType`) for tooltip display and icon layout. |
 | `src/UsageBar/Shell/Tray/` | Win32 tray icon, context menu with settings submenus, hidden window, native interop declarations, icon generation (CodexBar palette), WebView2 tooltip popup, tooltip card builder, and STA SynchronizationContext. |
-| `src/UsageBar/Assets/codexbar.css` | Verbatim 120KB CodexBar stylesheet, embedded as a build resource and baked into the WebView2 HTML. |
+| `src/UsageBar/Assets/usagebar.css` | Tooltip-specific stylesheet, embedded as a build resource and baked into the WebView2 HTML. Keep selectors aligned with the DOM built by `tooltip.js`. |
 | `src/UsageBar/Assets/tooltip.js` | Verbatim DOM builder from Rust; renders `MenuCard`-style cards from `window.__render({cards})`. Kept verbatim via an IPC shim (`window.ipc`) injected by the host. |
 | `Directory.Build.props` | Enables latest analyzer level, .NET analyzers, and code style enforcement during builds. |
 | `.editorconfig` | Formatting and C# style preferences. |
@@ -181,7 +181,7 @@ The project uses `Microsoft.Web.WebView2` (1.0.2903.40) — the only NuGet depen
 - If WebView2 init fails (missing runtime, COM error, directory access), `UseLegacyTooltip` is set and falls back to the existing `szTip` path.
 - `TooltipCardBuilder.Build(UsageSnapshot)` groups windows into metric cards (Codex first, then Claude) and non-metric blocks into balance cards (DeepSeek, OpenRouter, Deepgram). Plan labels are shown inline on metric cards.
 - Data shape serialised to the WebView: `{"cards":[{"title":"Codex","plan":"Pro","metrics":[{"label":"Session","percent":53.0,"detail":"2h 10m"}],...}]}`.
-- The HTML page embeds the verbatim 120KB `codexbar.css` and 4.6KB `tooltip.js` at build time (EmbeddedResource → `NavigateToString`).
+- The HTML page embeds the tooltip-specific `usagebar.css` and verbatim 4.6KB `tooltip.js` at build time (EmbeddedResource → `NavigateToString`).
 
 ### TrayIcon Integration
 
@@ -316,7 +316,7 @@ This application consumes third-party APIs; it does not expose an HTTP API.
 The user interface is the Windows tray icon, WebView2 custom tooltip, and context menu.
 
 - Tray UI lives in `src/UsageBar/Shell/Tray/`.
-- WebView2 tooltip is rendered in a borderless popup window; its content is HTML built from embedded `codexbar.css` and `tooltip.js`.
+- WebView2 tooltip is rendered in a borderless popup window; its content is HTML built from embedded `usagebar.css` and `tooltip.js`.
 - The WebView2 IPC bridge (`window.ipc`) is injected by the host before page load so `tooltip.js` stays verbatim.
 - Keep hover behaviour cheap: hovering the tray icon must use cached data and must not call provider APIs.
 - Context menu commands: Refresh every (submenu), High Level (submenu), Critical Level (submenu), Refresh, Exit.
