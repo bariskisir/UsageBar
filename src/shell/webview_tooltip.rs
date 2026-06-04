@@ -1,10 +1,9 @@
 //! Custom tooltip rendered with WebView2 (via `wry`).
 //!
 //! Instead of approximating CodexBar's look, this hosts a real WebView2 control
-//! and renders the **verbatim** `styles.css` shipped with Win-CodexBar
-//! (`apps/desktop-tauri/src/styles.css`, copied to `assets/codexbar.css`). The
-//! DOM is built (in `assets/tooltip.js`) with the exact class hierarchy of
-//! `MenuCard.tsx` / `TrayPanel.tsx`, so the design is pixel-identical.
+//! and renders a tooltip-only subset of the Win-CodexBar tray styles. The DOM
+//! is built in `assets/tooltip.js` with the matching `MenuCard.tsx` /
+//! `TrayPanel.tsx` class hierarchy.
 //!
 //! The popup is a borderless, top-most, non-activating window. It is shown in
 //! response to `NIN_POPUPOPEN` and hidden on `NIN_POPUPCLOSE`. Content is pushed
@@ -38,22 +37,9 @@ const WIDTH: i32 = 300;
 const CORNER_RADIUS: i32 = 10;
 const MIN_HEIGHT: i32 = 60;
 
-/// Verbatim CodexBar stylesheet + the DOM-building shim, embedded at build time.
-const CODEXBAR_CSS: &str = include_str!("../../assets/codexbar.css");
+/// Tooltip stylesheet + the DOM-building shim, embedded at build time.
+const USAGEBAR_CSS: &str = include_str!("../../assets/usagebar.css");
 const TOOLTIP_JS: &str = include_str!("../../assets/tooltip.js");
-/// Small overrides so the surface fills the borderless popup cleanly.
-const OVERRIDE_CSS: &str = "html,body{margin:0;padding:0;overflow:hidden;background:var(--app-bg);}\
-#root{width:100%;}\
-.menu-surface--tray{box-shadow:none;}\
-/* Balance-only providers: compact single row, smaller and less padded. */\
-.menu-surface--tray .menu-stack__item:has(.menu-card--balance){padding:1px 0;}\
-.menu-surface--tray .menu-card--balance{padding-top:3px;padding-bottom:3px;gap:0;}\
-.menu-surface--tray .menu-card--balance .menu-card__name{font-size:12px;font-weight:500;}\
-.menu-surface--tray .menu-card--balance .menu-card__email{font-size:12px;}\
-/* More breathing room between Session and Weekly metric rows. */\
-.menu-surface--tray .menu-card__metrics{display:flex;flex-direction:column;gap:10px;}\
-/* Plan/tier label shown next to the provider name. */\
-.menu-surface--tray .menu-card__plan-inline{margin-left:auto;font-size:11px;font-weight:500;color:var(--text-secondary);white-space:nowrap;}";
 
 // ── Shared state (UI thread owns the WebView; statics bridge other threads) ─
 static POPUP_HWND: OnceLock<Hwnd> = OnceLock::new();
@@ -212,7 +198,7 @@ pub fn hide() {
 fn build_html() -> String {
     format!(
         "<!doctype html><html data-theme=\"dark\"><head><meta charset=\"utf-8\">\
-<style>{CODEXBAR_CSS}</style><style>{OVERRIDE_CSS}</style></head>\
+<style>{USAGEBAR_CSS}</style></head>\
 <body><div id=\"root\"></div><script>{TOOLTIP_JS}</script></body></html>"
     )
 }

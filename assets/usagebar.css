@@ -1,0 +1,286 @@
+/*
+ * Tooltip-only subset of Win-CodexBar's tray panel styles.
+ *
+ * Keep this file aligned with the DOM built in tooltip.js. Rules for the
+ * settings window, provider picker, popout panel, charts, and unused themes
+ * have intentionally been removed.
+ */
+:root {
+  color-scheme: dark;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro",
+    "Segoe UI Variable", Inter, "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+
+  --app-bg: #1c1c1e;
+  --text-primary: #f5f5f7;
+  --text-secondary: #8e8e93;
+  --menu-popover-bg: var(--app-bg);
+  --usage-bar-track: rgba(255, 255, 255, 0.15);
+  --usage-bar-normal: #0a84ff;
+  --usage-bar-high: #ffd60a;
+  --usage-bar-critical: #ff9f0a;
+
+  color: var(--text-primary);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  background: var(--app-bg);
+}
+
+body {
+  color: var(--text-primary);
+}
+
+#root {
+  width: 100%;
+}
+
+.menu-surface {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  min-width: 260px;
+  padding: 6px 10px;
+  color: var(--text-primary);
+  background: var(--menu-popover-bg);
+  font-size: 13px;
+  line-height: 1.3;
+  -webkit-font-smoothing: antialiased;
+}
+
+.menu-surface--tray {
+  min-height: 0;
+  height: auto;
+  padding: 4px 0;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+.menu-surface__body {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.menu-surface__body::-webkit-scrollbar {
+  display: none;
+}
+
+.menu-stack {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  min-height: 0;
+  max-height: none;
+  overflow: visible;
+}
+
+.menu-stack__item {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  padding: 2px 0;
+  overflow: visible;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+}
+
+.menu-stack__item:has(.menu-card--balance) {
+  padding: 1px 0;
+}
+
+.menu-stack__sep {
+  height: 0.5px;
+  margin: 2px 16px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.menu-card {
+  --menu-card-x: 20px;
+  --menu-card-header-only-y: 7px;
+  --menu-card-section-y: 6px;
+  --menu-card-header-line-gap: 4px;
+  --menu-card-header-column-gap: 12px;
+
+  display: flex;
+  align-items: stretch;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  padding: var(--menu-card-header-only-y) var(--menu-card-x);
+  overflow: visible;
+  text-align: left;
+}
+
+.menu-card--with-details {
+  padding-top: var(--menu-card-section-y);
+  padding-bottom: var(--menu-card-section-y);
+}
+
+.menu-card--balance {
+  gap: 0;
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+
+.menu-card__header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--menu-card-header-line-gap);
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.menu-card__title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--menu-card-header-column-gap);
+}
+
+.menu-card__name-group {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
+
+.menu-card__name {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu-card--balance .menu-card__name {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.menu-card__email {
+  flex: 0 1 auto;
+  max-width: 55%;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 400;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu-card--balance .menu-card__email {
+  font-size: 12px;
+}
+
+.menu-card__plan-inline {
+  margin-left: auto;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.menu-card__divider {
+  margin: 3px 0;
+}
+
+.menu-card__content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 6px;
+}
+
+.menu-card__metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.menu-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.menu-metric__title {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.menu-metric__bar {
+  width: 100%;
+  max-width: 100%;
+  height: 6px;
+  overflow: hidden;
+  background: var(--usage-bar-track);
+  border-radius: 3px;
+}
+
+.menu-metric__bar-fill {
+  height: 100%;
+  background: var(--usage-bar-normal);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.menu-metric__bar-fill[data-level="high"] {
+  background: var(--usage-bar-high);
+}
+
+.menu-metric__bar-fill[data-level="critical"] {
+  background: var(--usage-bar-critical);
+}
+
+.menu-metric__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.menu-metric__pct {
+  color: var(--text-primary);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.menu-metric__reset {
+  color: var(--text-secondary);
+  font-size: 10px;
+  white-space: nowrap;
+}

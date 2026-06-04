@@ -1,6 +1,6 @@
 [package]
 name = "UsageBarRust"
-version = "1.3.5"
+version = "1.3.6"
 edition = "2021"
 description = "System tray application that displays LLM and API usage/balance information"
 

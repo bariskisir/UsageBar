@@ -11,7 +11,7 @@ UsageBarRust is a Windows notification-area (system tray) application that displ
 - Language/runtime: Rust (edition 2021) on Tokio async runtime.
 - Target platform: Windows only (`#![windows_subsystem = "windows"]`, Win32 tray icon via raw FFI).
 - Application type: Windows GUI executable (no console window in release builds).
-- UI model: raw Win32 tray icon and hidden message window through `extern "system"` FFI in `shell/native.rs`; tooltip popup rendered with **WebView2** via the `wry` crate (v0.54), using the verbatim `styles.css` from Win-CodexBar.
+- UI model: raw Win32 tray icon and hidden message window through `extern "system"` FFI in `shell/native.rs`; tooltip popup rendered with **WebView2** via the `wry` crate (v0.54), using a tooltip-only subset of the Win-CodexBar tray styles.
 - Providers: Codex OAuth, Claude OAuth, DeepSeek API, OpenRouter API, Deepgram API.
 - Configuration path: `%APPDATA%\UsageBarRust\settings.json`.
 - Log path: `%APPDATA%\UsageBarRust\app.log`.
@@ -31,7 +31,7 @@ UsageBarRust is a Windows notification-area (system tray) application that displ
 |-- build.rs
 |-- assets/
 |   |-- AppIcon.ico
-|   |-- codexbar.css        ← verbatim CodexBar styles.css for WebView2 tooltip
+|   |-- usagebar.css        ← tooltip-only subset of CodexBar tray styles
 |   `-- tooltip.js           ← DOM builder: MenuCard / MetricRow class hierarchy
 |-- images/
 |   `-- interface.png
@@ -87,10 +87,10 @@ Important files and directories:
 | `src/providers/deepgram.rs` | Deepgram API-key provider. Calls projects endpoint, then project balances endpoint; sums USD balances. |
 | `src/providers/json_helpers.rs` | Shared JSON traversal helpers: `try_get_property`, `get_string`, `get_decimal`, `get_double`. Tolerates both number and string JSON values. |
 | `src/shell/tray.rs` | `TrayIcon`: hidden Win32 message-only window, `Shell_NotifyIconW` tray icon, right-click context menu (Refresh every / High Level / Critical Level submenus + Refresh + Exit), tooltip updates, and Windows notification display. All public methods use `&self` with interior mutability. |
-| `src/shell/webview_tooltip.rs` | WebView2-based tooltip popup. Hosts a borderless, top-most, non-activating window with the embedded `codexbar.css` and `tooltip.js`. Receives `TooltipCard` data from Rust via `evaluate_script`, rendered height reported back over wry IPC for auto-sizing. |
+| `src/shell/webview_tooltip.rs` | WebView2-based tooltip popup. Hosts a borderless, top-most, non-activating window with the embedded `usagebar.css` and `tooltip.js`. Receives `TooltipCard` data from Rust via `evaluate_script`, rendered height reported back over wry IPC for auto-sizing. |
 | `src/shell/icon.rs` | 32×32 tray icon renderer. CodexBar colour palette (usage-level: green/yellow/orange/red), dark plate, grey track. Bar layout via `build_bar_layout()` with UsageBarRust's division logic (5 cases for Codex/Claude combinations). |
 | `src/shell/native.rs` | Raw Win32 FFI declarations (`extern "system"`) for user32, kernel32, gdi32, shell32, ole32. Handle wrappers (`Hwnd`, `Hicon`, `Hmenu`, `Hinstance`) with manual `Send + Sync` impls. DPI helpers. |
-| `assets/codexbar.css` | Verbatim copy of `apps/desktop-tauri/src/styles.css` from Win-CodexBar (5007 lines). |
+| `assets/usagebar.css` | Tooltip-only subset of the Win-CodexBar tray panel styles, limited to the DOM built by `tooltip.js`. |
 | `assets/tooltip.js` | DOM builder that constructs the `menu-surface--tray` / `menu-card` / `menu-metric` class hierarchy matching `MenuCard.tsx` and `TrayPanel.tsx`. Communicates with Rust via `window.ipc.postMessage`. |
 
 ## Setup Instructions
@@ -173,7 +173,7 @@ cargo build --release
 ### Tooltip
 
 Two modes, controlled by `useLegacyTooltip`:
-- **`false` (default):** WebView2 popup (`shell/webview_tooltip.rs`). Renders `assets/codexbar.css` (verbatim CodexBar styles) with DOM built by `assets/tooltip.js`. Cards group usage windows by provider with `Session`/`Weekly` metric rows. Balance-only providers render compactly with the value right-aligned. No character limit.
+- **`false` (default):** WebView2 popup (`shell/webview_tooltip.rs`). Renders the tooltip-only CodexBar styles in `assets/usagebar.css` with DOM built by `assets/tooltip.js`. Cards group usage windows by provider with `Session`/`Weekly` metric rows. Balance-only providers render compactly with the value right-aligned. No character limit.
 - **`true`:** Native Win32 `NOTIFYICONDATA.szTip`, 127-char limit (`tooltip::format`).
 
 ### Tray Icon
@@ -283,10 +283,10 @@ Default settings file shape:
 
 ## Frontend Guidelines
 
-- The tooltip UI is a WebView2 window rendered with `assets/codexbar.css` (verbatim from Win-CodexBar) and `assets/tooltip.js`.
-- The CSS file is the exact copy of `apps/desktop-tauri/src/styles.css` from Win-CodexBar. When updating the design, re-copy the upstream CSS and re-test.
+- The tooltip UI is a WebView2 window rendered with the tooltip-only Win-CodexBar styles in `assets/usagebar.css` and the DOM builder in `assets/tooltip.js`.
+- Keep `assets/usagebar.css` limited to selectors and custom properties used by `assets/tooltip.js`. When syncing upstream design changes, copy only the relevant tray panel rules and re-test.
 - `tooltip.js` builds DOM with the same class hierarchy as `MenuCard.tsx` / `TrayPanel.tsx`: `menu-surface--tray` > `menu-stack` > `menu-stack__item` > `menu-card` > `menu-card__header`, `menu-card__divider`, `menu-metric`, etc.
-- Styling overrides live in `webview_tooltip.rs`'s `OVERRIDE_CSS` constant (shadow removal, compact balance cards, plan inline label).
+- Tooltip styling, including compact balance cards and inline plan labels, lives in `assets/usagebar.css`.
 - IPC between Rust and JS: JS reports `{type: "ready"}` / `{type: "height", value}`; Rust pushes render data via `window.__render({cards})`.
 - Do not add React, npm, or a build step to the shell; keep the JS/CSS asset files self-contained.
 
@@ -311,7 +311,7 @@ Default settings file shape:
   3. Add `pub mod <name>;` to `src/providers/mod.rs`
   4. Register in `UsageBarRustHost::create_default()` in `host.rs`
   5. If API-key-based, add fields to `AppSettings` and `ProviderCredentials`
-- When adjusting the WebView2 tooltip layout, modify `OVERRIDE_CSS` in `webview_tooltip.rs` rather than the verbatim `codexbar.css`.
+- When adjusting the WebView2 tooltip layout, update `assets/usagebar.css` and keep it aligned with the DOM classes emitted by `assets/tooltip.js`.
 - Run `cargo check` and `cargo test` before finishing.
 - Avoid destructive git or filesystem operations.
 

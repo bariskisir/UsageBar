@@ -1,6 +1,5 @@
-// Renders the CodexBar tray "MenuCard" DOM using the verbatim styles.css that
-// ships with Win-CodexBar (apps/desktop-tauri/src). The class hierarchy mirrors
-// MenuCard.tsx / TrayPanel.tsx so the copied CSS applies unchanged.
+// Renders the CodexBar tray "MenuCard" DOM using the tooltip-only stylesheet in
+// usagebar.css. The class hierarchy mirrors MenuCard.tsx / TrayPanel.tsx.
 //
 // Data is pushed from Rust via window.__render({ cards: [...] }); the rendered
 // height is reported back over the wry IPC bridge so the host window can size
