@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/UsageBar.Core/UsageBar.Core.csproj" />
+    <Project Path="src/UsageBar.App/UsageBar.App.csproj" />
+    <Project Path="src/UsageBar.Tests/UsageBar.Tests.csproj" />
+  </Folder>
+</Solution>

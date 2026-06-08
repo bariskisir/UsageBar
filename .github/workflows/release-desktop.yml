@@ -39,11 +39,17 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Restore
-        run: dotnet restore src/UsageBar.slnx
+        run: dotnet restore UsageBar.slnx
+
+      - name: Build
+        run: dotnet build UsageBar.slnx --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test UsageBar.slnx --configuration Release --no-build
 
       - name: Publish desktop app
         run: >
-          dotnet publish src/UsageBar/UsageBar.csproj
+          dotnet publish src/UsageBar.App/UsageBar.App.csproj
           --configuration Release
           --runtime win-x64
           --self-contained true
