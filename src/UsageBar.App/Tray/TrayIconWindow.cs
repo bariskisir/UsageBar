@@ -201,18 +201,18 @@ internal sealed class TrayIconWindow : IDisposable
     private void AddIcon()
     {
         var data = CreateNotifyIconData();
-        data.uFlags = NativeMethods.NifMessage | NativeMethods.NifIcon | NativeMethods.NifTip;
+        data.uFlags = NativeMethods.NifMessage | NativeMethods.NifIcon;
         data.uCallbackMessage = NativeMethods.CallbackMessage;
         data.hIcon = _iconHandle;
-        data.szTip = IconName;
 
         if (!NativeMethods.ShellNotifyIcon(NativeMethods.NimAdd, ref data))
         {
             throw new InvalidOperationException("Failed to add tray icon.");
         }
 
-        // Request version 4 so the shell sends NIN_POPUPOPEN / NIN_POPUPCLOSE and suppresses
-        // the standard tooltip (we draw our own WebView2 popup).
+        // Request version 4 so the shell sends NIN_POPUPOPEN / NIN_POPUPCLOSE. We register no
+        // tip text (no NIF_TIP) so the shell never draws its own tooltip — only our WebView2
+        // popup shows on hover, with no stray gray box peeking out from behind it.
         data.uFlags = 0;
         data.uTimeoutOrVersion = NativeMethods.NotifyIconVersion4;
         NativeMethods.ShellNotifyIcon(NativeMethods.NimSetVersion, ref data);
