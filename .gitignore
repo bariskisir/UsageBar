@@ -1,14 +1,33 @@
 # Rust
 /target/
-**/*.rs.bk
-*.pdb
 
-# IDE
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.local.json
+
+# Logs and diagnostics
+*.log
+logs/
+
+# Build and release artifacts
+/artifacts/
+/dist/
+/publish/
+*.pdb
+*.ilk
+*.exe~
+
+# IDE/editor state
 .vs/
 .vscode/
-*.swp
-*.swo
+!.vscode/settings.json
+*.suo
+*.user
+*.rsuser
 
-# OS
-.DS_Store
+# OS files
 Thumbs.db
+Desktop.ini
+.DS_Store

@@ -30,7 +30,6 @@ C:\Users\USERNAME\AppData\Roaming\UsageBarRust\settings.json
 ```json
 {
   "refreshPeriodMinute": 5,
-  "useLegacyTooltip": false,
   "highPercentage": 70,
   "criticalPercentage": 90,
   "DEEPSEEK_API_KEY": "",
