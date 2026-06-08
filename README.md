@@ -52,7 +52,7 @@ Providers with blank or missing API keys will not be enabled
 
 ```bash
 git clone https://github.com/bariskisir/usagebar.git
-cd usagebar/src/UsageBar
+cd usagebar/src/UsageBar.App
 dotnet run
 ```
 
