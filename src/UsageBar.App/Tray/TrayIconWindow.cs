@@ -109,7 +109,7 @@ internal sealed class TrayIconWindow : IDisposable
         {
             var data = CreateNotifyIconData();
             data.uFlags = NativeMethods.NifInfo;
-            data.szInfoTitle = IconName;
+            data.szInfoTitle = "";
             data.szInfo = Truncate(message, 255);
             data.dwInfoFlags = infoFlag;
             NativeMethods.ShellNotifyIcon(NativeMethods.NimModify, ref data);
