@@ -11,12 +11,6 @@ namespace UsageBar.Infrastructure;
 /// </summary>
 internal sealed class JsonSettingsStore : ISettingsStore
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        PropertyNameCaseInsensitive = true,
-    };
-
     private readonly string _filePath;
     private readonly ILogger<JsonSettingsStore> _logger;
 
@@ -38,7 +32,7 @@ internal sealed class JsonSettingsStore : ISettingsStore
             await using (var stream = File.OpenRead(_filePath))
             {
                 settings = await JsonSerializer
-                    .DeserializeAsync<AppSettings>(stream, JsonOptions, cancellationToken)
+                    .DeserializeAsync(stream, SettingsJsonContext.Default.AppSettings, cancellationToken)
                     .ConfigureAwait(false);
             }
 
@@ -58,7 +52,7 @@ internal sealed class JsonSettingsStore : ISettingsStore
         try
         {
             EnsureFile();
-            var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(_filePath), JsonOptions);
+            var settings = JsonSerializer.Deserialize(File.ReadAllText(_filePath), SettingsJsonContext.Default.AppSettings);
             return (settings ?? AppSettings.Default).Normalize();
         }
         catch (Exception exception)
@@ -88,5 +82,6 @@ internal sealed class JsonSettingsStore : ISettingsStore
         }
     }
 
-    private static string Serialize(AppSettings settings) => JsonSerializer.Serialize(settings, JsonOptions);
+    private static string Serialize(AppSettings settings) =>
+        JsonSerializer.Serialize(settings, SettingsJsonContext.Default.AppSettings);
 }

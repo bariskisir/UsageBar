@@ -14,11 +14,9 @@ internal sealed class StubClaudeAuthReader(ClaudeAuth? auth) : IClaudeAuthReader
 }
 
 /// <summary>A provider whose result (or exception) is supplied by a delegate.</summary>
-internal sealed class StubProvider(string name, ProviderCategory category, Func<ProviderResult?> result) : IUsageProvider
+internal sealed class StubProvider(string name, Func<ProviderResult?> result, int displayOrder = 0) : IUsageProvider
 {
-    public string Name => name;
-
-    public ProviderCategory Category => category;
+    public ProviderDescriptor Descriptor { get; } = new(name, displayOrder);
 
     public Task<ProviderResult?> GetUsageAsync(ProviderQueryContext context, CancellationToken cancellationToken) =>
         Task.FromResult(result());

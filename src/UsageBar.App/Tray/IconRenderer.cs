@@ -1,12 +1,12 @@
 using UsageBar.Application;
-using UsageBar.Domain;
 
 namespace UsageBar.Tray;
 
 /// <summary>
 /// Renders the tray icon: a dark plate with one or more horizontal usage bars. The bar
-/// selection/order is decided by <see cref="IconLayout"/> (testable); this class turns that
-/// layout into pixels and a native icon handle using the CodexBar palette.
+/// selection/order/weight is decided upstream by the providers and <see cref="IconLayout"/>
+/// (testable); this class turns the laid-out bars into pixels and a native icon handle using the
+/// CodexBar palette.
 /// </summary>
 internal static class IconRenderer
 {
@@ -27,12 +27,9 @@ internal static class IconRenderer
     private static readonly (byte R, byte G, byte B) Plate = (60, 60, 70);
     private static readonly (byte R, byte G, byte B) Track = (80, 80, 90);
 
-    /// <summary>Creates a tray icon (HICON) from the current usage windows and plans.</summary>
-    public static nint CreateUsageIcon(IReadOnlyList<UsageWindow> windows, IReadOnlyList<ProviderPlan> plans)
-    {
-        var bars = IconLayout.Compute(windows, plans);
-        return RenderIcon(AssignBarPositions(bars));
-    }
+    /// <summary>Creates a tray icon (HICON) from the laid-out bars (empty → a single empty track).</summary>
+    public static nint CreateUsageIcon(IReadOnlyList<IconLayout.Bar> bars) =>
+        RenderIcon(AssignBarPositions(bars));
 
     private enum UsageLevel
     {
@@ -63,6 +60,12 @@ internal static class IconRenderer
 
     private static List<BarSpec> AssignBarPositions(IReadOnlyList<IconLayout.Bar> ordered)
     {
+        // An empty layout still draws a single empty track so the icon is never blank.
+        if (ordered.Count == 0)
+        {
+            ordered = [new IconLayout.Bar(UsedPercent: null, Weight: 1.0, Provider: "None")];
+        }
+
         var count = ordered.Count;
         var bars = new List<BarSpec>(count);
 
@@ -73,15 +76,23 @@ internal static class IconRenderer
         }
 
         var available = ContentHeight - totalSeparator;
-        var ratios = GetHeightRatios(count);
-        var totalRatio = ratios.Sum();
+        var totalWeight = 0.0;
+        foreach (var bar in ordered)
+        {
+            totalWeight += bar.Weight;
+        }
+
+        if (totalWeight <= 0)
+        {
+            totalWeight = count;
+        }
 
         var y = ContentTop;
         for (var i = 0; i < count; i++)
         {
             var height = i == count - 1
                 ? ContentBottom - y                                        // last bar absorbs rounding
-                : (int)Math.Round(available * ratios[i] / totalRatio);
+                : (int)Math.Round(available * ordered[i].Weight / totalWeight);
 
             bars.Add(new BarSpec(y, height, ordered[i].UsedPercent));
             y += height;
@@ -94,15 +105,6 @@ internal static class IconRenderer
 
         return bars;
     }
-
-    private static double[] GetHeightRatios(int count) => count switch
-    {
-        1 => [1.0],
-        2 => [1.0, 1.0],            // 50-50
-        3 => [2.0, 1.0, 1.0],       // 50-25-25
-        4 => [1.0, 1.0, 1.0, 1.0],  // 25-25-25-25
-        _ => [.. Enumerable.Repeat(1.0, count)],
-    };
 
     private static nint RenderIcon(List<BarSpec> bars)
     {

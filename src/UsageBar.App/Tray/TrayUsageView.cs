@@ -11,8 +11,7 @@ namespace UsageBar.Tray;
 /// </summary>
 internal sealed class TrayUsageView(TrayIconWindow window, WebViewTooltip tooltip) : IUsageView
 {
-    public void ShowIcon(IReadOnlyList<UsageWindow> windows, IReadOnlyList<ProviderPlan> plans) =>
-        window.UpdateIcon(windows, plans);
+    public void ShowIcon(IReadOnlyList<IconLayout.Bar> bars) => window.UpdateIcon(bars);
 
     public void ShowCards(IReadOnlyList<TooltipCard> cards) => tooltip.SetContent(cards);
 

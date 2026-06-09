@@ -7,16 +7,16 @@ namespace UsageBar.Tests;
 public sealed class TooltipCardBuilderTests
 {
     [Fact]
-    public void Orders_metric_cards_before_balance_and_codex_before_claude()
+    public void Builds_cards_in_result_order_with_correct_shapes()
     {
         IReadOnlyList<ProviderResult> results =
         [
-            ProviderResult.Balance("OpenRouter", "$1.00"),
-            ProviderResult.Metric("Claude", "Max", [TestData.Window("Claude", "Session", 50, "2h 0m")]),
-            ProviderResult.Metric("Codex", "Pro", [TestData.Window("Codex", "Session", 10, "1h 0m")]),
+            new MetricResult("Codex", "Pro", [TestData.Window("Codex", "Session", 10, "1h 0m")], []),
+            new MetricResult("Claude", "Max", [TestData.Window("Claude", "Session", 50, "2h 0m")], []),
+            new BalanceResult("OpenRouter", "$1.00"),
         ];
 
-        var cards = TooltipCardBuilder.Build(new UsageSnapshot(results, [], []));
+        var cards = TooltipCardBuilder.Build(new UsageSnapshot(results, []));
 
         Assert.Equal(["Codex", "Claude", "OpenRouter"], cards.Select(c => c.Title));
     }
@@ -26,10 +26,10 @@ public sealed class TooltipCardBuilderTests
     {
         IReadOnlyList<ProviderResult> results =
         [
-            ProviderResult.Metric("Codex", "Pro", [TestData.Window("Codex", "Session", 10, "1h 0m")]),
+            new MetricResult("Codex", "Pro", [TestData.Window("Codex", "Session", 10, "1h 0m")], []),
         ];
 
-        var card = Assert.Single(TooltipCardBuilder.Build(new UsageSnapshot(results, [], [])));
+        var card = Assert.Single(TooltipCardBuilder.Build(new UsageSnapshot(results, [])));
 
         Assert.Equal("Pro", card.Plan);
         Assert.Empty(card.Lines);
@@ -42,12 +42,25 @@ public sealed class TooltipCardBuilderTests
     [Fact]
     public void Balance_card_has_a_single_line_and_no_plan()
     {
-        IReadOnlyList<ProviderResult> results = [ProviderResult.Balance("DeepSeek", "$9.99")];
+        IReadOnlyList<ProviderResult> results = [new BalanceResult("DeepSeek", "$9.99")];
 
-        var card = Assert.Single(TooltipCardBuilder.Build(new UsageSnapshot(results, [], [])));
+        var card = Assert.Single(TooltipCardBuilder.Build(new UsageSnapshot(results, [])));
 
         Assert.Null(card.Plan);
         Assert.Empty(card.Metrics);
         Assert.Equal(["$9.99"], card.Lines);
+    }
+
+    [Fact]
+    public void Metric_result_with_no_windows_is_skipped()
+    {
+        IReadOnlyList<ProviderResult> results =
+        [
+            new MetricResult("Codex", "Pro", [], []),
+            new BalanceResult("DeepSeek", "$9.99"),
+        ];
+
+        var card = Assert.Single(TooltipCardBuilder.Build(new UsageSnapshot(results, [])));
+        Assert.Equal("DeepSeek", card.Title);
     }
 }

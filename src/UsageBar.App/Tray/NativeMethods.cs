@@ -18,7 +18,6 @@ internal static class NativeMethods
 
     // ── SetWindowPos ────────────────────────────────────────
     public static readonly nint HWND_TOPMOST = -1;
-    public const uint SWP_NOSIZE = 0x0001;
     public const uint SWP_NOMOVE = 0x0002;
     public const uint SWP_NOZORDER = 0x0004;
     public const uint SWP_NOACTIVATE = 0x0010;
@@ -51,9 +50,7 @@ internal static class NativeMethods
 
     public const uint NifMessage = 0x00000001;
     public const uint NifIcon = 0x00000002;
-    public const uint NifTip = 0x00000004;
     public const uint NifInfo = 0x00000010;
-    public const uint NifShowTip = 0x00000080;
     public const uint NiifInfo = 0x00000001;
     public const uint NiifWarning = 0x00000002;
     public const uint NiifError = 0x00000003;

@@ -48,6 +48,9 @@ jobs:
         run: dotnet test UsageBar.slnx --configuration Release --no-build
 
       - name: Publish desktop app
+        # ReadyToRun is intentionally omitted: it precompiles native images for faster cold
+        # start but roughly adds ~15 MB to the single file. For a login-launched, always-resident
+        # tray app the one-time JIT cost is invisible, so we trade it for a ~25% smaller download.
         run: >
           dotnet publish src/UsageBar.App/UsageBar.App.csproj
           --configuration Release
@@ -55,7 +58,6 @@ jobs:
           --self-contained true
           --output artifacts/publish/win-x64
           -p:PublishSingleFile=true
-          -p:PublishReadyToRun=true
           -p:EnableCompressionInSingleFile=true
 
       - name: Install Inno Setup

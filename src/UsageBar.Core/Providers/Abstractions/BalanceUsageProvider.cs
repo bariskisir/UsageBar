@@ -19,12 +19,11 @@ public abstract class BalanceUsageProvider : IUsageProvider
 
     protected BalanceUsageProvider(HttpClient httpClient) => _httpClient = httpClient;
 
-    public abstract string Name { get; }
+    /// <summary>Identity and presentation metadata; subclasses set the display order.</summary>
+    public abstract ProviderDescriptor Descriptor { get; }
 
     /// <summary>Credential/environment-variable name that enables this provider.</summary>
     protected abstract string CredentialName { get; }
-
-    public ProviderCategory Category => ProviderCategory.Balance;
 
     public async Task<ProviderResult?> GetUsageAsync(ProviderQueryContext context, CancellationToken cancellationToken)
     {
@@ -35,7 +34,7 @@ public abstract class BalanceUsageProvider : IUsageProvider
         }
 
         var balanceText = await FetchBalanceAsync(_httpClient, apiKey, cancellationToken).ConfigureAwait(false);
-        return ProviderResult.Balance(Name, balanceText);
+        return new BalanceResult(Descriptor.Name, balanceText);
     }
 
     /// <summary>

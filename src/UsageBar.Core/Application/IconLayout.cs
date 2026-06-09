@@ -3,133 +3,45 @@ using UsageBar.Domain;
 namespace UsageBar.Application;
 
 /// <summary>
-/// Plan-aware selection of which usage windows become tray-icon bars, and in what order.
-/// This is pure logic (no rendering) so the layout cases can be unit-tested; the Windows
-/// shell turns the resulting <see cref="Bar"/> list into pixels.
+/// Flattens the per-provider tray bars from a refresh into the final ordered list the shell
+/// rasterizes. Each metric provider decides its own bars (count + weight) in its result, so this
+/// is pure ordering/concatenation — provider-agnostic and unit-testable.
 /// </summary>
 public static class IconLayout
 {
-    /// <summary>A single bar to render: a usage percentage (or null for an empty track) and its provider.</summary>
-    public readonly record struct Bar(double? UsedPercent, string Provider);
+    /// <summary>
+    /// A single bar to render: a usage percentage (or null for an empty track), its height weight
+    /// relative to the other bars, and the owning provider (used for inter-bar spacing).
+    /// </summary>
+    public readonly record struct Bar(double? UsedPercent, double Weight, string Provider);
 
     /// <summary>
-    /// Computes the ordered bars. Mirrors the original CodexBar layout cases: Codex Pro +
-    /// Claude subscriber → four bars; Codex Free → Weekly only; single provider → one or two
-    /// bars; and sensible fallbacks. Returns a single empty bar when there is nothing to show.
+    /// Concatenates each metric result's <see cref="MetricResult.IconBars"/> in the order the
+    /// results are given (the aggregator pre-sorts by display order). Returns a single empty bar
+    /// when there is nothing to show.
     /// </summary>
-    public static IReadOnlyList<Bar> Compute(IReadOnlyList<UsageWindow> windows, IReadOnlyList<ProviderPlan> plans)
+    public static IReadOnlyList<Bar> Compute(IReadOnlyList<ProviderResult> results)
     {
-        var codex = windows.Where(w => w.ProviderName == "Codex").ToList();
-        var claude = windows.Where(w => w.ProviderName == "Claude").ToList();
+        var bars = new List<Bar>();
 
-        var codexSession = FindWindow(codex, "Session");
-        var codexWeekly = FindWindow(codex, "Weekly");
-        var claudeSession = FindWindow(claude, "Session");
-        var claudeWeekly = FindWindow(claude, "Weekly");
-
-        var hasCodex = codex.Count > 0;
-        var hasClaude = claude.Count > 0;
-
-        var codexPlanIsFree = PlanIs(plans, "Codex", "Free");
-        var codexFreeWindow = codexPlanIsFree ? codexWeekly ?? codexSession : codexWeekly;
-        var codexIsFree = codexFreeWindow is not null && (codexPlanIsFree || codexSession is null);
-        var codexIsPro = codexSession is not null && !codexPlanIsFree;
-        var claudeIsSubscriber = claudeSession is not null && claudeWeekly is not null;
-
-        var ordered = new List<Bar>();
-
-        if (codexIsPro && hasClaude && claudeIsSubscriber)
+        foreach (var result in results)
         {
-            // Codex Session+Weekly + Claude Session+Weekly → 25/25/25/25.
-            ordered.Add(BarFor(codexSession!));
-            ordered.Add(BarFor(codexWeekly!));
-            ordered.Add(BarFor(claudeSession!));
-            ordered.Add(BarFor(claudeWeekly!));
-        }
-        else if (codexIsFree && hasClaude && claudeIsSubscriber)
-        {
-            // Codex Free (Weekly only) + Claude Session+Weekly → 50/25/25.
-            ordered.Add(BarFor(codexFreeWindow!));
-            ordered.Add(BarFor(claudeSession!));
-            ordered.Add(BarFor(claudeWeekly!));
-        }
-        else if (!hasCodex && claudeIsSubscriber)
-        {
-            // Claude only Session+Weekly → 50/50.
-            ordered.Add(BarFor(claudeSession!));
-            ordered.Add(BarFor(claudeWeekly!));
-        }
-        else if (codexIsPro && !hasClaude)
-        {
-            // Codex Pro Session(+Weekly) only.
-            ordered.Add(BarFor(codexSession!));
-            if (codexWeekly is not null)
+            if (result is not MetricResult metric)
             {
-                ordered.Add(BarFor(codexWeekly));
+                continue;
             }
-        }
-        else if (codexIsFree && !hasClaude)
-        {
-            // Codex Free (Weekly only) → full bar.
-            ordered.Add(BarFor(codexFreeWindow!));
-        }
-        else if (hasCodex && hasClaude)
-        {
-            // Mixed fallback: show whatever is present in a reasonable order.
-            AddIfPresent(ordered, codexSession);
-            AddIfPresent(ordered, codexWeekly);
-            AddIfPresent(ordered, claudeSession);
-            AddIfPresent(ordered, claudeWeekly);
-        }
-        else if (hasClaude)
-        {
-            // Claude only, not a full subscriber pair.
-            AddIfPresent(ordered, claudeSession);
-            AddIfPresent(ordered, claudeWeekly);
-        }
 
-        if (ordered.Count == 0)
-        {
-            ordered.Add(new Bar(UsedPercent: null, Provider: "None"));
-        }
-
-        return ordered;
-    }
-
-    private static Bar BarFor(UsageWindow window) => new(window.UsedPercent, window.ProviderName);
-
-    private static void AddIfPresent(List<Bar> bars, UsageWindow? window)
-    {
-        if (window is not null)
-        {
-            bars.Add(BarFor(window));
-        }
-    }
-
-    private static bool PlanIs(IReadOnlyList<ProviderPlan> plans, string providerName, string expected)
-    {
-        foreach (var plan in plans)
-        {
-            if (string.Equals(plan.ProviderName, providerName, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(plan.Plan, expected, StringComparison.OrdinalIgnoreCase))
+            foreach (var bar in metric.IconBars)
             {
-                return true;
+                bars.Add(new Bar(bar.UsedPercent, bar.Weight, metric.ProviderName));
             }
         }
 
-        return false;
-    }
-
-    private static UsageWindow? FindWindow(List<UsageWindow> windows, string label)
-    {
-        foreach (var window in windows)
+        if (bars.Count == 0)
         {
-            if (window.Label == label)
-            {
-                return window;
-            }
+            bars.Add(new Bar(UsedPercent: null, Weight: 1.0, Provider: "None"));
         }
 
-        return null;
+        return bars;
     }
 }

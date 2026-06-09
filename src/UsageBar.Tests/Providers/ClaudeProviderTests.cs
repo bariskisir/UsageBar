@@ -26,10 +26,10 @@ public sealed class ClaudeProviderTests
         var result = await Create(json, new ClaudeAuth("token", SubscriptionType: "max"))
             .GetUsageAsync(TestData.Context(), CancellationToken.None);
 
-        Assert.NotNull(result);
-        Assert.Equal("Max", result!.Plan);
+        var metric = Assert.IsType<MetricResult>(result);
+        Assert.Equal("Max", metric.Plan);
         Assert.Collection(
-            result.Windows,
+            metric.Windows,
             session =>
             {
                 Assert.Equal("Session", session.Label);
@@ -45,6 +45,26 @@ public sealed class ClaudeProviderTests
     }
 
     [Fact]
+    public async Task Yields_equal_weight_session_and_weekly_bars()
+    {
+        var json = """
+        {
+          "five_hour": { "utilization": 88.0, "resets_at": "2030-01-01T02:10:00Z" },
+          "seven_day": { "utilization": 40.0, "resets_at": "2030-01-08T00:00:00Z" }
+        }
+        """;
+
+        var result = await Create(json, new ClaudeAuth("token", SubscriptionType: "max"))
+            .GetUsageAsync(TestData.Context(), CancellationToken.None);
+
+        var metric = Assert.IsType<MetricResult>(result);
+        Assert.Collection(
+            metric.IconBars,
+            session => { Assert.Equal(88.0, session.UsedPercent); Assert.Equal(1.0, session.Weight); },
+            weekly => { Assert.Equal(40.0, weekly.UsedPercent); Assert.Equal(1.0, weekly.Weight); });
+    }
+
+    [Fact]
     public async Task Falls_back_to_rate_limit_tier_for_plan()
     {
         var json = """{ "five_hour": { "utilization": 10.0, "resets_at": "2030-01-01T01:00:00Z" } }""";
@@ -52,7 +72,8 @@ public sealed class ClaudeProviderTests
         var result = await Create(json, new ClaudeAuth("token", SubscriptionType: null, RateLimitTier: "claude_pro"))
             .GetUsageAsync(TestData.Context(), CancellationToken.None);
 
-        Assert.Equal("Pro", result!.Plan);
+        var metric = Assert.IsType<MetricResult>(result);
+        Assert.Equal("Pro", metric.Plan);
     }
 
     [Fact]

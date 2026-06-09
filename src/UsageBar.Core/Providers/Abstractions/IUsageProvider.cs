@@ -9,11 +9,8 @@ namespace UsageBar.Providers;
 /// </summary>
 public interface IUsageProvider
 {
-    /// <summary>Display name, e.g. "Codex" or "DeepSeek".</summary>
-    string Name { get; }
-
-    /// <summary>Whether this provider reports usage windows or a balance.</summary>
-    ProviderCategory Category { get; }
+    /// <summary>Static identity and presentation metadata (name, category, display order).</summary>
+    ProviderDescriptor Descriptor { get; }
 
     /// <summary>
     /// Queries the provider for the current refresh.

@@ -81,7 +81,7 @@ public sealed class UsageRefreshService : IDisposable
                 .RefreshAsync(_providers, context, _logger, CancellationToken.None)
                 .ConfigureAwait(false);
 
-            _view.ShowIcon(snapshot.Windows, snapshot.Plans);
+            _view.ShowIcon(IconLayout.Compute(snapshot.Results));
             _view.ShowCards(TooltipCardBuilder.Build(snapshot));
 
             EmitThresholdNotifications(snapshot.Windows, settings);

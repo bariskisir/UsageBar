@@ -3,51 +3,34 @@ using UsageBar.Domain;
 namespace UsageBar.Application;
 
 /// <summary>
-/// Builds <see cref="TooltipCard"/>s from a <see cref="UsageSnapshot"/>: metric providers
-/// become metric cards (Session/Weekly bars + plan), balance providers become balance
-/// cards. Metric cards sort before balance cards; Codex sorts before Claude.
+/// Builds <see cref="TooltipCard"/>s from a <see cref="UsageSnapshot"/>: metric results become
+/// metric cards (Session/Weekly bars + plan), balance results become balance cards. Results are
+/// already ordered by the aggregator (metric providers sort before balance providers via their
+/// display order), so cards are emitted in that order.
 /// </summary>
 internal static class TooltipCardBuilder
 {
     public static IReadOnlyList<TooltipCard> Build(UsageSnapshot snapshot)
     {
-        var metricCards = new List<TooltipCard>();
-        var balanceCards = new List<TooltipCard>();
+        var cards = new List<TooltipCard>(snapshot.Results.Count);
 
         foreach (var result in snapshot.Results)
         {
-            if (result.Category == ProviderCategory.Metric)
+            switch (result)
             {
-                if (result.Windows.Count == 0)
-                {
-                    continue;
-                }
+                case MetricResult metric when metric.Windows.Count > 0:
+                    var metrics = metric.Windows
+                        .Select(window => new TooltipMetric(window.Label, window.UsedPercent, window.ResetText ?? string.Empty))
+                        .ToList();
+                    cards.Add(new TooltipCard(metric.ProviderName, metric.Plan, metrics, []));
+                    break;
 
-                var metrics = result.Windows
-                    .Select(window => new TooltipMetric(window.Label, window.UsedPercent, window.ResetText ?? string.Empty))
-                    .ToList();
-
-                metricCards.Add(new TooltipCard(result.ProviderName, result.Plan, metrics, []));
-            }
-            else
-            {
-                balanceCards.Add(new TooltipCard(result.ProviderName, Plan: null, [], [result.BalanceText ?? string.Empty]));
+                case BalanceResult balance:
+                    cards.Add(new TooltipCard(balance.ProviderName, Plan: null, [], [balance.BalanceText]));
+                    break;
             }
         }
 
-        metricCards.Sort(static (a, b) => ProviderRank(a.Title).CompareTo(ProviderRank(b.Title)));
-        balanceCards.Sort(static (a, b) => ProviderRank(a.Title).CompareTo(ProviderRank(b.Title)));
-
-        var cards = new List<TooltipCard>(metricCards.Count + balanceCards.Count);
-        cards.AddRange(metricCards);
-        cards.AddRange(balanceCards);
         return cards;
     }
-
-    private static int ProviderRank(string name) => name switch
-    {
-        "Codex" => 0,
-        "Claude" => 1,
-        _ => 2,
-    };
 }

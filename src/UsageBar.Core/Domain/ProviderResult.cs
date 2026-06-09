@@ -1,45 +1,27 @@
 namespace UsageBar.Domain;
 
 /// <summary>
-/// The outcome of a single provider refresh. Construct via <see cref="Metric"/> for
-/// window/percent providers or <see cref="Balance"/> for balance providers.
+/// The outcome of a single provider refresh. A provider returns exactly one concrete kind —
+/// <see cref="MetricResult"/> or <see cref="BalanceResult"/> — never a value that conflates both;
+/// consumers pattern-match on the concrete type.
 /// </summary>
-public sealed record ProviderResult
-{
-    private ProviderResult(
-        string providerName,
-        ProviderCategory category,
-        string? plan,
-        IReadOnlyList<UsageWindow> windows,
-        string? balanceText)
-    {
-        ProviderName = providerName;
-        Category = category;
-        Plan = plan;
-        Windows = windows;
-        BalanceText = balanceText;
-    }
+public abstract record ProviderResult(string ProviderName);
 
-    /// <summary>Display name of the provider that produced this result.</summary>
-    public string ProviderName { get; }
+/// <summary>
+/// A metric provider's result: usage windows, an optional plan/tier label, and the tray bars the
+/// provider contributes (ordered, weighted).
+/// </summary>
+/// <param name="ProviderName">Display name of the provider that produced this result.</param>
+/// <param name="Plan">Plan/tier label (e.g. "Pro", "Max", "Free"), or <see langword="null"/>.</param>
+/// <param name="Windows">Usage windows for the tooltip and threshold checks.</param>
+/// <param name="IconBars">The provider's contribution to the tray icon (ordered, weighted).</param>
+public sealed record MetricResult(
+    string ProviderName,
+    string? Plan,
+    IReadOnlyList<UsageWindow> Windows,
+    IReadOnlyList<IconBar> IconBars) : ProviderResult(ProviderName);
 
-    /// <summary>Whether this result carries usage windows or a balance.</summary>
-    public ProviderCategory Category { get; }
-
-    /// <summary>Plan/tier label for metric providers; <see langword="null"/> otherwise.</summary>
-    public string? Plan { get; }
-
-    /// <summary>Usage windows for metric providers; empty for balance providers.</summary>
-    public IReadOnlyList<UsageWindow> Windows { get; }
-
-    /// <summary>Formatted balance (e.g. "$12.34") for balance providers; <see langword="null"/> otherwise.</summary>
-    public string? BalanceText { get; }
-
-    /// <summary>Creates a metric result from usage windows and an optional plan label.</summary>
-    public static ProviderResult Metric(string providerName, string? plan, IReadOnlyList<UsageWindow> windows) =>
-        new(providerName, ProviderCategory.Metric, plan, windows, balanceText: null);
-
-    /// <summary>Creates a balance result from a pre-formatted balance string.</summary>
-    public static ProviderResult Balance(string providerName, string balanceText) =>
-        new(providerName, ProviderCategory.Balance, plan: null, windows: [], balanceText);
-}
+/// <summary>A balance provider's result: a pre-formatted balance string (e.g. "$12.34").</summary>
+/// <param name="ProviderName">Display name of the provider that produced this result.</param>
+/// <param name="BalanceText">Display-ready balance, e.g. "$12.34" or "$1.00 / ¥7.00".</param>
+public sealed record BalanceResult(string ProviderName, string BalanceText) : ProviderResult(ProviderName);

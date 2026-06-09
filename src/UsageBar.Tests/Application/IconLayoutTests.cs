@@ -6,60 +6,54 @@ namespace UsageBar.Tests;
 
 public sealed class IconLayoutTests
 {
+    private static ProviderResult Metric(string name, params IconBar[] bars) =>
+        new MetricResult(name, Plan: null, Windows: [], IconBars: bars);
+
     [Fact]
-    public void Codex_pro_and_claude_subscriber_yields_four_bars()
+    public void Concatenates_metric_bars_in_result_order_with_weights()
     {
-        IReadOnlyList<UsageWindow> windows =
+        IReadOnlyList<ProviderResult> results =
         [
-            TestData.Window("Codex", "Session", 10),
-            TestData.Window("Codex", "Weekly", 20),
-            TestData.Window("Claude", "Session", 30),
-            TestData.Window("Claude", "Weekly", 40),
+            Metric("Codex", new IconBar(10, 1.0), new IconBar(20, 1.0)),
+            Metric("Claude", new IconBar(30, 1.0), new IconBar(40, 1.0)),
         ];
 
-        var bars = IconLayout.Compute(windows, []);
+        var bars = IconLayout.Compute(results);
 
         Assert.Equal(["Codex", "Codex", "Claude", "Claude"], bars.Select(b => b.Provider));
         Assert.Equal([10.0, 20.0, 30.0, 40.0], bars.Select(b => b.UsedPercent));
+        Assert.Equal([1.0, 1.0, 1.0, 1.0], bars.Select(b => b.Weight));
     }
 
     [Fact]
-    public void Codex_free_plan_uses_weekly_only_then_claude()
+    public void Codex_free_double_weight_bar_then_claude()
     {
-        IReadOnlyList<UsageWindow> windows =
+        IReadOnlyList<ProviderResult> results =
         [
-            TestData.Window("Codex", "Weekly", 25),
-            TestData.Window("Claude", "Session", 30),
-            TestData.Window("Claude", "Weekly", 40),
+            Metric("Codex", new IconBar(25, 2.0)),
+            Metric("Claude", new IconBar(30, 1.0), new IconBar(40, 1.0)),
         ];
-        IReadOnlyList<ProviderPlan> plans = [new ProviderPlan("Codex", "Free")];
 
-        var bars = IconLayout.Compute(windows, plans);
+        var bars = IconLayout.Compute(results);
 
         Assert.Equal(["Codex", "Claude", "Claude"], bars.Select(b => b.Provider));
-        Assert.Equal([25.0, 30.0, 40.0], bars.Select(b => b.UsedPercent));
+        Assert.Equal([2.0, 1.0, 1.0], bars.Select(b => b.Weight));
     }
 
     [Fact]
-    public void Claude_only_subscriber_yields_two_bars()
+    public void Balance_results_contribute_no_bars()
     {
-        IReadOnlyList<UsageWindow> windows =
-        [
-            TestData.Window("Claude", "Session", 30),
-            TestData.Window("Claude", "Weekly", 40),
-        ];
+        IReadOnlyList<ProviderResult> results = [new BalanceResult("DeepSeek", "$9.99")];
 
-        var bars = IconLayout.Compute(windows, []);
-
-        Assert.Equal(["Claude", "Claude"], bars.Select(b => b.Provider));
+        var bar = Assert.Single(IconLayout.Compute(results));
+        Assert.Null(bar.UsedPercent);
+        Assert.Equal("None", bar.Provider);
     }
 
     [Fact]
     public void Empty_input_yields_single_empty_bar()
     {
-        var bars = IconLayout.Compute([], []);
-
-        var bar = Assert.Single(bars);
+        var bar = Assert.Single(IconLayout.Compute([]));
         Assert.Null(bar.UsedPercent);
         Assert.Equal("None", bar.Provider);
     }

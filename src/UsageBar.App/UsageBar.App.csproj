@@ -15,6 +15,13 @@
     <!-- P/Invoke declarations are intentionally hand-written DllImports;
          silence the LibraryImport source-generator suggestion. -->
     <NoWarn>$(NoWarn);SYSLIB1054</NoWarn>
+
+    <!-- Runtime/publish slimming. InvariantGlobalization drops ICU (the app formats with
+         InvariantCulture everywhere); symbols are embedded so no loose .pdb ships; and referenced
+         packages' companion .xml/.pdb (e.g. the ~600 KB WebView2 doc file) are no longer copied. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <DebugType>embedded</DebugType>
+    <AllowedReferenceRelatedFileExtensions>none</AllowedReferenceRelatedFileExtensions>
   </PropertyGroup>
 
   <ItemGroup>
@@ -32,8 +39,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="Assets\usagebar.css" />
-    <EmbeddedResource Include="Assets\tooltip.js" />
+    <EmbeddedResource Include="Assets\index.html" />
   </ItemGroup>
 
   <!-- WebView2 pulls WPF/WinForms assemblies we don't use; their WPF dependency

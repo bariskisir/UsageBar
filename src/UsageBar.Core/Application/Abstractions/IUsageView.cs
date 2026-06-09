@@ -9,8 +9,8 @@ namespace UsageBar.Application;
 /// </summary>
 public interface IUsageView
 {
-    /// <summary>Updates the tray icon bars from the latest usage windows and plans.</summary>
-    void ShowIcon(IReadOnlyList<UsageWindow> windows, IReadOnlyList<ProviderPlan> plans);
+    /// <summary>Updates the tray icon from the latest laid-out bars (already ordered and weighted).</summary>
+    void ShowIcon(IReadOnlyList<IconLayout.Bar> bars);
 
     /// <summary>Pushes the latest tooltip cards to the popup.</summary>
     void ShowCards(IReadOnlyList<TooltipCard> cards);

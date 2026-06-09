@@ -9,35 +9,52 @@ namespace UsageBar.Tests;
 public sealed class UsageAggregatorTests
 {
     [Fact]
-    public async Task Merges_windows_and_plans_and_skips_nulls()
+    public async Task Merges_windows_and_skips_nulls()
     {
-        var metric = ProviderResult.Metric("Codex", "Pro", [TestData.Window("Codex", "Session", 10)]);
-        var balance = ProviderResult.Balance("DeepSeek", "$5.00");
+        ProviderResult metric = new MetricResult("Codex", "Pro", [TestData.Window("Codex", "Session", 10)], []);
+        ProviderResult balance = new BalanceResult("DeepSeek", "$5.00");
 
         IReadOnlyList<IUsageProvider> providers =
         [
-            new StubProvider("Codex", ProviderCategory.Metric, () => metric),
-            new StubProvider("Skipped", ProviderCategory.Balance, () => null),
-            new StubProvider("DeepSeek", ProviderCategory.Balance, () => balance),
+            new StubProvider("Codex", () => metric),
+            new StubProvider("Skipped", () => null, 50),
+            new StubProvider("DeepSeek", () => balance, 100),
         ];
 
         var snapshot = await UsageAggregator.RefreshAsync(providers, TestData.Context(), NullLogger.Instance, CancellationToken.None);
 
         Assert.Equal(2, snapshot.Results.Count);
         Assert.Single(snapshot.Windows);
-        var plan = Assert.Single(snapshot.Plans);
-        Assert.Equal("Codex", plan.ProviderName);
-        Assert.Equal("Pro", plan.Plan);
+    }
+
+    [Fact]
+    public async Task Orders_results_by_display_order()
+    {
+        ProviderResult codex = new MetricResult("Codex", "Pro", [], []);
+        ProviderResult claude = new MetricResult("Claude", "Max", [], []);
+        ProviderResult deepseek = new BalanceResult("DeepSeek", "$5.00");
+
+        // Registered out of order; the aggregator must sort by display order.
+        IReadOnlyList<IUsageProvider> providers =
+        [
+            new StubProvider("DeepSeek", () => deepseek, 100),
+            new StubProvider("Claude", () => claude, 10),
+            new StubProvider("Codex", () => codex, 0),
+        ];
+
+        var snapshot = await UsageAggregator.RefreshAsync(providers, TestData.Context(), NullLogger.Instance, CancellationToken.None);
+
+        Assert.Equal(["Codex", "Claude", "DeepSeek"], snapshot.Results.Select(r => r.ProviderName));
     }
 
     [Fact]
     public async Task Isolates_a_throwing_provider()
     {
-        var good = ProviderResult.Balance("DeepSeek", "$5.00");
+        ProviderResult good = new BalanceResult("DeepSeek", "$5.00");
         IReadOnlyList<IUsageProvider> providers =
         [
-            new StubProvider("Broken", ProviderCategory.Balance, () => throw new ProviderException("boom")),
-            new StubProvider("DeepSeek", ProviderCategory.Balance, () => good),
+            new StubProvider("Broken", () => throw new ProviderException("boom")),
+            new StubProvider("DeepSeek", () => good, 100),
         ];
 
         var snapshot = await UsageAggregator.RefreshAsync(providers, TestData.Context(), NullLogger.Instance, CancellationToken.None);

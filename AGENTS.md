@@ -26,12 +26,12 @@ testable; keep all Win32/WebView2/registry code in App.
 
 ### Core layout
 
-- `Domain/` — records/enums only: `UsageWindow`, `ProviderResult`, `ProviderCategory`,
-  `UsageSnapshot`, `ProviderPlan`, `TooltipCard`, `NotificationLevel`, `ThresholdNotification`,
-  `ProviderException`.
+- `Domain/` — records/enums only: `UsageWindow`, `ProviderResult` (abstract) with `MetricResult` /
+  `BalanceResult`, `IconBar`, `UsageSnapshot`, `TooltipCard`, `NotificationLevel`,
+  `ThresholdNotification`, `ProviderException`.
 - `Configuration/AppSettings.cs` — settings record + `Default` + `Normalize`.
-- `Providers/Abstractions/` — `IUsageProvider`, `BalanceUsageProvider`, `ProviderQueryContext`,
-  `CredentialNames`, `ProviderJson`, `UsageFormatting`.
+- `Providers/Abstractions/` — `IUsageProvider`, `ProviderDescriptor`, `BalanceUsageProvider`,
+  `ProviderQueryContext`, `CredentialNames`, `ProviderJson`, `UsageFormatting`.
 - `Providers/<Name>/` — one folder per provider (Codex, Claude, DeepSeek, OpenRouter, Deepgram).
 - `Application/` — `UsageRefreshService`, `UsageAggregator`, `ThresholdNotifier`,
   `TooltipCardBuilder`, `IconLayout`, and the `Abstractions/` the shell implements
@@ -48,8 +48,9 @@ testable; keep all Win32/WebView2/registry code in App.
 - `Tooltip/WebViewTooltip.cs` — WebView2 popup.
 - `Infrastructure/` — `JsonSettingsStore`, `ApplicationPaths`, `StartupRegistrationService`,
   `SystemClock`.
-- `Assets/` — `AppIcon.*`, and the embedded `usagebar.css` / `tooltip.js` (kept verbatim;
-  embedded-resource names are `UsageBar.Assets.*`).
+- `Assets/` — `AppIcon.*` and `index.html` (the whole tooltip page — inline CSS + JS, no separate
+  base/override split, UsageBar-native class names `panel` / `stack` / `card` / `metric`;
+  embedded-resource name `UsageBar.Assets.index.html`, loaded verbatim by the host).
 
 ## Commands
 
@@ -59,11 +60,18 @@ testable; keep all Win32/WebView2/registry code in App.
 | Build | `dotnet build UsageBar.slnx` |
 | Test | `dotnet test UsageBar.slnx` |
 | Run | `dotnet run --project src/UsageBar.App` |
-| Publish | `dotnet publish src/UsageBar.App/UsageBar.App.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:PublishReadyToRun=true -p:EnableCompressionInSingleFile=true` |
+| Publish | `dotnet publish src/UsageBar.App/UsageBar.App.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true` |
 
 `Directory.Build.props` enables nullable, implicit usings, the latest analyzers, code-style
 enforcement, and **`TreatWarningsAsErrors`** for production projects. Keep builds warning-clean.
 The test project opts out of warnings-as-errors and the heavy analyzers for readability.
+
+The published app is a self-contained single file (`PublishSingleFile` + compression) built
+**without ReadyToRun** (smaller download; the one-time JIT cost is invisible for a resident tray
+app) and **without trimming** (the WebView2 SDK is not trim-safe). `InvariantGlobalization` is on
+(the app formats with `InvariantCulture` everywhere) and referenced packages' documentation files
+are not copied. JSON uses System.Text.Json **source generation** (`SettingsJsonContext`,
+`TooltipJsonContext`), so (de)serialization is reflection-free and trim/AOT-ready.
 
 ## Conventions
 
@@ -89,44 +97,54 @@ The test project opts out of warnings-as-errors and the heavy analyzers for read
 ### Refresh flow
 
 - `UsageRefreshService` reads settings each refresh, builds a `ProviderQueryContext` (reference
-  `Now` + resolved API keys), and calls `UsageAggregator.RefreshAsync` (concurrent, per-provider
-  failures logged + isolated).
+  `Now` + resolved API keys), and calls `UsageAggregator.RefreshAsync` (providers queried in
+  display order, concurrently; per-provider failures logged + isolated).
 - It updates `IUsageView` (icon + tooltip cards) and emits threshold notifications, then schedules
   the next refresh. Refreshes never overlap (`SemaphoreSlim` gate); manual refresh disables the
   timer and reschedules from the manual-refresh time. Hover never triggers a provider call.
 
 ### Providers
 
-`IUsageProvider` returns `null` when not configured; throws on API/parse failures (the aggregator
-logs and isolates). Two standards:
+Every provider exposes a `ProviderDescriptor` (`Name`, `DisplayOrder`) and returns exactly one
+concrete result kind — never a value that conflates both. `IUsageProvider.GetUsageAsync` returns
+`null` when not configured; it throws on API/parse failures (the aggregator logs and isolates).
+Two standards:
 
-- **Balance** providers derive from `BalanceUsageProvider` and implement `FetchBalanceAsync`
-  (return a display-ready string built with `UsageFormatting.Currency`, which defaults to the USD
-  sign and accepts a custom symbol) + `Name`/`CredentialName`.
-- **Metric** providers implement `IUsageProvider` directly, returning `Session`/`Weekly`
-  `UsageWindow`s (used percent clamped 0–100, reset countdown) and a plan label. Auth is read
-  through an injected `I{Codex,Claude}AuthReader` (testable; tokens are never logged).
+- **Balance** providers derive from `BalanceUsageProvider`, declare their `Descriptor` and
+  `CredentialName`, and implement `FetchBalanceAsync` (return a display-ready string built with
+  `UsageFormatting.Currency`, which defaults to the USD sign and accepts a custom symbol). They
+  yield a `BalanceResult`.
+- **Metric** providers implement `IUsageProvider` directly, returning a `MetricResult` with
+  `Session`/`Weekly` `UsageWindow`s (used percent clamped 0–100, reset countdown), a plan label,
+  and the `IconBar`s they contribute to the tray icon (the provider owns its own bar count/weight,
+  e.g. Codex Free → one Weekly bar at double weight). Auth is read through an injected
+  `I{Codex,Claude}AuthReader` (testable; tokens are never logged).
 
 DeepSeek shows the USD balance and additionally the CNY balance when CNY is non-zero
 (`"$x / ¥y"`); when CNY is zero only USD is shown.
 
-To add a provider: new folder under `Providers/`, implement the right base/interface, add one
-registration in `ServiceConfiguration.cs`.
+To add a provider: new folder under `Providers/`, implement the right base/interface (declare a
+`Descriptor`; for metric providers, build its `IconBar`s), and add one registration in
+`ServiceConfiguration.cs`. Nothing else — ordering, tray-icon layout, and tooltip cards are all
+driven by the descriptor and result, with no provider names hardcoded anywhere.
 
 ### Tray icon
 
-`IconLayout.Compute` (Core, unit-tested) decides which windows become bars and in what order
-(plan-aware: Codex Free uses the Weekly window; Codex Pro + Claude subscriber → four bars; etc.).
-`IconRenderer` (App) rasterizes that to an HICON using the CodexBar palette (green <50%, amber
-<80%, orange <95%, red ≥95%).
+Each metric provider decides its own bars in `MetricResult.IconBars` (Codex Free → one Weekly bar
+at double weight; Codex Pro / Claude → Session + Weekly at equal weight). `IconLayout.Compute`
+(Core, unit-tested) concatenates those across providers in display order — pure geometry with no
+provider names — and falls back to a single empty bar when there is nothing to show. `IconRenderer`
+(App) rasterizes the laid-out bars to an HICON using the CodexBar palette (green <50%, amber <80%,
+orange <95%, red ≥95%), sizing each bar by its weight.
 
 ### Tooltip
 
 `WebViewTooltip` is a borderless, top-most, non-activating WebView2 popup shown on
 `NIN_POPUPOPEN` / hidden on `NIN_POPUPCLOSE` (the icon is registered as `NOTIFYICON_VERSION_4`
 without `NIF_SHOWTIP`). The `window.ipc` shim is injected via
-`AddScriptToExecuteOnDocumentCreatedAsync` **before** `NavigateToString` so `tooltip.js` stays
-verbatim. Cards are pushed from the refresh thread via `PostMessage` → `ExecuteScriptAsync`. If
+`AddScriptToExecuteOnDocumentCreatedAsync` **before** `NavigateToString` of the single embedded
+`Assets/index.html`. Cards are serialised with System.Text.Json source generation
+(`TooltipJsonContext`) and pushed from the refresh thread via `PostMessage` → `ExecuteScriptAsync`. If
 WebView2 init fails the popup is torn down (`Hwnd == 0`) and the app runs without a hover tooltip
 — **there is no legacy text tooltip**.
 
@@ -151,5 +169,7 @@ service groups messages per severity into one balloon each.
 
 - Providers are registered explicitly (no assembly scanning) for clarity.
 - Tray/WebView2 interop is validated manually (not unit-tested); Core logic is covered by tests.
+- Publish is **not trimmed**: the WebView2 SDK emits trim warnings (errors here under
+  warnings-as-errors). Revisit if a trim-safe WebView2 ships.
 - WebView2 still pulls WPF/WinForms assemblies that are stripped by an MSBuild target in
   `UsageBar.App.csproj`; re-verify that target if the package is upgraded.

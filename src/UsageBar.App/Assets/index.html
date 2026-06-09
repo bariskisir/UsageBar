@@ -1,0 +1,401 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Usage Bar</title>
+    <style>
+:root {
+  color-scheme: dark;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro",
+    "Segoe UI Variable", Inter, "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  background: var(--app-bg);
+  color: var(--text-primary);
+  --app-bg: #1c1c1e;
+  --text-primary: #f5f5f7;
+  --text-secondary: #8e8e93;
+  --panel-bg: var(--app-bg);
+  --usage-bar-track: rgba(255, 255, 255, 0.15);
+  --usage-bar-normal: #0a84ff;
+  --usage-bar-high: #ffd60a;
+  --usage-bar-critical: #ff9f0a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: var(--app-bg);
+}
+
+#app {
+  width: 100%;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  min-width: 260px;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--panel-bg);
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.3;
+  -webkit-font-smoothing: antialiased;
+}
+
+.panel--tray {
+  display: flex;
+  flex-direction: column;
+  height: auto;
+  min-height: 0;
+  padding: 4px 0;
+  border-color: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  box-shadow: none;
+}
+
+.panel__body {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.panel__body::-webkit-scrollbar {
+  display: none;
+}
+
+.stack {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  min-height: 0;
+  max-height: none;
+  overflow: visible;
+}
+
+.stack__item {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  padding: 2px 0;
+  border: none;
+  border-radius: 0;
+  overflow: visible;
+  background: transparent;
+}
+
+.stack__item:has(.card--balance) {
+  padding: 1px 0;
+}
+
+.stack__sep {
+  height: 0.5px;
+  margin: 2px 16px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.card {
+  --card-x: 20px;
+  --card-header-only-y: 7px;
+  --card-section-y: 6px;
+  --card-header-line-gap: 4px;
+  --card-header-column-gap: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  padding: var(--card-header-only-y) var(--card-x);
+  overflow: visible;
+  text-align: left;
+}
+
+.card--with-details {
+  padding-top: var(--card-section-y);
+  padding-bottom: var(--card-section-y);
+}
+
+.card--balance {
+  padding-top: 3px;
+  padding-bottom: 3px;
+  gap: 0;
+}
+
+.card__header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--card-header-line-gap);
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.card__title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--card-header-column-gap);
+}
+
+.card__name-group {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
+
+.card__name {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card--balance .card__name {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.card__value {
+  flex: 0 1 auto;
+  max-width: 55%;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 400;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card--balance .card__value {
+  font-size: 12px;
+}
+
+.card__plan {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.card__divider {
+  margin: 3px 0;
+}
+
+.card__content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 6px;
+}
+
+.card__metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.metric__title {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.metric__bar {
+  width: 100%;
+  max-width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--usage-bar-track);
+}
+
+.metric__bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--usage-bar-normal);
+  transition: width 0.3s ease;
+}
+
+.metric__bar-fill[data-level="high"] {
+  background: var(--usage-bar-high);
+}
+
+.metric__bar-fill[data-level="critical"] {
+  background: var(--usage-bar-critical);
+}
+
+.metric__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.metric__pct {
+  color: var(--text-primary);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.metric__reset {
+  color: var(--text-secondary);
+  font-size: 10px;
+  white-space: nowrap;
+}
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script>
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text != null) node.textContent = text;
+  return node;
+}
+
+function levelOf(remainPct) {
+  if (remainPct <= 5) return "critical";
+  if (remainPct <= 25) return "high";
+  return "normal";
+}
+
+function resetText(detail) {
+  const d = (detail || "").trim();
+  if (!d) return "";
+  if (d === "now") return "Resets now";
+  return "Resets in " + d;
+}
+
+function metricRow(m) {
+  const pct = Math.min(100, Math.max(0, m.percent));
+  const remain = 100 - pct;
+  const level = levelOf(remain);
+  const wrap = el("div", "metric");
+  wrap.appendChild(el("span", "metric__title", m.label));
+  const bar = el("div", "metric__bar");
+  const fill = el("div", "metric__bar-fill");
+  fill.dataset.level = level;
+  fill.style.width = pct + "%";
+  bar.appendChild(fill);
+  wrap.appendChild(bar);
+  const row = el("div", "metric__row");
+  row.appendChild(el("span", "metric__pct", Math.round(pct) + "% used"));
+  const reset = resetText(m.detail);
+  if (reset) row.appendChild(el("span", "metric__reset", reset));
+  wrap.appendChild(row);
+  return wrap;
+}
+
+function renderCard(card) {
+  const hasMetrics = card.metrics && card.metrics.length > 0;
+  const isBalance = !hasMetrics && card.lines && card.lines.length > 0;
+  const art = el(
+    "article",
+    [
+      "card",
+      hasMetrics ? "card--with-details" : "card--header-only",
+      isBalance ? "card--balance" : "",
+    ]
+      .filter(Boolean)
+      .join(" "),
+  );
+  const header = el("header", "card__header");
+  const titleRow = el("div", "card__title-row");
+  const nameGroup = el("div", "card__name-group");
+  nameGroup.appendChild(el("span", "card__name", card.title));
+  if (isBalance) {
+    nameGroup.appendChild(el("span", "card__value", card.lines[0]));
+  } else if (card.plan) {
+    nameGroup.appendChild(el("span", "card__plan", card.plan));
+  }
+  titleRow.appendChild(nameGroup);
+  header.appendChild(titleRow);
+  art.appendChild(header);
+  if (hasMetrics) {
+    art.appendChild(el("div", "card__divider"));
+    const content = el("div", "card__content");
+    const group = el("section", "card__metrics");
+    card.metrics.forEach((m) => group.appendChild(metricRow(m)));
+    content.appendChild(group);
+    art.appendChild(content);
+  }
+  return art;
+}
+
+function reportHeight() {
+  const panel = document.querySelector(".panel");
+  if (!panel) return;
+  const h = Math.ceil(panel.getBoundingClientRect().height);
+  if (h > 0 && window.ipc) {
+    window.ipc.postMessage(JSON.stringify({ type: "height", value: h }));
+  }
+}
+
+window.__render = function (data) {
+  const app = document.getElementById("app");
+  app.innerHTML = "";
+  const panel = el("div", "panel panel--tray");
+  const body = el("div", "panel__body");
+  const stack = el("div", "stack");
+  (data.cards || []).forEach((card, i) => {
+    if (i > 0) stack.appendChild(el("div", "stack__sep"));
+    const item = el("div", "stack__item");
+    item.appendChild(renderCard(card));
+    stack.appendChild(item);
+  });
+  body.appendChild(stack);
+  panel.appendChild(body);
+  app.appendChild(panel);
+  requestAnimationFrame(() => requestAnimationFrame(reportHeight));
+};
+
+function signalReady() {
+  if (window.ipc) window.ipc.postMessage(JSON.stringify({ type: "ready" }));
+}
+if (document.readyState === "complete" || document.readyState === "interactive") {
+  signalReady();
+} else {
+  document.addEventListener("DOMContentLoaded", signalReady);
+}
+    </script>
+  </body>
+</html>

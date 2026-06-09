@@ -7,7 +7,7 @@ namespace UsageBar.Providers;
 /// <summary>Reports the DeepSeek account USD balance.</summary>
 public sealed class DeepSeekProvider(HttpClient httpClient) : BalanceUsageProvider(httpClient)
 {
-    public override string Name => "DeepSeek";
+    public override ProviderDescriptor Descriptor { get; } = new("DeepSeek", DisplayOrder: 100);
 
     protected override string CredentialName => CredentialNames.DeepSeek;
 

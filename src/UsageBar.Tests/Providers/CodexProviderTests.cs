@@ -30,11 +30,10 @@ public sealed class CodexProviderTests
 
         var result = await Create(json, new CodexAuth("token", "account")).GetUsageAsync(TestData.Context(), CancellationToken.None);
 
-        Assert.NotNull(result);
-        Assert.Equal(ProviderCategory.Metric, result!.Category);
-        Assert.Equal("Pro", result.Plan);
+        var metric = Assert.IsType<MetricResult>(result);
+        Assert.Equal("Pro", metric.Plan);
         Assert.Collection(
-            result.Windows,
+            metric.Windows,
             session =>
             {
                 Assert.Equal("Session", session.Label);
@@ -47,6 +46,52 @@ public sealed class CodexProviderTests
                 Assert.Equal(12.5, weekly.UsedPercent);
                 Assert.Equal("3d 0h", weekly.ResetText);
             });
+    }
+
+    [Fact]
+    public async Task Pro_account_yields_two_equal_weight_bars()
+    {
+        var reset = TestData.FixedNow.AddMinutes(130).ToUnixTimeSeconds();
+        var json = $$"""
+        {
+          "plan_type": "pro",
+          "rate_limit": {
+            "primary_window": { "used_percent": 53.0, "reset_at": {{reset}} },
+            "secondary_window": { "used_percent": 12.5, "reset_at": {{reset}} }
+          }
+        }
+        """;
+
+        var result = await Create(json, new CodexAuth("token", "account")).GetUsageAsync(TestData.Context(), CancellationToken.None);
+
+        var metric = Assert.IsType<MetricResult>(result);
+        Assert.Collection(
+            metric.IconBars,
+            session => { Assert.Equal(53.0, session.UsedPercent); Assert.Equal(1.0, session.Weight); },
+            weekly => { Assert.Equal(12.5, weekly.UsedPercent); Assert.Equal(1.0, weekly.Weight); });
+    }
+
+    [Fact]
+    public async Task Free_account_yields_single_double_weight_weekly_bar()
+    {
+        var reset = TestData.FixedNow.AddDays(2).ToUnixTimeSeconds();
+        var json = $$"""
+        {
+          "plan_type": "free",
+          "rate_limit": {
+            "primary_window": { "used_percent": 80.0, "reset_at": {{reset}} },
+            "secondary_window": { "used_percent": 25.0, "reset_at": {{reset}} }
+          }
+        }
+        """;
+
+        var result = await Create(json, new CodexAuth("token", "account")).GetUsageAsync(TestData.Context(), CancellationToken.None);
+
+        var metric = Assert.IsType<MetricResult>(result);
+        Assert.Equal("Free", metric.Plan);
+        var bar = Assert.Single(metric.IconBars);
+        Assert.Equal(25.0, bar.UsedPercent); // weekly window
+        Assert.Equal(2.0, bar.Weight);
     }
 
     [Fact]
@@ -70,8 +115,8 @@ public sealed class CodexProviderTests
 
         var result = await Create(json, new CodexAuth("token", "account")).GetUsageAsync(TestData.Context(), CancellationToken.None);
 
-        Assert.NotNull(result);
-        var window = Assert.Single(result!.Windows);
+        var metric = Assert.IsType<MetricResult>(result);
+        var window = Assert.Single(metric.Windows);
         Assert.Equal(20.0, window.UsedPercent);
         Assert.Equal("30m", window.ResetText);
     }
@@ -86,7 +131,8 @@ public sealed class CodexProviderTests
 
         var result = await Create(json, new CodexAuth("token", "account")).GetUsageAsync(TestData.Context(), CancellationToken.None);
 
-        Assert.Equal(100.0, Assert.Single(result!.Windows).UsedPercent);
+        var metric = Assert.IsType<MetricResult>(result);
+        Assert.Equal(100.0, Assert.Single(metric.Windows).UsedPercent);
     }
 
     [Fact]

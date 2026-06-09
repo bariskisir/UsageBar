@@ -9,7 +9,7 @@ namespace UsageBar.Providers;
 /// </summary>
 public sealed class DeepgramProvider(HttpClient httpClient) : BalanceUsageProvider(httpClient)
 {
-    public override string Name => "Deepgram";
+    public override ProviderDescriptor Descriptor { get; } = new("Deepgram", DisplayOrder: 120);
 
     protected override string CredentialName => CredentialNames.Deepgram;
 

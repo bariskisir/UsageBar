@@ -22,10 +22,9 @@ public sealed class BalanceProviderTests
 
         var result = await provider.GetUsageAsync(TestData.Context((CredentialNames.DeepSeek, "key")), CancellationToken.None);
 
-        Assert.NotNull(result);
-        Assert.Equal(ProviderCategory.Balance, result!.Category);
-        Assert.Equal("DeepSeek", result.ProviderName);
-        Assert.Equal("$12.34 / ¥100.00", result.BalanceText);
+        var balance = Assert.IsType<BalanceResult>(result);
+        Assert.Equal("DeepSeek", balance.ProviderName);
+        Assert.Equal("$12.34 / ¥100.00", balance.BalanceText);
     }
 
     [Fact]
@@ -43,7 +42,7 @@ public sealed class BalanceProviderTests
 
         var result = await provider.GetUsageAsync(TestData.Context((CredentialNames.DeepSeek, "key")), CancellationToken.None);
 
-        Assert.Equal("$12.34", result!.BalanceText);
+        Assert.Equal("$12.34", Assert.IsType<BalanceResult>(result).BalanceText);
     }
 
     [Fact]
@@ -62,7 +61,7 @@ public sealed class BalanceProviderTests
 
         var result = await provider.GetUsageAsync(TestData.Context((CredentialNames.OpenRouter, "key")), CancellationToken.None);
 
-        Assert.Equal("$12.50", result!.BalanceText);
+        Assert.Equal("$12.50", Assert.IsType<BalanceResult>(result).BalanceText);
     }
 
     [Fact]
@@ -83,7 +82,7 @@ public sealed class BalanceProviderTests
 
         var result = await provider.GetUsageAsync(TestData.Context((CredentialNames.Deepgram, "key")), CancellationToken.None);
 
-        Assert.Equal("$7.50", result!.BalanceText);
+        Assert.Equal("$7.50", Assert.IsType<BalanceResult>(result).BalanceText);
         Assert.Equal(2, handler.Requests.Count);
     }
 

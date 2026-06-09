@@ -1,16 +1,12 @@
 namespace UsageBar.Domain;
 
 /// <summary>
-/// Aggregated results of one refresh across all configured providers.
+/// Aggregated results of one refresh across all configured providers, ordered by provider
+/// display order (see <c>ProviderDescriptor.DisplayOrder</c>) so downstream icon bars and
+/// tooltip cards come out in a stable, provider-defined order.
 /// </summary>
-/// <param name="Results">Per-provider results (only providers that returned data).</param>
-/// <param name="Windows">All metric windows, flattened, for icon rendering and threshold checks.</param>
-/// <param name="Plans">Provider plan labels, where reported.</param>
+/// <param name="Results">Per-provider results (only providers that returned data), in display order.</param>
+/// <param name="Windows">All metric windows, flattened, for threshold checks.</param>
 public sealed record UsageSnapshot(
     IReadOnlyList<ProviderResult> Results,
-    IReadOnlyList<UsageWindow> Windows,
-    IReadOnlyList<ProviderPlan> Plans)
-{
-    /// <summary>An empty snapshot (no configured providers / no data).</summary>
-    public static UsageSnapshot Empty { get; } = new([], [], []);
-}
+    IReadOnlyList<UsageWindow> Windows);

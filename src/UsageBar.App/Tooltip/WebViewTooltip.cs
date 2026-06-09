@@ -24,11 +24,6 @@ internal sealed class WebViewTooltip : IDisposable
     private const int CornerRadius = 10;
     private const int MinHeight = 60;
 
-    private readonly JsonSerializerOptions _camelCase = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-    };
-
     private readonly NativeMethods.WndProc _wndProc;
 
     private nint _hwnd;
@@ -87,12 +82,12 @@ internal sealed class WebViewTooltip : IDisposable
             _core.Settings.IsStatusBarEnabled = false;
             _core.Settings.IsZoomControlEnabled = false;
 
-            // IPC shim MUST exist before NavigateToString so tooltip.js can signal ready.
+            // IPC shim MUST exist before NavigateToString so the page script can signal ready.
             await _core.AddScriptToExecuteOnDocumentCreatedAsync(
                 "window.ipc={postMessage:(m)=>window.chrome.webview.postMessage(m)};").ConfigureAwait(true);
 
             _core.WebMessageReceived += OnWebMessageReceived;
-            _core.NavigateToString(BuildHtml());
+            _core.NavigateToString(ReadHtmlDocument());
             _navigated = true;
             return true;
         }
@@ -110,7 +105,7 @@ internal sealed class WebViewTooltip : IDisposable
     /// </summary>
     public void SetContent(IReadOnlyList<TooltipCard> cards)
     {
-        var json = JsonSerializer.Serialize(new { cards }, _camelCase);
+        var json = JsonSerializer.Serialize(new TooltipPayload(cards), TooltipJsonContext.Default.TooltipPayload);
         lock (_gate)
         {
             _pendingJson = json;
@@ -374,59 +369,11 @@ internal sealed class WebViewTooltip : IDisposable
         }
     }
 
-    private static string BuildHtml()
-    {
-        var css = ReadEmbeddedResource("UsageBar.Assets.usagebar.css");
-        var js = ReadEmbeddedResource("UsageBar.Assets.tooltip.js");
-
-        const string overrideCss =
-            """
-            html,body{margin:0;padding:0;overflow:hidden;background:var(--app-bg);}
-            #root{width:100%;}
-            .menu-surface--tray{box-shadow:none;}
-            .menu-surface--tray .menu-stack__item:has(.menu-card--balance){padding:1px 0;}
-            .menu-surface--tray .menu-card--balance{padding-top:3px;padding-bottom:3px;gap:0;}
-            .menu-surface--tray .menu-card--balance .menu-card__name{font-size:12px;font-weight:500;}
-            .menu-surface--tray .menu-card--balance .menu-card__email{font-size:12px;}
-            .menu-surface--tray .menu-card__metrics{display:flex;flex-direction:column;gap:10px;}
-            .menu-surface--tray .menu-card__plan-inline{margin-left:auto;font-size:11px;font-weight:500;color:var(--text-secondary);white-space:nowrap;}
-            """;
-
-        return $$"""
-            <!doctype html><html data-theme="dark"><head><meta charset="utf-8">
-            <style>{{css}}</style><style>{{overrideCss}}</style></head>
-            <body><div id="root"></div><script>{{js}}</script></body></html>
-            """;
-    }
-
-    private static string ReadEmbeddedResource(string name)
+    private static string ReadHtmlDocument()
     {
         var assembly = Assembly.GetExecutingAssembly();
-        var stream = assembly.GetManifestResourceStream(name);
-        if (stream is null)
-        {
-            foreach (var candidate in assembly.GetManifestResourceNames())
-            {
-                if (candidate.EndsWith(name, StringComparison.OrdinalIgnoreCase) ||
-                    candidate.EndsWith(name[name.LastIndexOf('.')..], StringComparison.OrdinalIgnoreCase))
-                {
-                    name = candidate;
-                    break;
-                }
-            }
-
-            stream = assembly.GetManifestResourceStream(name);
-        }
-
-        if (stream is null)
-        {
-            return string.Empty;
-        }
-
-        using (stream)
-        {
-            using var reader = new StreamReader(stream);
-            return reader.ReadToEnd();
-        }
+        using var stream = assembly.GetManifestResourceStream("UsageBar.Assets.index.html")!;
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
     }
 }

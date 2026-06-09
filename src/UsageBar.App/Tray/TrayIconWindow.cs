@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using UsageBar.Application;
 using UsageBar.Domain;
 
 namespace UsageBar.Tray;
@@ -48,7 +49,7 @@ internal sealed class TrayIconWindow : IDisposable
             throw new InvalidOperationException("Failed to create tray window.");
         }
 
-        _iconHandle = IconRenderer.CreateUsageIcon([], []);
+        _iconHandle = IconRenderer.CreateUsageIcon([]);
         AddIcon();
     }
 
@@ -73,9 +74,9 @@ internal sealed class TrayIconWindow : IDisposable
     /// <summary>Stops the message loop. Safe to call from the UI thread.</summary>
     public void Quit() => NativeMethods.PostQuitMessage(0);
 
-    public void UpdateIcon(IReadOnlyList<UsageWindow> windows, IReadOnlyList<ProviderPlan> plans)
+    public void UpdateIcon(IReadOnlyList<IconLayout.Bar> bars)
     {
-        var nextIcon = IconRenderer.CreateUsageIcon(windows, plans);
+        var nextIcon = IconRenderer.CreateUsageIcon(bars);
         nint previousIcon;
 
         lock (_iconGate)

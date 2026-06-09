@@ -12,9 +12,7 @@ public sealed class CodexProvider(HttpClient httpClient, ICodexAuthReader authRe
 {
     private const string UsageEndpoint = "https://chatgpt.com/backend-api/wham/usage";
 
-    public string Name => "Codex";
-
-    public ProviderCategory Category => ProviderCategory.Metric;
+    public ProviderDescriptor Descriptor { get; } = new("Codex", DisplayOrder: 0);
 
     public async Task<ProviderResult?> GetUsageAsync(ProviderQueryContext context, CancellationToken cancellationToken)
     {
@@ -39,15 +37,18 @@ public sealed class CodexProvider(HttpClient httpClient, ICodexAuthReader authRe
         var plan = PlanLabel(ProviderJson.GetString(document.RootElement, "plan_type"));
         var rateLimit = GetRateLimit(document.RootElement);
 
+        var session = ReadWindow(rateLimit, "primary_window", "Session", context.Now);
+        var weekly = ReadWindow(rateLimit, "secondary_window", "Weekly", context.Now);
+
         var windows = new List<UsageWindow>(2);
-        if (ReadWindow(rateLimit, "primary_window", "Session", context.Now) is { } primary)
+        if (session is not null)
         {
-            windows.Add(primary);
+            windows.Add(session);
         }
 
-        if (ReadWindow(rateLimit, "secondary_window", "Weekly", context.Now) is { } secondary)
+        if (weekly is not null)
         {
-            windows.Add(secondary);
+            windows.Add(weekly);
         }
 
         if (windows.Count == 0)
@@ -55,7 +56,30 @@ public sealed class CodexProvider(HttpClient httpClient, ICodexAuthReader authRe
             throw new ProviderException("Codex response did not contain usable rate limit windows.");
         }
 
-        return ProviderResult.Metric(Name, plan, windows);
+        return new MetricResult(Descriptor.Name, plan, windows, BuildIconBars(plan, session, weekly));
+    }
+
+    /// <summary>
+    /// Maps Codex windows to tray bars. Free (or session-less) accounts show a single bar from the
+    /// Weekly window at double weight, so it reads as one full band beside other providers' weight-1
+    /// bars; paid accounts show Session + Weekly at equal weight.
+    /// </summary>
+    private static IReadOnlyList<IconBar> BuildIconBars(string? plan, UsageWindow? session, UsageWindow? weekly)
+    {
+        var freeLike = string.Equals(plan, "Free", StringComparison.OrdinalIgnoreCase) || session is null;
+        if (freeLike)
+        {
+            var single = weekly ?? session;
+            return single is null ? [] : [new IconBar(single.UsedPercent, 2.0)];
+        }
+
+        var bars = new List<IconBar>(2) { new(session!.UsedPercent, 1.0) };
+        if (weekly is not null)
+        {
+            bars.Add(new IconBar(weekly.UsedPercent, 1.0));
+        }
+
+        return bars;
     }
 
     /// <summary>Maps a Codex <c>plan_type</c> to a short plan/tier label.</summary>

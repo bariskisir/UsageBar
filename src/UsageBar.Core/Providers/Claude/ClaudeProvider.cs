@@ -15,9 +15,7 @@ public sealed class ClaudeProvider(HttpClient httpClient, IClaudeAuthReader auth
     private const string BetaHeader = "oauth-2025-04-20";
     private const string ClaudeCodeUserAgent = "claude-code/2.1.0";
 
-    public string Name => "Claude";
-
-    public ProviderCategory Category => ProviderCategory.Metric;
+    public ProviderDescriptor Descriptor { get; } = new("Claude", DisplayOrder: 10);
 
     public async Task<ProviderResult?> GetUsageAsync(ProviderQueryContext context, CancellationToken cancellationToken)
     {
@@ -41,13 +39,16 @@ public sealed class ClaudeProvider(HttpClient httpClient, IClaudeAuthReader auth
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
 
+        var session = ReadWindow(document.RootElement, "five_hour", "Session", context.Now);
+        var weekly = ReadWindow(document.RootElement, "seven_day", "Weekly", context.Now);
+
         var windows = new List<UsageWindow>(2);
-        if (ReadWindow(document.RootElement, "five_hour", "Session", context.Now) is { } session)
+        if (session is not null)
         {
             windows.Add(session);
         }
 
-        if (ReadWindow(document.RootElement, "seven_day", "Weekly", context.Now) is { } weekly)
+        if (weekly is not null)
         {
             windows.Add(weekly);
         }
@@ -57,7 +58,24 @@ public sealed class ClaudeProvider(HttpClient httpClient, IClaudeAuthReader auth
             throw new ProviderException("Claude response did not contain usable rate limit windows.");
         }
 
-        return ProviderResult.Metric(Name, plan, windows);
+        return new MetricResult(Descriptor.Name, plan, windows, BuildIconBars(session, weekly));
+    }
+
+    /// <summary>Maps Claude windows to tray bars: the present windows at equal weight.</summary>
+    private static IReadOnlyList<IconBar> BuildIconBars(UsageWindow? session, UsageWindow? weekly)
+    {
+        var bars = new List<IconBar>(2);
+        if (session is not null)
+        {
+            bars.Add(new IconBar(session.UsedPercent, 1.0));
+        }
+
+        if (weekly is not null)
+        {
+            bars.Add(new IconBar(weekly.UsedPercent, 1.0));
+        }
+
+        return bars;
     }
 
     /// <summary>Maps a Claude subscription tier to a short plan label.</summary>
