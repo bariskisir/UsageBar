@@ -37,6 +37,7 @@ internal sealed class WebViewTooltip : IDisposable
     private NativeMethods.Rect _lastIconRect;
     private int _heightCss;
     private volatile bool _visible;
+    private bool _suspended;
     private bool _disposed;
 
     public WebViewTooltip() => _wndProc = WndProc;
@@ -67,15 +68,31 @@ internal sealed class WebViewTooltip : IDisposable
 
         try
         {
+            // The tooltip is a tiny static page: no GPU compositing, no background timers,
+            // a single renderer. These flags drop the standalone GPU process and trim the
+            // renderer's resident footprint.
+            var options = new CoreWebView2EnvironmentOptions
+            {
+                AdditionalBrowserArguments =
+                    "--disable-gpu --disable-gpu-compositing " +
+                    "--renderer-process-limit=1 --disable-renderer-backgrounding " +
+                    "--disable-background-timer-throttling " +
+                    "--disable-features=Translate,BackForwardCache,MediaRouter,OptimizationHints,AcceptCHFrame",
+            };
+
             _env = await CoreWebView2Environment.CreateAsync(
                 browserExecutableFolder: null,
                 userDataFolder: ApplicationPaths.WebView2DataDirectory,
-                options: null).ConfigureAwait(true);
+                options: options).ConfigureAwait(true);
 
             _controller = await _env.CreateCoreWebView2ControllerAsync(_hwnd).ConfigureAwait(true);
             _core = _controller.CoreWebView2;
             _controller.Bounds = new System.Drawing.Rectangle(0, 0, initialWidth, initialHeight);
-            _controller.IsVisible = true;
+
+            // The popup window starts hidden; keep the controller hidden and in the low
+            // memory band until the first hover so the idle footprint stays small.
+            _controller.IsVisible = false;
+            _core.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Low;
 
             _core.Settings.AreDevToolsEnabled = false;
             _core.Settings.AreDefaultContextMenusEnabled = false;
@@ -133,6 +150,7 @@ internal sealed class WebViewTooltip : IDisposable
         };
 
         _visible = true;
+        ResumeCore();
         Reposition();
         NativeMethods.ShowWindow(_hwnd, NativeMethods.SW_SHOWNOACTIVATE);
     }
@@ -144,6 +162,61 @@ internal sealed class WebViewTooltip : IDisposable
         {
             NativeMethods.ShowWindow(_hwnd, NativeMethods.SW_HIDE);
         }
+
+        SuspendCore();
+        NativeMethods.TrimWorkingSet();
+    }
+
+    /// <summary>
+    /// Wakes the WebView before showing: makes the controller visible, restores the normal
+    /// memory band, resumes the suspended renderer, and re-renders the latest content (updates
+    /// pushed while suspended are skipped, so the freshest payload is applied here).
+    /// </summary>
+    private void ResumeCore()
+    {
+        if (_controller is null || _core is null)
+        {
+            return;
+        }
+
+        _controller.IsVisible = true;
+        _core.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Normal;
+
+        if (_suspended)
+        {
+            _suspended = false;
+            try
+            {
+                _core.Resume();
+            }
+            catch (Exception)
+            {
+                // Resume can race teardown; the popup simply stays whatever it was.
+            }
+        }
+
+        if (_hwnd != 0)
+        {
+            NativeMethods.PostMessage(_hwnd, NativeMethods.WmTooltipSetData, 0, 0);
+        }
+    }
+
+    /// <summary>
+    /// Frees renderer memory while hidden: hides the controller, drops to the low memory band,
+    /// and suspends the renderer. Suspend requires a hidden controller and a completed initial
+    /// navigation, so it is a no-op before the page is ready.
+    /// </summary>
+    private void SuspendCore()
+    {
+        if (_controller is null || _core is null || !_navigated || _suspended)
+        {
+            return;
+        }
+
+        _controller.IsVisible = false;
+        _core.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Low;
+        _suspended = true;
+        _ = _core.TrySuspendAsync();
     }
 
     public void Dispose()
@@ -192,7 +265,7 @@ internal sealed class WebViewTooltip : IDisposable
 
     private void HandleSetData()
     {
-        if (!_navigated || _core is null)
+        if (!_navigated || _core is null || _suspended)
         {
             return;
         }
@@ -223,9 +296,20 @@ internal sealed class WebViewTooltip : IDisposable
         switch (typeProperty.GetString())
         {
             case "ready":
-                if (_hwnd != 0)
+                if (_visible)
                 {
-                    NativeMethods.PostMessage(_hwnd, NativeMethods.WmTooltipSetData, 0, 0);
+                    if (_hwnd != 0)
+                    {
+                        NativeMethods.PostMessage(_hwnd, NativeMethods.WmTooltipSetData, 0, 0);
+                    }
+                }
+                else
+                {
+                    // Hidden at startup: suspend now so the renderer sits in the low band
+                    // until the first hover wakes it (ResumeCore renders the latest payload),
+                    // then hand the startup churn back to the OS.
+                    SuspendCore();
+                    NativeMethods.TrimWorkingSet();
                 }
 
                 break;

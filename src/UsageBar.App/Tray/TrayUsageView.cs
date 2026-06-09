@@ -13,7 +13,13 @@ internal sealed class TrayUsageView(TrayIconWindow window, WebViewTooltip toolti
 {
     public void ShowIcon(IReadOnlyList<IconLayout.Bar> bars) => window.UpdateIcon(bars);
 
-    public void ShowCards(IReadOnlyList<TooltipCard> cards) => tooltip.SetContent(cards);
+    public void ShowCards(IReadOnlyList<TooltipCard> cards)
+    {
+        tooltip.SetContent(cards);
+
+        // ShowCards is the tail of every refresh; return the transient HTTP/JSON churn to the OS.
+        NativeMethods.TrimWorkingSet();
+    }
 
     public void Notify(NotificationLevel level, string message) => window.ShowBalloon(level, message);
 }

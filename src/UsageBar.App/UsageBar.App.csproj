@@ -22,7 +22,18 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <DebugType>embedded</DebugType>
     <AllowedReferenceRelatedFileExtensions>none</AllowedReferenceRelatedFileExtensions>
+
+    <!-- Memory tuning for a low-activity resident tray app: Workstation (not Server) GC avoids
+         per-core heap reservations, and disabling background GC drops the dedicated GC thread.
+         ConserveMemory (0-9) makes the GC compact and release segments to the OS more eagerly;
+         5 is a moderate balance (refresh only runs ~every 5 min, so no need for the aggressive 9). -->
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
   </PropertyGroup>
+
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="5" Trim="false" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />

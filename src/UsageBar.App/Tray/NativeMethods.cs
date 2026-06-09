@@ -234,4 +234,17 @@ internal static class NativeMethods
 
     [DllImport("kernel32.dll", EntryPoint = "GetModuleHandleW", SetLastError = true, CharSet = CharSet.Unicode)]
     public static extern nint GetModuleHandle(string? lpModuleName);
+
+    [DllImport("kernel32.dll")]
+    public static extern nint GetCurrentProcess();
+
+    [DllImport("psapi.dll", SetLastError = true)]
+    public static extern bool EmptyWorkingSet(nint hProcess);
+
+    /// <summary>
+    /// Returns the process working set to the OS; the pages fault back in lazily on next touch.
+    /// A cheap way to keep the idle footprint low for this resident tray app — call it after
+    /// bursts of allocation (a refresh) or after freeing memory (hiding/suspending the tooltip).
+    /// </summary>
+    public static void TrimWorkingSet() => EmptyWorkingSet(GetCurrentProcess());
 }
