@@ -1,5 +1,4 @@
 using System.Reflection;
-using System.Runtime.InteropServices;
 using System.Text.Json;
 using Microsoft.Web.WebView2.Core;
 using UsageBar.Domain;
@@ -249,11 +248,7 @@ internal sealed class WebViewTooltip : IDisposable
                 return 0;
 
             case NativeMethods.WmRunDelegate:
-                if (SynchronizationContext.Current is TrayUiSyncContext ctx)
-                {
-                    ctx.Drain();
-                }
-
+                TrayUiSyncContext.DrainCurrent();
                 return 0;
 
             case NativeMethods.WmDestroy:
@@ -387,17 +382,8 @@ internal sealed class WebViewTooltip : IDisposable
 
     private nint CreatePopupWindow(nint instance)
     {
-        var className = $"UsageBarWebTooltip-{Guid.NewGuid():N}";
-
-        var windowClass = new NativeMethods.WndClassEx
-        {
-            cbSize = (uint)Marshal.SizeOf<NativeMethods.WndClassEx>(),
-            lpfnWndProc = _wndProc,
-            hInstance = instance,
-            lpszClassName = className,
-        };
-
-        if (NativeMethods.RegisterClassEx(ref windowClass) == 0)
+        var className = NativeMethods.RegisterWindowClass("UsageBarWebTooltip", _wndProc, instance);
+        if (className is null)
         {
             return 0;
         }

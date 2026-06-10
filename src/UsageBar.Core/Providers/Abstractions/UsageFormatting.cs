@@ -15,6 +15,10 @@ internal static class UsageFormatting
     public static string Currency(decimal value, string symbol = "$") =>
         string.Create(CultureInfo.InvariantCulture, $"{symbol}{value:0.00}");
 
+    /// <summary>Capitalizes the first character of a plan/tier token for display (invariant).</summary>
+    public static string Capitalize(string value) =>
+        value.Length == 0 ? value : char.ToUpperInvariant(value[0]) + value[1..];
+
     /// <summary>
     /// Formats a reset countdown as <c>now</c>, <c>5m</c>, <c>2h 10m</c>, or <c>1d 3h</c>.
     /// Returns <c>now</c> when the window has already reset.

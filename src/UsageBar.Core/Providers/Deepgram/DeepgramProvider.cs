@@ -25,11 +25,7 @@ public sealed class DeepgramProvider(HttpClient httpClient) : BalanceUsageProvid
         using var request = new HttpRequestMessage(HttpMethod.Get, "https://api.deepgram.com/v1/projects");
         AddHeaders(request, apiKey);
 
-        using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+        using var document = await ProviderHttp.GetJsonAsync(httpClient, request, cancellationToken).ConfigureAwait(false);
 
         foreach (var project in EnumerateProjects(document.RootElement))
         {
@@ -50,11 +46,7 @@ public sealed class DeepgramProvider(HttpClient httpClient) : BalanceUsageProvid
             $"https://api.deepgram.com/v1/projects/{Uri.EscapeDataString(projectId)}/balances");
         AddHeaders(request, apiKey);
 
-        using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+        using var document = await ProviderHttp.GetJsonAsync(httpClient, request, cancellationToken).ConfigureAwait(false);
 
         var total = 0m;
         var found = false;

@@ -31,7 +31,8 @@ testable; keep all Win32/WebView2/registry code in App.
   `ThresholdNotification`, `ProviderException`.
 - `Configuration/AppSettings.cs` — settings record + `Default` + `Normalize`.
 - `Providers/Abstractions/` — `IUsageProvider`, `ProviderDescriptor`, `BalanceUsageProvider`,
-  `ProviderQueryContext`, `CredentialNames`, `ProviderJson`, `UsageFormatting`.
+  `ProviderQueryContext`, `CredentialNames`, `ProviderJson`, `ProviderHttp`, `MetricWindows`,
+  `UsageFormatting`.
 - `Providers/<Name>/` — one folder per provider (Codex, Claude, DeepSeek, OpenRouter, Deepgram).
 - `Application/` — `UsageRefreshService`, `UsageAggregator`, `ThresholdNotifier`,
   `TooltipCardBuilder`, `IconLayout`, and the `Abstractions/` the shell implements
@@ -119,6 +120,11 @@ Two standards:
   and the `IconBar`s they contribute to the tray icon (the provider owns its own bar count/weight,
   e.g. Codex Free → one Weekly bar at double weight). Auth is read through an injected
   `I{Codex,Claude}AuthReader` (testable; tokens are never logged).
+
+Shared plumbing keeps providers small and uniform: `ProviderHttp.GetJsonAsync` (send + status
+check + streaming JSON parse; the caller builds the request and disposes the document),
+`ProviderJson` (tolerant value reads), and `MetricWindows` (non-null window collection with the
+standard no-windows `ProviderException`, plus the common equal-weight icon bars).
 
 DeepSeek shows the USD balance and additionally the CNY balance when CNY is non-zero
 (`"$x / ¥y"`); when CNY is zero only USD is shown.

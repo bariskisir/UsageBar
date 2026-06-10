@@ -33,4 +33,14 @@ public sealed class UsageFormattingTests
     {
         Assert.Equal(expected, UsageFormatting.Currency((decimal)value, "¥"));
     }
+
+    [Theory]
+    [InlineData("", "")]
+    [InlineData("pro", "Pro")]
+    [InlineData("pro_lite", "Pro_lite")]
+    [InlineData("Team", "Team")]
+    public void Capitalize_uppercases_only_the_first_character(string value, string expected)
+    {
+        Assert.Equal(expected, UsageFormatting.Capitalize(value));
+    }
 }

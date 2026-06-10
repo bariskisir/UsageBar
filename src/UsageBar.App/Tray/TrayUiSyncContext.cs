@@ -47,10 +47,18 @@ internal sealed class TrayUiSyncContext : SynchronizationContext
     }
 
     /// <summary>
-    /// Drains all queued callbacks. Call from the UI thread's WndProc when
-    /// <see cref="NativeMethods.WmRunDelegate"/> is received.
+    /// Drains the current thread's <see cref="TrayUiSyncContext"/>, if one is installed. Call
+    /// from a UI-thread WndProc when <see cref="NativeMethods.WmRunDelegate"/> is received.
     /// </summary>
-    public void Drain()
+    public static void DrainCurrent()
+    {
+        if (Current is TrayUiSyncContext context)
+        {
+            context.Drain();
+        }
+    }
+
+    private void Drain()
     {
         while (_queue.TryDequeue(out var work))
         {

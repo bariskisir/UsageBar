@@ -16,11 +16,7 @@ public sealed class DeepSeekProvider(HttpClient httpClient) : BalanceUsageProvid
         using var request = new HttpRequestMessage(HttpMethod.Get, "https://api.deepseek.com/user/balance");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
 
-        using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+        using var document = await ProviderHttp.GetJsonAsync(httpClient, request, cancellationToken).ConfigureAwait(false);
 
         if (!ProviderJson.TryGetProperty(document.RootElement, "balance_infos", out var balanceInfos) ||
             balanceInfos.ValueKind != JsonValueKind.Array)

@@ -33,49 +33,13 @@ public sealed class ClaudeProvider(HttpClient httpClient, IClaudeAuthReader auth
         request.Headers.TryAddWithoutValidation("anthropic-beta", BetaHeader);
         request.Headers.TryAddWithoutValidation("User-Agent", ClaudeCodeUserAgent);
 
-        using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+        using var document = await ProviderHttp.GetJsonAsync(httpClient, request, cancellationToken).ConfigureAwait(false);
 
         var session = ReadWindow(document.RootElement, "five_hour", "Session", context.Now);
         var weekly = ReadWindow(document.RootElement, "seven_day", "Weekly", context.Now);
 
-        var windows = new List<UsageWindow>(2);
-        if (session is not null)
-        {
-            windows.Add(session);
-        }
-
-        if (weekly is not null)
-        {
-            windows.Add(weekly);
-        }
-
-        if (windows.Count == 0)
-        {
-            throw new ProviderException("Claude response did not contain usable rate limit windows.");
-        }
-
-        return new MetricResult(Descriptor.Name, plan, windows, BuildIconBars(session, weekly));
-    }
-
-    /// <summary>Maps Claude windows to tray bars: the present windows at equal weight.</summary>
-    private static IReadOnlyList<IconBar> BuildIconBars(UsageWindow? session, UsageWindow? weekly)
-    {
-        var bars = new List<IconBar>(2);
-        if (session is not null)
-        {
-            bars.Add(new IconBar(session.UsedPercent, 1.0));
-        }
-
-        if (weekly is not null)
-        {
-            bars.Add(new IconBar(weekly.UsedPercent, 1.0));
-        }
-
-        return bars;
+        var windows = MetricWindows.Require(Descriptor.Name, session, weekly);
+        return new MetricResult(Descriptor.Name, plan, windows, MetricWindows.EqualWeightBars(session, weekly));
     }
 
     /// <summary>Maps a Claude subscription tier to a short plan label.</summary>
@@ -96,7 +60,7 @@ public sealed class ClaudeProvider(HttpClient httpClient, IClaudeAuthReader auth
             _ when normalized.Contains("enterprise") => "Enterprise",
             _ when normalized.Contains("free") => "Free",
             "default_claude_ai" => "Claude AI",
-            _ => char.ToUpperInvariant(normalized[0]) + normalized[1..],
+            _ => UsageFormatting.Capitalize(normalized),
         };
     }
 

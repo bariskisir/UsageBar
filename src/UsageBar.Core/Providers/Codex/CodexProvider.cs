@@ -28,11 +28,7 @@ public sealed class CodexProvider(HttpClient httpClient, ICodexAuthReader authRe
         request.Headers.TryAddWithoutValidation("originator", "codex_cli_rs");
         request.Headers.TryAddWithoutValidation("chatgpt-account-id", auth.AccountId);
 
-        using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+        using var document = await ProviderHttp.GetJsonAsync(httpClient, request, cancellationToken).ConfigureAwait(false);
 
         var plan = PlanLabel(ProviderJson.GetString(document.RootElement, "plan_type"));
         var rateLimit = GetRateLimit(document.RootElement);
@@ -40,22 +36,7 @@ public sealed class CodexProvider(HttpClient httpClient, ICodexAuthReader authRe
         var session = ReadWindow(rateLimit, "primary_window", "Session", context.Now);
         var weekly = ReadWindow(rateLimit, "secondary_window", "Weekly", context.Now);
 
-        var windows = new List<UsageWindow>(2);
-        if (session is not null)
-        {
-            windows.Add(session);
-        }
-
-        if (weekly is not null)
-        {
-            windows.Add(weekly);
-        }
-
-        if (windows.Count == 0)
-        {
-            throw new ProviderException("Codex response did not contain usable rate limit windows.");
-        }
-
+        var windows = MetricWindows.Require(Descriptor.Name, session, weekly);
         return new MetricResult(Descriptor.Name, plan, windows, BuildIconBars(plan, session, weekly));
     }
 
@@ -67,19 +48,13 @@ public sealed class CodexProvider(HttpClient httpClient, ICodexAuthReader authRe
     private static IReadOnlyList<IconBar> BuildIconBars(string? plan, UsageWindow? session, UsageWindow? weekly)
     {
         var freeLike = string.Equals(plan, "Free", StringComparison.OrdinalIgnoreCase) || session is null;
-        if (freeLike)
+        if (!freeLike)
         {
-            var single = weekly ?? session;
-            return single is null ? [] : [new IconBar(single.UsedPercent, 2.0)];
+            return MetricWindows.EqualWeightBars(session, weekly);
         }
 
-        var bars = new List<IconBar>(2) { new(session!.UsedPercent, 1.0) };
-        if (weekly is not null)
-        {
-            bars.Add(new IconBar(weekly.UsedPercent, 1.0));
-        }
-
-        return bars;
+        var single = weekly ?? session;
+        return single is null ? [] : [new IconBar(single.UsedPercent, 2.0)];
     }
 
     /// <summary>Maps a Codex <c>plan_type</c> to a short plan/tier label.</summary>
@@ -102,12 +77,9 @@ public sealed class CodexProvider(HttpClient httpClient, ICodexAuthReader authRe
             "enterprise" => "Enterprise",
             "education" or "edu" => "Education",
             "guest" => "Guest",
-            _ => Capitalize(planType),
+            _ => UsageFormatting.Capitalize(planType),
         };
     }
-
-    private static string Capitalize(string value) =>
-        value.Length == 0 ? value : char.ToUpperInvariant(value[0]) + value[1..];
 
     private static JsonElement GetRateLimit(JsonElement root)
     {

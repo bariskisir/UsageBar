@@ -247,4 +247,22 @@ internal static class NativeMethods
     /// bursts of allocation (a refresh) or after freeing memory (hiding/suspending the tooltip).
     /// </summary>
     public static void TrimWorkingSet() => EmptyWorkingSet(GetCurrentProcess());
+
+    /// <summary>
+    /// Registers a process-unique window class (prefix + GUID) for the given window procedure.
+    /// Returns the generated class name, or <see langword="null"/> when registration fails.
+    /// </summary>
+    public static string? RegisterWindowClass(string namePrefix, WndProc wndProc, nint instance)
+    {
+        var className = $"{namePrefix}-{Guid.NewGuid():N}";
+        var windowClass = new WndClassEx
+        {
+            cbSize = (uint)Marshal.SizeOf<WndClassEx>(),
+            lpfnWndProc = wndProc,
+            hInstance = instance,
+            lpszClassName = className,
+        };
+
+        return RegisterClassEx(ref windowClass) == 0 ? null : className;
+    }
 }

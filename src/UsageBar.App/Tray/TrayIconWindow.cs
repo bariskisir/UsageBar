@@ -29,19 +29,8 @@ internal sealed class TrayIconWindow : IDisposable
         _wndProc = WindowProc;
         _instance = NativeMethods.GetModuleHandle(null);
 
-        var className = $"UsageBarTrayWindow-{Guid.NewGuid():N}";
-        var windowClass = new NativeMethods.WndClassEx
-        {
-            cbSize = (uint)Marshal.SizeOf<NativeMethods.WndClassEx>(),
-            lpfnWndProc = _wndProc,
-            hInstance = _instance,
-            lpszClassName = className,
-        };
-
-        if (NativeMethods.RegisterClassEx(ref windowClass) == 0)
-        {
-            throw new InvalidOperationException("Failed to register tray window class.");
-        }
+        var className = NativeMethods.RegisterWindowClass("UsageBarTrayWindow", _wndProc, _instance)
+            ?? throw new InvalidOperationException("Failed to register tray window class.");
 
         _windowHandle = NativeMethods.CreateWindowEx(0, className, "UsageBar", 0, 0, 0, 0, 0, 0, 0, _instance, 0);
         if (_windowHandle == 0)
@@ -126,11 +115,7 @@ internal sealed class TrayIconWindow : IDisposable
                 return 0;
 
             case NativeMethods.WmRunDelegate:
-                if (SynchronizationContext.Current is TrayUiSyncContext ctx)
-                {
-                    ctx.Drain();
-                }
-
+                TrayUiSyncContext.DrainCurrent();
                 return 0;
 
             case NativeMethods.WmDestroy:
