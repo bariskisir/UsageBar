@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using UsageBar.Domain;
 
 namespace UsageBar.Configuration;
 
@@ -13,11 +14,12 @@ public sealed record AppSettings(
     [property: JsonPropertyName("criticalPercentage")] double CriticalPercentage,
     [property: JsonPropertyName("DEEPSEEK_API_KEY")] string? DeepSeekApiKey,
     [property: JsonPropertyName("OPENROUTER_API_KEY")] string? OpenRouterApiKey,
-    [property: JsonPropertyName("DEEPGRAM_API_KEY")] string? DeepgramApiKey)
+    [property: JsonPropertyName("DEEPGRAM_API_KEY")] string? DeepgramApiKey,
+    [property: JsonPropertyName("telegram")] TelegramSettings? Telegram)
 {
     /// <summary>The built-in defaults used when no settings file exists yet.</summary>
     public static AppSettings Default { get; } =
-        new(5, 70, 90, string.Empty, string.Empty, string.Empty);
+        new(5, 70, 90, string.Empty, string.Empty, string.Empty, null);
 
     /// <summary>
     /// Returns a copy with out-of-range numeric values reset to defaults and null
@@ -31,5 +33,6 @@ public sealed record AppSettings(
         DeepSeekApiKey = DeepSeekApiKey ?? string.Empty,
         OpenRouterApiKey = OpenRouterApiKey ?? string.Empty,
         DeepgramApiKey = DeepgramApiKey ?? string.Empty,
+        Telegram = Telegram ?? new TelegramSettings(null, 0),
     };
 }

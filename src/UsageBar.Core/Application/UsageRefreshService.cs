@@ -16,6 +16,7 @@ public sealed class UsageRefreshService : IDisposable
     private readonly ISettingsStore _settings;
     private readonly IUsageView _view;
     private readonly IClock _clock;
+    private readonly TelegramNotifier _telegram;
     private readonly ILogger<UsageRefreshService> _logger;
     private static readonly NotificationLevel[] SeverityOrder =
         [NotificationLevel.Critical, NotificationLevel.High, NotificationLevel.Reset];
@@ -31,12 +32,14 @@ public sealed class UsageRefreshService : IDisposable
         ISettingsStore settings,
         IUsageView view,
         IClock clock,
+        TelegramNotifier telegram,
         ILogger<UsageRefreshService> logger)
     {
         _providers = providers.ToArray();
         _settings = settings;
         _view = view;
         _clock = clock;
+        _telegram = telegram;
         _logger = logger;
     }
 
@@ -84,7 +87,7 @@ public sealed class UsageRefreshService : IDisposable
             _view.ShowIcon(IconLayout.Compute(snapshot.Results));
             _view.ShowCards(TooltipCardBuilder.Build(snapshot));
 
-            EmitThresholdNotifications(snapshot.Windows, settings);
+            await EmitThresholdNotifications(snapshot.Windows, settings).ConfigureAwait(false);
 
             _logger.LogInformation(
                 "Refresh complete: {ProviderCount} provider(s), {WindowCount} window(s).",
@@ -103,7 +106,7 @@ public sealed class UsageRefreshService : IDisposable
         ScheduleNext(settings.RefreshPeriodMinute, scheduleAnchor);
     }
 
-    private void EmitThresholdNotifications(IReadOnlyList<UsageWindow> windows, AppSettings settings)
+    private async Task EmitThresholdNotifications(IReadOnlyList<UsageWindow> windows, AppSettings settings)
     {
         var notifications = _thresholds.Evaluate(windows, settings);
         if (notifications.Count == 0)
@@ -111,13 +114,25 @@ public sealed class UsageRefreshService : IDisposable
             return;
         }
 
-        // One balloon per severity (most severe first), with messages joined.
+        var telegramSettings = settings.Telegram ?? Domain.TelegramSettings.Default;
+        var enabled = telegramSettings.IsEnabled;
+
         foreach (var level in SeverityOrder)
         {
             var lines = notifications.Where(n => n.Level == level).Select(n => n.Message).ToList();
-            if (lines.Count > 0)
+            if (lines.Count == 0)
             {
-                _view.Notify(level, string.Join(Environment.NewLine, lines));
+                continue;
+            }
+
+            var message = string.Join(Environment.NewLine, lines);
+            _view.Notify(level, message);
+
+            if (enabled)
+            {
+                await _telegram
+                    .SendAsync(telegramSettings, level, message, CancellationToken.None)
+                    .ConfigureAwait(false);
             }
         }
     }

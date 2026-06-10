@@ -51,6 +51,7 @@ internal static class ServiceConfiguration
         services.AddSingleton<IUsageView, TrayUsageView>();
 
         // Orchestration + application root.
+        services.AddSingleton<TelegramNotifier>(sp => new TelegramNotifier(HttpClient(sp), sp.GetRequiredService<ILogger<TelegramNotifier>>()));
         services.AddSingleton<UsageRefreshService>();
         services.AddSingleton<TrayApplication>();
 

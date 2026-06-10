@@ -34,7 +34,12 @@ C:\Users\USERNAME\AppData\Roaming\UsageBar\settings.json
   "criticalPercentage": 90,
   "DEEPSEEK_API_KEY": "",
   "OPENROUTER_API_KEY": "",
-  "DEEPGRAM_API_KEY": ""
+  "DEEPGRAM_API_KEY": "",
+  "telegram": {
+    "token": "",
+    "chatId": 0,
+    "IsEnabled": false
+  }
 }
 ```
 
