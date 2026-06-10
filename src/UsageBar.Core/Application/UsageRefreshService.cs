@@ -10,13 +10,13 @@ namespace UsageBar.Application;
 /// on-demand manual refreshes. Each refresh reads settings, queries providers, updates the
 /// view (icon + tooltip cards), and emits threshold notifications. Refreshes never overlap.
 /// </summary>
-public sealed class UsageRefreshService : IDisposable
+public sealed class UsageRefreshService : IUsageRefreshService, IDisposable
 {
     private readonly IReadOnlyList<IUsageProvider> _providers;
     private readonly ISettingsStore _settings;
     private readonly IUsageView _view;
     private readonly IClock _clock;
-    private readonly TelegramNotifier _telegram;
+    private readonly IRemoteNotificationService _telegram;
     private readonly ILogger<UsageRefreshService> _logger;
     private static readonly NotificationLevel[] SeverityOrder =
         [NotificationLevel.Critical, NotificationLevel.High, NotificationLevel.Reset];
@@ -32,7 +32,7 @@ public sealed class UsageRefreshService : IDisposable
         ISettingsStore settings,
         IUsageView view,
         IClock clock,
-        TelegramNotifier telegram,
+        IRemoteNotificationService telegram,
         ILogger<UsageRefreshService> logger)
     {
         _providers = providers.ToArray();
@@ -114,9 +114,6 @@ public sealed class UsageRefreshService : IDisposable
             return;
         }
 
-        var telegramSettings = settings.Telegram ?? Domain.TelegramSettings.Default;
-        var enabled = telegramSettings.IsEnabled;
-
         foreach (var level in SeverityOrder)
         {
             var lines = notifications.Where(n => n.Level == level).Select(n => n.Message).ToList();
@@ -128,12 +125,9 @@ public sealed class UsageRefreshService : IDisposable
             var message = string.Join(Environment.NewLine, lines);
             _view.Notify(level, message);
 
-            if (enabled)
-            {
-                await _telegram
-                    .SendAsync(telegramSettings, level, message, CancellationToken.None)
-                    .ConfigureAwait(false);
-            }
+            await _telegram
+                .SendAsync(level, message, CancellationToken.None)
+                .ConfigureAwait(false);
         }
     }
 

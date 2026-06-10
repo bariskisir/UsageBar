@@ -10,12 +10,12 @@ namespace UsageBar.Tray;
 /// show/hide events from the version-4 popup messages. All tray data is pushed in; this
 /// type holds no settings or business state.
 /// </summary>
-internal sealed class TrayIconWindow : IDisposable
+internal sealed class TrayIconWindow : ITrayIconWindow, IDisposable
 {
     private const uint IconId = 1;
     private const string IconName = "Usage Bar";
 
-    private readonly TrayContextMenu _contextMenu;
+    private readonly ITrayContextMenu _contextMenu;
     private readonly NativeMethods.WndProc _wndProc;
     private readonly nint _instance;
     private readonly nint _windowHandle;
@@ -23,7 +23,7 @@ internal sealed class TrayIconWindow : IDisposable
     private nint _iconHandle;
     private bool _disposed;
 
-    public TrayIconWindow(TrayContextMenu contextMenu)
+    public TrayIconWindow(ITrayContextMenu contextMenu)
     {
         _contextMenu = contextMenu;
         _wndProc = WindowProc;

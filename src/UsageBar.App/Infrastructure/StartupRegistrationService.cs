@@ -7,7 +7,7 @@ namespace UsageBar.Infrastructure;
 /// Registers UsageBar to launch at user logon via
 /// <c>HKCU\Software\Microsoft\Windows\CurrentVersion\Run</c>. Failures are logged, never thrown.
 /// </summary>
-internal sealed class StartupRegistrationService(ILogger<StartupRegistrationService> logger)
+internal sealed class StartupRegistrationService(ILogger<StartupRegistrationService> logger) : IStartupRegistrationService
 {
     private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string ValueName = "UsageBar";

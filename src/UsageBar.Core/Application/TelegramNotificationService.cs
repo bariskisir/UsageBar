@@ -5,23 +5,25 @@ using UsageBar.Domain;
 
 namespace UsageBar.Application;
 
-public sealed class TelegramNotifier
+public sealed class TelegramNotificationService : IRemoteNotificationService
 {
     private readonly HttpClient _httpClient;
-    private readonly ILogger<TelegramNotifier> _logger;
+    private readonly ISettingsStore _settings;
+    private readonly ILogger<TelegramNotificationService> _logger;
 
-    public TelegramNotifier(HttpClient httpClient, ILogger<TelegramNotifier> logger)
+    public TelegramNotificationService(HttpClient httpClient, ISettingsStore settings, ILogger<TelegramNotificationService> logger)
     {
         _httpClient = httpClient;
+        _settings = settings;
         _logger = logger;
     }
 
     public async Task SendAsync(
-        TelegramSettings settings,
         NotificationLevel level,
         string message,
         CancellationToken cancellationToken)
     {
+        var settings = _settings.Read().Telegram ?? TelegramSettings.Default;
         if (!settings.IsEnabled)
         {
             return;

@@ -9,7 +9,7 @@ namespace UsageBar.Tray;
 /// and WebView2 tooltip. All members are safe to call from the background refresh thread
 /// (the icon and balloon use thread-safe shell calls; the tooltip marshals via a posted message).
 /// </summary>
-internal sealed class TrayUsageView(TrayIconWindow window, WebViewTooltip tooltip) : IUsageView
+internal sealed class TrayUsageView(ITrayIconWindow window, IWebViewTooltip tooltip) : IUsageView
 {
     public void ShowIcon(IReadOnlyList<IconLayout.Bar> bars) => window.UpdateIcon(bars);
 

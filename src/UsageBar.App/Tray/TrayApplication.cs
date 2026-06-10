@@ -11,11 +11,11 @@ namespace UsageBar.Tray;
 /// events to the refresh service, and pumps the Win32 message loop until exit.
 /// </summary>
 internal sealed class TrayApplication(
-    TrayIconWindow window,
-    WebViewTooltip tooltip,
-    TrayContextMenu contextMenu,
-    UsageRefreshService refresh,
-    StartupRegistrationService startupRegistration,
+    ITrayIconWindow window,
+    IWebViewTooltip tooltip,
+    ITrayContextMenu contextMenu,
+    IUsageRefreshService refresh,
+    IStartupRegistrationService startupRegistration,
     ILogger<TrayApplication> logger)
 {
     public void Run()

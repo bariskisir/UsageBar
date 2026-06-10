@@ -25,6 +25,7 @@ internal static class ServiceConfiguration
         services.AddLogging(builder => builder.AddSerilog(serilogLogger, dispose: false));
 
         services.AddHttpClient(UsageHttpClientName, client => client.Timeout = TimeSpan.FromSeconds(20));
+        services.AddSingleton(sp => sp.GetRequiredService<IHttpClientFactory>().CreateClient(UsageHttpClientName));
 
         // Configuration + cross-cutting services.
         services.AddSingleton<IClock, SystemClock>();
@@ -37,27 +38,24 @@ internal static class ServiceConfiguration
         services.AddSingleton<IClaudeAuthReader, ClaudeAuthReader>();
 
         // Providers — add a new one here (and its folder under Providers/) to extend the app.
-        services.AddSingleton<IUsageProvider>(sp => new CodexProvider(HttpClient(sp), sp.GetRequiredService<ICodexAuthReader>()));
-        services.AddSingleton<IUsageProvider>(sp => new ClaudeProvider(HttpClient(sp), sp.GetRequiredService<IClaudeAuthReader>()));
-        services.AddSingleton<IUsageProvider>(sp => new DeepSeekProvider(HttpClient(sp)));
-        services.AddSingleton<IUsageProvider>(sp => new OpenRouterProvider(HttpClient(sp)));
-        services.AddSingleton<IUsageProvider>(sp => new DeepgramProvider(HttpClient(sp)));
+        services.AddSingleton<IUsageProvider, CodexProvider>();
+        services.AddSingleton<IUsageProvider, ClaudeProvider>();
+        services.AddSingleton<IUsageProvider, DeepSeekProvider>();
+        services.AddSingleton<IUsageProvider, OpenRouterProvider>();
+        services.AddSingleton<IUsageProvider, DeepgramProvider>();
 
         // Windows shell.
-        services.AddSingleton<StartupRegistrationService>();
-        services.AddSingleton<TrayContextMenu>();
-        services.AddSingleton<TrayIconWindow>();
-        services.AddSingleton<WebViewTooltip>();
+        services.AddSingleton<IStartupRegistrationService, StartupRegistrationService>();
+        services.AddSingleton<ITrayContextMenu, TrayContextMenu>();
+        services.AddSingleton<ITrayIconWindow, TrayIconWindow>();
+        services.AddSingleton<IWebViewTooltip, WebViewTooltip>();
         services.AddSingleton<IUsageView, TrayUsageView>();
 
         // Orchestration + application root.
-        services.AddSingleton<TelegramNotifier>(sp => new TelegramNotifier(HttpClient(sp), sp.GetRequiredService<ILogger<TelegramNotifier>>()));
-        services.AddSingleton<UsageRefreshService>();
+        services.AddSingleton<IRemoteNotificationService, TelegramNotificationService>();
+        services.AddSingleton<IUsageRefreshService, UsageRefreshService>();
         services.AddSingleton<TrayApplication>();
 
         return services.BuildServiceProvider();
     }
-
-    private static HttpClient HttpClient(IServiceProvider services) =>
-        services.GetRequiredService<IHttpClientFactory>().CreateClient(UsageHttpClientName);
 }

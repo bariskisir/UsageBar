@@ -8,7 +8,7 @@ namespace UsageBar.Tray;
 /// <see cref="ISettingsStore"/> and raises <see cref="RefreshRequested"/> /
 /// <see cref="ExitRequested"/>; it holds no UI state of its own.
 /// </summary>
-internal sealed class TrayContextMenu(ISettingsStore settings)
+internal sealed class TrayContextMenu(ISettingsStore settings) : ITrayContextMenu
 {
     private const uint RefreshCommandId = 1001;
     private const uint ExitCommandId = 1002;

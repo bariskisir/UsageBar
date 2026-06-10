@@ -17,7 +17,7 @@ namespace UsageBar.Tooltip;
 /// popup window is torn down and <see cref="Hwnd"/> stays 0, so show/push calls become
 /// no-ops — the app simply runs without a hover tooltip.
 /// </remarks>
-internal sealed class WebViewTooltip : IDisposable
+internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
 {
     private const int Width = 300;
     private const int CornerRadius = 10;
