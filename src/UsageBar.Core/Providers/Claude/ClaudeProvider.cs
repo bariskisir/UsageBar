@@ -35,8 +35,8 @@ public sealed class ClaudeProvider(HttpClient httpClient, IClaudeAuthReader auth
 
         using var document = await ProviderHttp.GetJsonAsync(httpClient, request, cancellationToken).ConfigureAwait(false);
 
-        var session = ReadWindow(document.RootElement, "five_hour", "Session", context.Now);
-        var weekly = ReadWindow(document.RootElement, "seven_day", "Weekly", context.Now);
+        var session = ReadWindow(document.RootElement, "five_hour", "Session", Descriptor.Name, context.Now);
+        var weekly = ReadWindow(document.RootElement, "seven_day", "Weekly", Descriptor.Name, context.Now);
 
         var windows = MetricWindows.Require(Descriptor.Name, session, weekly);
         return new MetricResult(Descriptor.Name, plan, windows, MetricWindows.EqualWeightBars(session, weekly));
@@ -64,7 +64,7 @@ public sealed class ClaudeProvider(HttpClient httpClient, IClaudeAuthReader auth
         };
     }
 
-    private static UsageWindow? ReadWindow(JsonElement root, string propertyName, string label, DateTimeOffset now)
+    private static UsageWindow? ReadWindow(JsonElement root, string propertyName, string label, string providerName, DateTimeOffset now)
     {
         if (!ProviderJson.TryGetProperty(root, propertyName, out var window) || window.ValueKind != JsonValueKind.Object)
         {
@@ -80,7 +80,7 @@ public sealed class ClaudeProvider(HttpClient httpClient, IClaudeAuthReader auth
         var resetTime = ParseResetTime(ProviderJson.GetString(window, "resets_at"));
         var resetText = resetTime is { } reset ? UsageFormatting.ResetDuration(reset - now) : null;
 
-        return new UsageWindow("Claude", label, Math.Clamp(utilization.Value, 0, 100), resetText);
+        return new UsageWindow(providerName, label, Math.Clamp(utilization.Value, 0, 100), resetText);
     }
 
     private static DateTimeOffset? ParseResetTime(string? iso8601)

@@ -33,8 +33,8 @@ public sealed class CodexProvider(HttpClient httpClient, ICodexAuthReader authRe
         var plan = PlanLabel(ProviderJson.GetString(document.RootElement, "plan_type"));
         var rateLimit = GetRateLimit(document.RootElement);
 
-        var session = ReadWindow(rateLimit, "primary_window", "Session", context.Now);
-        var weekly = ReadWindow(rateLimit, "secondary_window", "Weekly", context.Now);
+        var session = ReadWindow(rateLimit, "primary_window", "Session", Descriptor.Name, context.Now);
+        var weekly = ReadWindow(rateLimit, "secondary_window", "Weekly", Descriptor.Name, context.Now);
 
         var windows = MetricWindows.Require(Descriptor.Name, session, weekly);
         return new MetricResult(Descriptor.Name, plan, windows, BuildIconBars(plan, session, weekly));
@@ -103,7 +103,7 @@ public sealed class CodexProvider(HttpClient httpClient, ICodexAuthReader authRe
         throw new ProviderException("Codex response did not contain rate_limit.");
     }
 
-    private static UsageWindow? ReadWindow(JsonElement rateLimit, string propertyName, string label, DateTimeOffset now)
+    private static UsageWindow? ReadWindow(JsonElement rateLimit, string propertyName, string label, string providerName, DateTimeOffset now)
     {
         if (!ProviderJson.TryGetProperty(rateLimit, propertyName, out var window) || window.ValueKind != JsonValueKind.Object)
         {
@@ -119,7 +119,7 @@ public sealed class CodexProvider(HttpClient httpClient, ICodexAuthReader authRe
         }
 
         var resetText = UsageFormatting.ResetDuration(FromEpoch(resetAt.Value) - now);
-        return new UsageWindow("Codex", label, Math.Clamp(usedPercent.Value, 0, 100), resetText);
+        return new UsageWindow(providerName, label, Math.Clamp(usedPercent.Value, 0, 100), resetText);
     }
 
     private static DateTimeOffset FromEpoch(double epoch)
