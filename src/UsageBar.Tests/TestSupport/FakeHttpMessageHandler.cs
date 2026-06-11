@@ -15,6 +15,20 @@ internal sealed class FakeHttpMessageHandler(Func<HttpRequestMessage, HttpRespon
             Content = new StringContent(json, Encoding.UTF8, "application/json"),
         });
 
+    /// <summary>Responds with the given JSON bodies in order.</summary>
+    public static FakeHttpMessageHandler Sequence(params (string Json, HttpStatusCode Status)[] responses)
+    {
+        var queue = new Queue<(string Json, HttpStatusCode Status)>(responses);
+        return new FakeHttpMessageHandler(_ =>
+        {
+            var response = queue.Dequeue();
+            return new HttpResponseMessage(response.Status)
+            {
+                Content = new StringContent(response.Json, Encoding.UTF8, "application/json"),
+            };
+        });
+    }
+
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         Requests.Add(request);

@@ -1,4 +1,6 @@
+using System.Net;
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 using UsageBar.Domain;
 
@@ -11,6 +13,9 @@ namespace UsageBar.Providers;
 public sealed class CodexProvider(HttpClient httpClient, ICodexAuthReader authReader) : IUsageProvider
 {
     private const string UsageEndpoint = "https://chatgpt.com/backend-api/wham/usage";
+    private const string RefreshEndpoint = "https://auth.openai.com/oauth/token";
+    private const string OAuthClientId = "app_EMoamEEZ73f0CkXaXp7hrann";
+    private static readonly TimeSpan RefreshInterval = TimeSpan.FromDays(8);
 
     public ProviderDescriptor Descriptor { get; } = new("Codex", DisplayOrder: 0);
 
@@ -22,13 +27,12 @@ public sealed class CodexProvider(HttpClient httpClient, ICodexAuthReader authRe
             return null;
         }
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, UsageEndpoint);
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", auth.AccessToken);
-        request.Headers.TryAddWithoutValidation("originator", "codex_cli_rs");
-        request.Headers.TryAddWithoutValidation("chatgpt-account-id", auth.AccountId);
+        if (ShouldRefresh(auth, context.Now))
+        {
+            auth = await RefreshAuthAsync(auth, cancellationToken).ConfigureAwait(false);
+        }
 
-        using var document = await ProviderHttp.GetJsonAsync(httpClient, request, cancellationToken).ConfigureAwait(false);
+        using var document = await GetUsageDocumentWithRefreshRetryAsync(auth, cancellationToken).ConfigureAwait(false);
 
         var plan = PlanLabel(ProviderJson.GetString(document.RootElement, "plan_type"));
         var rateLimit = GetRateLimit(document.RootElement);
@@ -38,6 +42,100 @@ public sealed class CodexProvider(HttpClient httpClient, ICodexAuthReader authRe
 
         var windows = MetricWindows.Require(Descriptor.Name, session, weekly);
         return new MetricResult(Descriptor.Name, plan, windows, BuildIconBars(plan, session, weekly));
+    }
+
+    private async Task<JsonDocument> GetUsageDocumentWithRefreshRetryAsync(
+        CodexAuth auth,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await GetUsageDocumentAsync(auth, cancellationToken).ConfigureAwait(false);
+        }
+        catch (HttpRequestException exception) when (IsAuthFailure(exception.StatusCode) && HasRefreshToken(auth))
+        {
+            var refreshed = await RefreshAuthAsync(auth, cancellationToken).ConfigureAwait(false);
+            return await GetUsageDocumentAsync(refreshed, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private async Task<JsonDocument> GetUsageDocumentAsync(CodexAuth auth, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, UsageEndpoint);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", auth.AccessToken);
+        request.Headers.TryAddWithoutValidation("User-Agent", "UsageBar");
+        request.Headers.TryAddWithoutValidation("originator", "codex_cli_rs");
+
+        if (!string.IsNullOrWhiteSpace(auth.AccountId))
+        {
+            request.Headers.TryAddWithoutValidation("ChatGPT-Account-Id", auth.AccountId);
+        }
+
+        using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new HttpRequestException(
+                $"Codex usage request failed with HTTP {(int)response.StatusCode}.",
+                inner: null,
+                response.StatusCode);
+        }
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        return await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<CodexAuth> RefreshAuthAsync(CodexAuth auth, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(auth.RefreshToken))
+        {
+            return auth;
+        }
+
+        var body = JsonSerializer.Serialize(new Dictionary<string, string>
+        {
+            ["client_id"] = OAuthClientId,
+            ["grant_type"] = "refresh_token",
+            ["refresh_token"] = auth.RefreshToken,
+            ["scope"] = "openid profile email",
+        });
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, RefreshEndpoint)
+        {
+            Content = new StringContent(body, Encoding.UTF8, "application/json"),
+        };
+
+        using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new ProviderException($"Codex token refresh failed with HTTP {(int)response.StatusCode}.");
+        }
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var root = document.RootElement;
+        var refreshed = auth with
+        {
+            AccessToken = ProviderJson.GetString(root, "access_token") ?? auth.AccessToken,
+            RefreshToken = ProviderJson.GetString(root, "refresh_token") ?? auth.RefreshToken,
+            IdToken = ProviderJson.GetString(root, "id_token") ?? auth.IdToken,
+            LastRefresh = DateTimeOffset.UtcNow,
+        };
+
+        authReader.Save(refreshed);
+        return refreshed;
+    }
+
+    private static bool ShouldRefresh(CodexAuth auth, DateTimeOffset now)
+    {
+        return HasRefreshToken(auth) && (auth.LastRefresh is null || now - auth.LastRefresh > RefreshInterval);
+    }
+
+    private static bool HasRefreshToken(CodexAuth auth) => !string.IsNullOrWhiteSpace(auth.RefreshToken);
+
+    private static bool IsAuthFailure(HttpStatusCode? statusCode)
+    {
+        return statusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden;
     }
 
     /// <summary>

@@ -84,6 +84,61 @@ public sealed class ClaudeProviderTests
     }
 
     [Fact]
+    public async Task Refreshes_expired_token_before_usage_request()
+    {
+        var usageJson = """
+        {
+          "five_hour": { "utilization": 25.0, "resets_at": "2030-01-01T01:00:00Z" }
+        }
+        """;
+        var handler = FakeHttpMessageHandler.Sequence(
+            ("""{ "access_token": "new-token", "refresh_token": "new-refresh", "expires_in": 3600 }""", HttpStatusCode.OK),
+            (usageJson, HttpStatusCode.OK));
+        var authReader = new StubClaudeAuthReader(new ClaudeAuth(
+            "old-token",
+            SubscriptionType: "pro",
+            RefreshToken: "old-refresh",
+            ExpiresAt: TestData.FixedNow.AddMinutes(-1),
+            Scopes: ["user:profile"]));
+        var provider = new ClaudeProvider(new HttpClient(handler), authReader);
+
+        var result = await provider.GetUsageAsync(TestData.Context(), CancellationToken.None);
+
+        Assert.IsType<MetricResult>(result);
+        Assert.Equal(2, handler.Requests.Count);
+        Assert.Equal("new-token", authReader.Saved?.AccessToken);
+        Assert.Equal("new-refresh", authReader.Saved?.RefreshToken);
+        Assert.NotNull(authReader.Saved?.ExpiresAt);
+        Assert.Equal(["user:profile"], authReader.Saved?.Scopes);
+    }
+
+    [Fact]
+    public async Task Refreshes_and_retries_once_on_unauthorized()
+    {
+        var usageJson = """
+        {
+          "five_hour": { "utilization": 25.0, "resets_at": "2030-01-01T01:00:00Z" }
+        }
+        """;
+        var handler = FakeHttpMessageHandler.Sequence(
+            ("{}", HttpStatusCode.Unauthorized),
+            ("""{ "access_token": "new-token", "refresh_token": "new-refresh", "expires_in": 3600 }""", HttpStatusCode.OK),
+            (usageJson, HttpStatusCode.OK));
+        var authReader = new StubClaudeAuthReader(new ClaudeAuth(
+            "old-token",
+            SubscriptionType: "pro",
+            RefreshToken: "old-refresh",
+            ExpiresAt: TestData.FixedNow.AddMinutes(1)));
+        var provider = new ClaudeProvider(new HttpClient(handler), authReader);
+
+        var result = await provider.GetUsageAsync(TestData.Context(), CancellationToken.None);
+
+        Assert.IsType<MetricResult>(result);
+        Assert.Equal(3, handler.Requests.Count);
+        Assert.Equal("new-token", authReader.Saved?.AccessToken);
+    }
+
+    [Fact]
     public async Task Throws_when_no_windows_present()
     {
         var provider = Create("{}", new ClaudeAuth("token"));

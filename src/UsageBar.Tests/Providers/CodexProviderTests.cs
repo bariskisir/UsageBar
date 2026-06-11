@@ -143,6 +143,67 @@ public sealed class CodexProviderTests
     }
 
     [Fact]
+    public async Task Refreshes_stale_token_before_usage_request()
+    {
+        var reset = TestData.FixedNow.AddMinutes(30).ToUnixTimeSeconds();
+        var usageJson = $$"""
+        {
+          "plan_type": "pro",
+          "rate_limit": {
+            "primary_window": { "used_percent": 20.0, "reset_at": {{reset}} }
+          }
+        }
+        """;
+        var handler = FakeHttpMessageHandler.Sequence(
+            ("""{ "access_token": "new-token", "refresh_token": "new-refresh", "id_token": "new-id" }""", HttpStatusCode.OK),
+            (usageJson, HttpStatusCode.OK));
+        var authReader = new StubCodexAuthReader(new CodexAuth(
+            "old-token",
+            "account",
+            "old-refresh",
+            LastRefresh: TestData.FixedNow.AddDays(-9)));
+        var provider = new CodexProvider(new HttpClient(handler), authReader);
+
+        var result = await provider.GetUsageAsync(TestData.Context(), CancellationToken.None);
+
+        Assert.IsType<MetricResult>(result);
+        Assert.Equal(2, handler.Requests.Count);
+        Assert.Equal("new-token", authReader.Saved?.AccessToken);
+        Assert.Equal("new-refresh", authReader.Saved?.RefreshToken);
+        Assert.Equal("new-id", authReader.Saved?.IdToken);
+    }
+
+    [Fact]
+    public async Task Refreshes_and_retries_once_on_auth_failure()
+    {
+        var reset = TestData.FixedNow.AddMinutes(30).ToUnixTimeSeconds();
+        var usageJson = $$"""
+        {
+          "plan_type": "pro",
+          "rate_limit": {
+            "primary_window": { "used_percent": 20.0, "reset_at": {{reset}} }
+          }
+        }
+        """;
+        var handler = FakeHttpMessageHandler.Sequence(
+            ("{}", HttpStatusCode.Unauthorized),
+            ("""{ "access_token": "new-token", "refresh_token": "new-refresh" }""", HttpStatusCode.OK),
+            (usageJson, HttpStatusCode.OK));
+        var authReader = new StubCodexAuthReader(new CodexAuth(
+            "old-token",
+            "account",
+            "old-refresh",
+            LastRefresh: TestData.FixedNow));
+        var provider = new CodexProvider(new HttpClient(handler), authReader);
+
+        var result = await provider.GetUsageAsync(TestData.Context(), CancellationToken.None);
+
+        Assert.IsType<MetricResult>(result);
+        Assert.Equal(3, handler.Requests.Count);
+        Assert.Equal("new-token", authReader.Saved?.AccessToken);
+    }
+
+    [Fact]
     public async Task Throws_when_no_windows_present()
     {
         var provider = Create("""{ "rate_limit": {} }""", new CodexAuth("token", "account"));

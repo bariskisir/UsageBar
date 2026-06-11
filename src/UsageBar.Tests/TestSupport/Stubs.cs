@@ -5,12 +5,32 @@ namespace UsageBar.Tests;
 
 internal sealed class StubCodexAuthReader(CodexAuth? auth) : ICodexAuthReader
 {
-    public CodexAuth? Read() => auth;
+    private CodexAuth? _auth = auth;
+
+    public CodexAuth? Saved { get; private set; }
+
+    public CodexAuth? Read() => _auth;
+
+    public void Save(CodexAuth auth)
+    {
+        Saved = auth;
+        _auth = auth;
+    }
 }
 
 internal sealed class StubClaudeAuthReader(ClaudeAuth? auth) : IClaudeAuthReader
 {
-    public ClaudeAuth? Read() => auth;
+    private ClaudeAuth? _auth = auth;
+
+    public ClaudeAuth? Saved { get; private set; }
+
+    public ClaudeAuth? Read() => _auth;
+
+    public void Save(ClaudeAuth auth)
+    {
+        Saved = auth;
+        _auth = auth;
+    }
 }
 
 /// <summary>A provider whose result (or exception) is supplied by a delegate.</summary>
