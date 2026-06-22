@@ -37,8 +37,7 @@ C:\Users\USERNAME\AppData\Roaming\UsageBar\settings.json
   "DEEPGRAM_API_KEY": "",
   "telegram": {
     "token": "",
-    "chatId": 0,
-    "IsEnabled": false
+    "chatId": 0
   }
 }
 ```

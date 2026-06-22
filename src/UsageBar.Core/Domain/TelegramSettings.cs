@@ -8,5 +8,6 @@ public sealed record TelegramSettings(
 {
     public static TelegramSettings Default { get; } = new(null, 0);
 
+    [JsonIgnore]
     public bool IsEnabled => !string.IsNullOrWhiteSpace(Token) && ChatId != 0;
 }
