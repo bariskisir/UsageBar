@@ -16,7 +16,7 @@ public sealed class UsageRefreshService : IUsageRefreshService, IDisposable
     private readonly ISettingsStore _settings;
     private readonly IUsageView _view;
     private readonly IClock _clock;
-    private readonly IRemoteNotificationService _telegram;
+    private readonly IReadOnlyList<IRemoteNotificationService> _remoteServices;
     private readonly ILogger<UsageRefreshService> _logger;
     private static readonly NotificationLevel[] SeverityOrder =
         [NotificationLevel.Critical, NotificationLevel.High, NotificationLevel.Reset];
@@ -32,14 +32,14 @@ public sealed class UsageRefreshService : IUsageRefreshService, IDisposable
         ISettingsStore settings,
         IUsageView view,
         IClock clock,
-        IRemoteNotificationService telegram,
+        IEnumerable<IRemoteNotificationService> remoteServices,
         ILogger<UsageRefreshService> logger)
     {
         _providers = providers.ToArray();
         _settings = settings;
         _view = view;
         _clock = clock;
-        _telegram = telegram;
+        _remoteServices = remoteServices.ToArray();
         _logger = logger;
     }
 
@@ -52,6 +52,16 @@ public sealed class UsageRefreshService : IUsageRefreshService, IDisposable
         var anchor = _clock.Now;
         DisableTimer();
         _ = RefreshAsync(anchor);
+    }
+
+    public void SendTestNotification()
+    {
+        var message = FormatMessage(NotificationLevel.Critical, "Test: Limit reached 100%");
+        _view.Notify(NotificationLevel.Critical, message);
+        foreach (var svc in _remoteServices)
+        {
+            _ = svc.SendAsync(message, CancellationToken.None);
+        }
     }
 
     /// <summary>Stops scheduling further refreshes.</summary>
@@ -122,13 +132,29 @@ public sealed class UsageRefreshService : IUsageRefreshService, IDisposable
                 continue;
             }
 
-            var message = string.Join(Environment.NewLine, lines);
+            var message = FormatMessage(level, string.Join(Environment.NewLine, lines));
             _view.Notify(level, message);
 
-            await _telegram
-                .SendAsync(level, message, CancellationToken.None)
-                .ConfigureAwait(false);
+            foreach (var svc in _remoteServices)
+            {
+                await svc
+                    .SendAsync(message, CancellationToken.None)
+                    .ConfigureAwait(false);
+            }
         }
+    }
+
+    private static string FormatMessage(NotificationLevel level, string raw)
+    {
+        var emoji = level switch
+        {
+            NotificationLevel.Critical => "\u26a0\ufe0f ",
+            NotificationLevel.High => "\u26a1 ",
+            NotificationLevel.Reset => "\u2705 ",
+            _ => string.Empty,
+        };
+
+        return $"{emoji}{raw}";
     }
 
     private void ScheduleNext(int refreshPeriodMinute, DateTimeOffset? scheduleAnchor)

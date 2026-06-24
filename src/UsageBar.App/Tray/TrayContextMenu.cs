@@ -10,6 +10,7 @@ namespace UsageBar.Tray;
 /// </summary>
 internal sealed class TrayContextMenu(ISettingsStore settings) : ITrayContextMenu
 {
+    private const uint TestNotificationCommandId = 1000;
     private const uint RefreshCommandId = 1001;
     private const uint ExitCommandId = 1002;
     private const uint RefreshEveryBase = 2001;
@@ -21,6 +22,9 @@ internal sealed class TrayContextMenu(ISettingsStore settings) : ITrayContextMen
 
     /// <summary>Raised when an immediate refresh is requested (Refresh item or a settings change).</summary>
     public event Action? RefreshRequested;
+
+    /// <summary>Raised when the user chooses Test Notification.</summary>
+    public event Action? TestNotificationRequested;
 
     /// <summary>Raised when the user chooses Exit.</summary>
     public event Action? ExitRequested;
@@ -47,6 +51,7 @@ internal sealed class TrayContextMenu(ISettingsStore settings) : ITrayContextMen
             NativeMethods.AppendMenu(menu, NativeMethods.MfPopup, (nuint)criticalLevel, "Critical Level");
 
             NativeMethods.AppendMenu(menu, NativeMethods.MfSeparator, 0, string.Empty);
+            NativeMethods.AppendMenu(menu, NativeMethods.MfString, TestNotificationCommandId, "Test Notification");
             NativeMethods.AppendMenu(menu, NativeMethods.MfString, RefreshCommandId, "Refresh");
             NativeMethods.AppendMenu(menu, NativeMethods.MfString, ExitCommandId, "Exit");
 
@@ -78,6 +83,10 @@ internal sealed class TrayContextMenu(ISettingsStore settings) : ITrayContextMen
     {
         switch (commandId)
         {
+            case TestNotificationCommandId:
+                TestNotificationRequested?.Invoke();
+                break;
+
             case RefreshCommandId:
                 RefreshRequested?.Invoke();
                 break;

@@ -53,6 +53,7 @@ internal static class ServiceConfiguration
 
         // Orchestration + application root.
         services.AddSingleton<IRemoteNotificationService, TelegramNotificationService>();
+        services.AddSingleton<IRemoteNotificationService, DiscordNotificationService>();
         services.AddSingleton<IUsageRefreshService, UsageRefreshService>();
         services.AddSingleton<TrayApplication>();
 

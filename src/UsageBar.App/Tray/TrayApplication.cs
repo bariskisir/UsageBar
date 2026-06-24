@@ -37,6 +37,7 @@ internal sealed class TrayApplication(
         window.TooltipShowRequested += OnTooltipShowRequested;
         window.TooltipHideRequested += tooltip.Hide;
         contextMenu.RefreshRequested += refresh.TriggerManualRefresh;
+        contextMenu.TestNotificationRequested += refresh.SendTestNotification;
         contextMenu.ExitRequested += OnExitRequested;
     }
 

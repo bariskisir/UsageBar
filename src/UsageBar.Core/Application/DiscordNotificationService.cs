@@ -5,13 +5,13 @@ using UsageBar.Domain;
 
 namespace UsageBar.Application;
 
-public sealed class TelegramNotificationService : IRemoteNotificationService
+public sealed class DiscordNotificationService : IRemoteNotificationService
 {
     private readonly HttpClient _httpClient;
     private readonly ISettingsStore _settings;
-    private readonly ILogger<TelegramNotificationService> _logger;
+    private readonly ILogger<DiscordNotificationService> _logger;
 
-    public TelegramNotificationService(HttpClient httpClient, ISettingsStore settings, ILogger<TelegramNotificationService> logger)
+    public DiscordNotificationService(HttpClient httpClient, ISettingsStore settings, ILogger<DiscordNotificationService> logger)
     {
         _httpClient = httpClient;
         _settings = settings;
@@ -22,8 +22,8 @@ public sealed class TelegramNotificationService : IRemoteNotificationService
         string message,
         CancellationToken cancellationToken)
     {
-        var settings = _settings.Read().Telegram ?? TelegramSettings.Default;
-        if (!settings.IsEnabled)
+        var discordSettings = _settings.Read().Discord ?? DiscordSettings.Default;
+        if (!discordSettings.IsEnabled)
         {
             return;
         }
@@ -32,25 +32,25 @@ public sealed class TelegramNotificationService : IRemoteNotificationService
         {
             var payload = JsonSerializer.Serialize(new
             {
-                chat_id = settings.ChatId,
-                text = message,
-                parse_mode = "Markdown",
+                content = message,
+                username = discordSettings.Username ?? "Usage Bar",
+                avatar_url = "https://raw.githubusercontent.com/bariskisir/UsageBar/refs/heads/master/src/UsageBar.App/Assets/AppIcon.png",
             });
 
             using var content = new StringContent(payload, Encoding.UTF8, "application/json");
             using var response = await _httpClient
-                .PostAsync($"https://api.telegram.org/bot{settings.Token}/sendMessage", content, cancellationToken)
+                .PostAsync(discordSettings.WebhookUrl, content, cancellationToken)
                 .ConfigureAwait(false);
 
             if (!response.IsSuccessStatusCode)
             {
                 var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-                _logger.LogWarning("Telegram API returned {StatusCode}: {Body}", (int)response.StatusCode, body);
+                _logger.LogWarning("Discord webhook returned {StatusCode}: {Body}", (int)response.StatusCode, body);
             }
         }
         catch (Exception exception)
         {
-            _logger.LogWarning(exception, "Failed to send Telegram notification.");
+            _logger.LogWarning(exception, "Failed to send Discord notification.");
         }
     }
 }

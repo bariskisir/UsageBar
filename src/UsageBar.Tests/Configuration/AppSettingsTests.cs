@@ -25,7 +25,8 @@ public sealed class AppSettingsTests
             DeepSeekApiKey: null,
             OpenRouterApiKey: null,
             DeepgramApiKey: null,
-            Telegram: null);
+            Telegram: null,
+            Discord: null);
 
         var normalized = settings.Normalize();
 
@@ -38,12 +39,15 @@ public sealed class AppSettingsTests
         Assert.NotNull(normalized.Telegram);
         Assert.Null(normalized.Telegram!.Token);
         Assert.Equal(0, normalized.Telegram.ChatId);
+        Assert.NotNull(normalized.Discord);
+        Assert.Null(normalized.Discord!.WebhookUrl);
+        Assert.Equal("Usage Bar", normalized.Discord.Username);
     }
 
     [Fact]
     public void Normalize_keeps_valid_values()
     {
-        var settings = new AppSettings(15, 60, 85, "a", "b", "c", null);
+        var settings = new AppSettings(15, 60, 85, "a", "b", "c", null, null);
 
         var normalized = settings.Normalize();
 

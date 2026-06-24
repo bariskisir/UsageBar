@@ -38,6 +38,10 @@ C:\Users\USERNAME\AppData\Roaming\UsageBar\settings.json
   "telegram": {
     "token": "",
     "chatId": 0
+  },
+  "discord": {
+    "webhookUrl": "",
+    "username": "Usage Bar"
   }
 }
 ```
@@ -50,6 +54,14 @@ C:\Users\USERNAME\AppData\Roaming\UsageBar\settings.json
 ```
 
 Providers with blank or missing API keys will not be enabled
+
+## Notifications
+
+Notifications are sent when a usage window crosses a threshold (defaults: 70% high, 90% critical) or resets. Supported channels:
+
+- **Telegram** — set `telegram.token` and `telegram.chatId`
+- **Discord** — set `discord.webhookUrl`
+
 
 ## Development
 
