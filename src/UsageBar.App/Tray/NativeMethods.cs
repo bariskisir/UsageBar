@@ -220,6 +220,18 @@ internal static class NativeMethods
     [DllImport("user32.dll", SetLastError = true)]
     public static extern bool DestroyIcon(nint hIcon);
 
+    [StructLayout(LayoutKind.Sequential)]
+    public struct Margins
+    {
+        public int Left;
+        public int Right;
+        public int Top;
+        public int Bottom;
+    }
+
+    [DllImport("dwmapi.dll")]
+    public static extern int DwmExtendFrameIntoClientArea(nint hWnd, ref Margins pMarInset);
+
     [DllImport("gdi32.dll")]
     public static extern nint CreateRoundRectRgn(int x1, int y1, int x2, int y2, int w, int h);
 

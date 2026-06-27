@@ -388,7 +388,7 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
             return 0;
         }
 
-        return NativeMethods.CreateWindowEx(
+        var hwnd = NativeMethods.CreateWindowEx(
             NativeMethods.WS_EX_TOOLWINDOW | NativeMethods.WS_EX_TOPMOST | NativeMethods.WS_EX_NOACTIVATE,
             className,
             "UsageBarWebTooltip",
@@ -398,6 +398,16 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
             0, 0,
             instance,
             0);
+
+        if (hwnd != 0)
+        {
+            // Disable the DWM shadow that Windows 11 draws around borderless popup windows —
+            // it appears as a tiny gray corner artifact at the rounded edges.
+            var margins = new NativeMethods.Margins { Left = -1, Right = -1, Top = -1, Bottom = -1 };
+            NativeMethods.DwmExtendFrameIntoClientArea(hwnd, ref margins);
+        }
+
+        return hwnd;
     }
 
     private double WindowScale()
