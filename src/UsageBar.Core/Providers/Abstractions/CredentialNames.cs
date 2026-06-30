@@ -8,6 +8,7 @@ public static class CredentialNames
 {
     public const string DeepSeek = "DEEPSEEK_API_KEY";
     public const string OpenRouter = "OPENROUTER_API_KEY";
+    public const string Moonshot = "MOONSHOT_API_KEY";
     public const string Deepgram = "DEEPGRAM_API_KEY";
     public const string ElevenLabs = "ELEVENLABS_API_KEY";
 }

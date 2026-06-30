@@ -58,4 +58,20 @@ public sealed class ProviderQueryContextTests
             Environment.SetEnvironmentVariable(CredentialNames.ElevenLabs, null);
         }
     }
+
+    [Fact]
+    public void Moonshot_falls_back_to_environment_variable_when_blank()
+    {
+        var settings = AppSettings.Default with { MoonshotApiKey = "" };
+        Environment.SetEnvironmentVariable(CredentialNames.Moonshot, "moonshot-env");
+        try
+        {
+            var context = ProviderQueryContext.FromSettings(settings, TestData.FixedNow);
+            Assert.Equal("moonshot-env", context.GetApiKey(CredentialNames.Moonshot));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(CredentialNames.Moonshot, null);
+        }
+    }
 }

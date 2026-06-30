@@ -14,6 +14,7 @@ public sealed record AppSettings(
     [property: JsonPropertyName("criticalPercentage")] double CriticalPercentage,
     [property: JsonPropertyName("DEEPSEEK_API_KEY")] string? DeepSeekApiKey,
     [property: JsonPropertyName("OPENROUTER_API_KEY")] string? OpenRouterApiKey,
+    [property: JsonPropertyName("MOONSHOT_API_KEY")] string? MoonshotApiKey,
     [property: JsonPropertyName("DEEPGRAM_API_KEY")] string? DeepgramApiKey,
     [property: JsonPropertyName("ELEVENLABS_API_KEY")] string? ElevenLabsApiKey,
     [property: JsonPropertyName("iconLayout")] TrayIconLayoutSettings? IconLayout,
@@ -22,7 +23,7 @@ public sealed record AppSettings(
 {
     /// <summary>The built-in defaults used when no settings file exists yet.</summary>
     public static AppSettings Default { get; } =
-        new(5, 70, 95, string.Empty, string.Empty, string.Empty, string.Empty, TrayIconLayoutSettings.Default, null, null);
+        new(5, 70, 95, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, TrayIconLayoutSettings.Default, null, null);
 
     /// <summary>Maximum allowed refresh period in minutes (24 hours).</summary>
     private const int MaxRefreshPeriodMinutes = 1440;
@@ -41,6 +42,7 @@ public sealed record AppSettings(
             CriticalPercentage = CriticalPercentage is >= 1 and <= 100 ? CriticalPercentage : Default.CriticalPercentage,
             DeepSeekApiKey = DeepSeekApiKey ?? string.Empty,
             OpenRouterApiKey = OpenRouterApiKey ?? string.Empty,
+            MoonshotApiKey = MoonshotApiKey ?? string.Empty,
             DeepgramApiKey = DeepgramApiKey ?? string.Empty,
             ElevenLabsApiKey = ElevenLabsApiKey ?? string.Empty,
             IconLayout = (IconLayout ?? TrayIconLayoutSettings.Default).Normalize(),
@@ -74,7 +76,7 @@ public sealed record AppSettings(
     /// include in logs, crash dumps, and debug output.
     /// </summary>
     public override string ToString() =>
-        $"AppSettings {{ RefreshPeriodMinute = {RefreshPeriodMinute}, HighPercentage = {HighPercentage}, CriticalPercentage = {CriticalPercentage}, DeepSeekApiKey = ***, OpenRouterApiKey = ***, DeepgramApiKey = ***, ElevenLabsApiKey = ***, Telegram = {(Telegram is not null ? "***" : "null")}, Discord = {(Discord is not null ? "***" : "null")} }}";
+        $"AppSettings {{ RefreshPeriodMinute = {RefreshPeriodMinute}, HighPercentage = {HighPercentage}, CriticalPercentage = {CriticalPercentage}, DeepSeekApiKey = ***, OpenRouterApiKey = ***, MoonshotApiKey = ***, DeepgramApiKey = ***, ElevenLabsApiKey = ***, Telegram = {(Telegram is not null ? "***" : "null")}, Discord = {(Discord is not null ? "***" : "null")} }}";
 }
 
 /// <summary>

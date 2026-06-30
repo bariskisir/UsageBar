@@ -33,7 +33,7 @@ testable; keep all Win32/WebView2/registry code in App.
 - `Providers/Abstractions/` — `IUsageProvider`, `ProviderDescriptor`, `BalanceUsageProvider`,
   `ProviderQueryContext`, `CredentialNames`, `ProviderJson`, `ProviderHttp`, `MetricWindows`,
   `UsageFormatting`, provider-facing auth-reader interfaces.
-- `Providers/<Name>/` — one folder per provider (Codex, Claude, ElevenLabs, DeepSeek, OpenRouter, Deepgram).
+- `Providers/<Name>/` — one folder per provider (Codex, Claude, ElevenLabs, DeepSeek, OpenRouter, Moonshot, Deepgram).
 - `Application/` — `UsageRefreshService`, `UsageAggregator`, `ThresholdNotifier`,
   `TooltipCardBuilder`, `IconLayout`, and the `Abstractions/` the shell implements
   (`IUsageView`, `ISettingsStore`, `IClock`) plus internal orchestration seams.
@@ -140,6 +140,9 @@ the raw character counts are not displayed.
 
 DeepSeek shows the USD balance and additionally the CNY balance when CNY is non-zero
 (`"$x / ¥y"`); when CNY is zero only USD is shown.
+
+Moonshot calls `GET https://api.moonshot.ai/v1/users/me/balance` with `Authorization: Bearer KEY`
+from `MOONSHOT_API_KEY` and shows `data.available_balance` as a USD balance.
 
 To add a provider: new folder under `Providers/`, implement the right base/interface (declare a
 `Descriptor`; for metric providers, return stable `UsageWindow` labels used for icon-layout keys),

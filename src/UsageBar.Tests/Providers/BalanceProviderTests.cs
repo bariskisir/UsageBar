@@ -65,6 +65,41 @@ public sealed class BalanceProviderTests
     }
 
     [Fact]
+    public async Task Moonshot_reports_available_balance()
+    {
+        var json = """
+        {
+          "code": 0,
+          "data": {
+            "available_balance": 9.25,
+            "voucher_balance": 1.00,
+            "cash_balance": 8.25
+          },
+          "scode": "0x0",
+          "status": true
+        }
+        """;
+        var handler = FakeHttpMessageHandler.Json(json);
+        var provider = new MoonshotProvider(new HttpClient(handler));
+
+        var result = await provider.GetUsageAsync(TestData.Context((CredentialNames.Moonshot, "moonshot-key")), CancellationToken.None);
+
+        Assert.Equal("$9.25", Assert.IsType<BalanceResult>(result).BalanceText);
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal("https://api.moonshot.ai/v1/users/me/balance", request.RequestUri!.AbsoluteUri);
+        Assert.Equal("Bearer", request.Headers.Authorization!.Scheme);
+        Assert.Equal("moonshot-key", request.Headers.Authorization.Parameter);
+    }
+
+    [Fact]
+    public async Task Moonshot_returns_null_without_api_key()
+    {
+        var provider = new MoonshotProvider(new HttpClient(FakeHttpMessageHandler.Json("{}")));
+        var result = await provider.GetUsageAsync(TestData.Context(), CancellationToken.None);
+        Assert.Null(result);
+    }
+
+    [Fact]
     public async Task Deepgram_sums_usd_balances_for_first_project()
     {
         var handler = new FakeHttpMessageHandler(request =>

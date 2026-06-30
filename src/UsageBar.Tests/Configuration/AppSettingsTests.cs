@@ -26,6 +26,7 @@ public sealed class AppSettingsTests
             CriticalPercentage: 150,
             DeepSeekApiKey: null,
             OpenRouterApiKey: null,
+            MoonshotApiKey: null,
             DeepgramApiKey: null,
             ElevenLabsApiKey: null,
             IconLayout: null,
@@ -39,6 +40,7 @@ public sealed class AppSettingsTests
         Assert.Equal(95, normalized.CriticalPercentage);
         Assert.Equal(string.Empty, normalized.DeepSeekApiKey);
         Assert.Equal(string.Empty, normalized.OpenRouterApiKey);
+        Assert.Equal(string.Empty, normalized.MoonshotApiKey);
         Assert.Equal(string.Empty, normalized.DeepgramApiKey);
         Assert.Equal(string.Empty, normalized.ElevenLabsApiKey);
         Assert.Equal(TrayIconLayoutSettings.AutoMode, normalized.IconLayout!.Mode);
@@ -56,7 +58,7 @@ public sealed class AppSettingsTests
         var iconLayout = new TrayIconLayoutSettings(
             TrayIconLayoutSettings.ManualMode,
             new Dictionary<string, double> { ["codex_session"] = 25 });
-        var settings = new AppSettings(15, 60, 85, "a", "b", "c", "d", iconLayout, null, null);
+        var settings = new AppSettings(15, 60, 85, "a", "b", "c", "d", "e", iconLayout, null, null);
 
         var normalized = settings.Normalize();
 
@@ -64,7 +66,8 @@ public sealed class AppSettingsTests
         Assert.Equal(60, normalized.HighPercentage);
         Assert.Equal(85, normalized.CriticalPercentage);
         Assert.Equal("a", normalized.DeepSeekApiKey);
-        Assert.Equal("d", normalized.ElevenLabsApiKey);
+        Assert.Equal("c", normalized.MoonshotApiKey);
+        Assert.Equal("e", normalized.ElevenLabsApiKey);
         Assert.True(normalized.IconLayout!.IsManual);
         Assert.Equal(25, normalized.IconLayout.Bars!["codex_session"]);
     }

@@ -34,6 +34,7 @@ public sealed class ProviderQueryContext
         {
             [CredentialNames.DeepSeek] = Resolve(settings.DeepSeekApiKey, CredentialNames.DeepSeek),
             [CredentialNames.OpenRouter] = Resolve(settings.OpenRouterApiKey, CredentialNames.OpenRouter),
+            [CredentialNames.Moonshot] = Resolve(settings.MoonshotApiKey, CredentialNames.Moonshot),
             [CredentialNames.Deepgram] = Resolve(settings.DeepgramApiKey, CredentialNames.Deepgram),
             [CredentialNames.ElevenLabs] = Resolve(settings.ElevenLabsApiKey, CredentialNames.ElevenLabs),
         };

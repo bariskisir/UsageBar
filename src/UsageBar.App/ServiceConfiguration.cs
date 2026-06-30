@@ -49,6 +49,7 @@ internal static class ServiceConfiguration
         services.AddSingleton<IUsageProvider, ElevenLabsProvider>();
         services.AddSingleton<IUsageProvider, DeepSeekProvider>();
         services.AddSingleton<IUsageProvider, OpenRouterProvider>();
+        services.AddSingleton<IUsageProvider, MoonshotProvider>();
         services.AddSingleton<IUsageProvider, DeepgramProvider>();
 
         // Windows shell.

@@ -13,6 +13,7 @@ UsageBar is a minimal Windows notification-area app for showing LLM or API usage
 - ElevenLabs API
 - DeepSeek API
 - OpenRouter API
+- Moonshot (Kimi) API
 - Deepgram API
 - New providers will be added soon.
 
@@ -36,6 +37,7 @@ C:\Users\USERNAME\AppData\Roaming\UsageBar\settings.json
   "ELEVENLABS_API_KEY": "",
   "DEEPSEEK_API_KEY": "",
   "OPENROUTER_API_KEY": "",
+  "MOONSHOT_API_KEY": "",
   "DEEPGRAM_API_KEY": "",
   "iconLayout": {
     "mode": "auto",
@@ -56,6 +58,7 @@ C:\Users\USERNAME\AppData\Roaming\UsageBar\settings.json
 ```powershell
 [System.Environment]::SetEnvironmentVariable("DEEPSEEK_API_KEY", "API_KEY", "User")
 [System.Environment]::SetEnvironmentVariable("OPENROUTER_API_KEY", "API_KEY", "User")
+[System.Environment]::SetEnvironmentVariable("MOONSHOT_API_KEY", "API_KEY", "User")
 [System.Environment]::SetEnvironmentVariable("DEEPGRAM_API_KEY", "API_KEY", "User")
 [System.Environment]::SetEnvironmentVariable("ELEVENLABS_API_KEY", "API_KEY", "User")
 ```
