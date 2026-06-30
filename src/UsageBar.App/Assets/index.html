@@ -315,6 +315,7 @@ function providerIcon(title) {
   const name = (title || "").toLowerCase();
   if (name === "codex") return iconImage("{{OPENAI_ICON}}", "OpenAI");
   if (name === "claude") return iconImage("{{CLAUDE_ICON}}", "Claude");
+  if (name === "elevenlabs") return iconImage("{{ELEVENLABS_ICON}}", "ElevenLabs");
   return iconImage("{{GENERIC_ICON}}", title || "Provider");
 }
 

@@ -15,12 +15,13 @@ public sealed record AppSettings(
     [property: JsonPropertyName("DEEPSEEK_API_KEY")] string? DeepSeekApiKey,
     [property: JsonPropertyName("OPENROUTER_API_KEY")] string? OpenRouterApiKey,
     [property: JsonPropertyName("DEEPGRAM_API_KEY")] string? DeepgramApiKey,
+    [property: JsonPropertyName("ELEVENLABS_API_KEY")] string? ElevenLabsApiKey,
     [property: JsonPropertyName("telegram")] TelegramSettings? Telegram,
     [property: JsonPropertyName("discord")] DiscordSettings? Discord)
 {
     /// <summary>The built-in defaults used when no settings file exists yet.</summary>
     public static AppSettings Default { get; } =
-        new(5, 70, 95, string.Empty, string.Empty, string.Empty, null, null);
+        new(5, 70, 95, string.Empty, string.Empty, string.Empty, string.Empty, null, null);
 
     /// <summary>Maximum allowed refresh period in minutes (24 hours).</summary>
     private const int MaxRefreshPeriodMinutes = 1440;
@@ -40,6 +41,7 @@ public sealed record AppSettings(
             DeepSeekApiKey = DeepSeekApiKey ?? string.Empty,
             OpenRouterApiKey = OpenRouterApiKey ?? string.Empty,
             DeepgramApiKey = DeepgramApiKey ?? string.Empty,
+            ElevenLabsApiKey = ElevenLabsApiKey ?? string.Empty,
             Telegram = Telegram ?? TelegramSettings.Default,
             Discord = Discord ?? DiscordSettings.Default,
         };
@@ -70,5 +72,5 @@ public sealed record AppSettings(
     /// include in logs, crash dumps, and debug output.
     /// </summary>
     public override string ToString() =>
-        $"AppSettings {{ RefreshPeriodMinute = {RefreshPeriodMinute}, HighPercentage = {HighPercentage}, CriticalPercentage = {CriticalPercentage}, DeepSeekApiKey = ***, OpenRouterApiKey = ***, DeepgramApiKey = ***, Telegram = {(Telegram is not null ? "***" : "null")}, Discord = {(Discord is not null ? "***" : "null")} }}";
+        $"AppSettings {{ RefreshPeriodMinute = {RefreshPeriodMinute}, HighPercentage = {HighPercentage}, CriticalPercentage = {CriticalPercentage}, DeepSeekApiKey = ***, OpenRouterApiKey = ***, DeepgramApiKey = ***, ElevenLabsApiKey = ***, Telegram = {(Telegram is not null ? "***" : "null")}, Discord = {(Discord is not null ? "***" : "null")} }}";
 }

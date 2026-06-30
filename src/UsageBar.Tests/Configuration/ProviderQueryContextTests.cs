@@ -42,4 +42,20 @@ public sealed class ProviderQueryContextTests
 
         Assert.Null(context.GetApiKey(CredentialNames.Deepgram));
     }
+
+    [Fact]
+    public void ElevenLabs_falls_back_to_environment_variable_when_blank()
+    {
+        var settings = AppSettings.Default with { ElevenLabsApiKey = "" };
+        Environment.SetEnvironmentVariable(CredentialNames.ElevenLabs, "eleven-env");
+        try
+        {
+            var context = ProviderQueryContext.FromSettings(settings, TestData.FixedNow);
+            Assert.Equal("eleven-env", context.GetApiKey(CredentialNames.ElevenLabs));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(CredentialNames.ElevenLabs, null);
+        }
+    }
 }

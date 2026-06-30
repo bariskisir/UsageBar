@@ -33,7 +33,7 @@ testable; keep all Win32/WebView2/registry code in App.
 - `Providers/Abstractions/` — `IUsageProvider`, `ProviderDescriptor`, `BalanceUsageProvider`,
   `ProviderQueryContext`, `CredentialNames`, `ProviderJson`, `ProviderHttp`, `MetricWindows`,
   `UsageFormatting`, provider-facing auth-reader interfaces.
-- `Providers/<Name>/` — one folder per provider (Codex, Claude, DeepSeek, OpenRouter, Deepgram).
+- `Providers/<Name>/` — one folder per provider (Codex, Claude, ElevenLabs, DeepSeek, OpenRouter, Deepgram).
 - `Application/` — `UsageRefreshService`, `UsageAggregator`, `ThresholdNotifier`,
   `TooltipCardBuilder`, `IconLayout`, and the `Abstractions/` the shell implements
   (`IUsageView`, `ISettingsStore`, `IClock`) plus internal orchestration seams.
@@ -122,15 +122,21 @@ Two standards:
   `UsageFormatting.Currency`, which defaults to the USD sign and accepts a custom symbol). They
   yield a `BalanceResult`.
 - **Metric** providers implement `IUsageProvider` directly, returning a `MetricResult` with
-  `Session`/`Weekly` `UsageWindow`s (used percent clamped 0–100, reset countdown), a plan label,
+  one or more `UsageWindow`s (used percent clamped 0–100, reset countdown), a plan label,
   and the `IconBar`s they contribute to the tray icon (the provider owns its own bar count/weight,
-  e.g. Codex Free → one Weekly bar at double weight). Auth is read through an injected
-  `I{Codex,Claude}AuthReader` (testable; tokens are never logged).
+  e.g. Codex Free → one Weekly bar at double weight; ElevenLabs → one Session bar). Auth is read
+  through an injected `I{Codex,Claude}AuthReader` when OAuth-backed, or through
+  `ProviderQueryContext` when API-key-backed; tokens are never logged.
 
 Shared plumbing keeps providers small and uniform: `ProviderHttp.GetJsonAsync` (send + status
 check + streaming JSON parse; the caller builds the request and disposes the document),
 `ProviderJson` (tolerant value reads), and `MetricWindows` (non-null window collection with the
 standard no-windows `ProviderException`, plus the common equal-weight icon bars).
+
+ElevenLabs calls `GET https://api.elevenlabs.io/v1/user/subscription` with the `xi-api-key`
+header from `ELEVENLABS_API_KEY`. It reports a single Session bar using only
+`character_count / character_limit * 100` for the usage percentage and notification thresholds;
+the raw character counts are not displayed.
 
 DeepSeek shows the USD balance and additionally the CNY balance when CNY is non-zero
 (`"$x / ¥y"`); when CNY is zero only USD is shown.

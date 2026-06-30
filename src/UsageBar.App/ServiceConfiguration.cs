@@ -46,6 +46,7 @@ internal static class ServiceConfiguration
         // Providers — add a new one here (and its folder under Providers/) to extend the app.
         services.AddSingleton<IUsageProvider, CodexProvider>();
         services.AddSingleton<IUsageProvider, ClaudeProvider>();
+        services.AddSingleton<IUsageProvider, ElevenLabsProvider>();
         services.AddSingleton<IUsageProvider, DeepSeekProvider>();
         services.AddSingleton<IUsageProvider, OpenRouterProvider>();
         services.AddSingleton<IUsageProvider, DeepgramProvider>();

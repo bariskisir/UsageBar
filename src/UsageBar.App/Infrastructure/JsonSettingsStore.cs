@@ -37,6 +37,7 @@ internal sealed class JsonSettingsStore : ISettingsStore
             cancellationToken.ThrowIfCancellationRequested();
             var settings = JsonSerializer.Deserialize(raw, SettingsJsonContext.Default.AppSettings)?.Normalize()
                            ?? AppSettings.Default;
+            WriteNormalizedIfChanged(raw, settings);
             return settings;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -58,7 +59,9 @@ internal sealed class JsonSettingsStore : ISettingsStore
             }
 
             var settings = JsonSerializer.Deserialize(raw, SettingsJsonContext.Default.AppSettings);
-            return (settings ?? AppSettings.Default).Normalize();
+            var normalized = (settings ?? AppSettings.Default).Normalize();
+            WriteNormalizedIfChanged(raw, normalized);
+            return normalized;
         }
         catch (Exception exception)
         {
@@ -92,4 +95,25 @@ internal sealed class JsonSettingsStore : ISettingsStore
 
     private static string Serialize(AppSettings settings) =>
         JsonSerializer.Serialize(settings, SettingsJsonContext.Default.AppSettings);
+
+    private void WriteNormalizedIfChanged(string raw, AppSettings settings)
+    {
+        var normalized = Serialize(settings);
+        if (raw == normalized)
+        {
+            return;
+        }
+
+        try
+        {
+            lock (_gate)
+            {
+                File.WriteAllText(_filePath, normalized);
+            }
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Failed to update settings.json with normalized defaults.");
+        }
+    }
 }

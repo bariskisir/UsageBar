@@ -25,6 +25,7 @@ public sealed class AppSettingsTests
             DeepSeekApiKey: null,
             OpenRouterApiKey: null,
             DeepgramApiKey: null,
+            ElevenLabsApiKey: null,
             Telegram: null,
             Discord: null);
 
@@ -36,6 +37,7 @@ public sealed class AppSettingsTests
         Assert.Equal(string.Empty, normalized.DeepSeekApiKey);
         Assert.Equal(string.Empty, normalized.OpenRouterApiKey);
         Assert.Equal(string.Empty, normalized.DeepgramApiKey);
+        Assert.Equal(string.Empty, normalized.ElevenLabsApiKey);
         Assert.NotNull(normalized.Telegram);
         Assert.Null(normalized.Telegram!.Token);
         Assert.Equal(0, normalized.Telegram.ChatId);
@@ -47,7 +49,7 @@ public sealed class AppSettingsTests
     [Fact]
     public void Normalize_keeps_valid_values()
     {
-        var settings = new AppSettings(15, 60, 85, "a", "b", "c", null, null);
+        var settings = new AppSettings(15, 60, 85, "a", "b", "c", "d", null, null);
 
         var normalized = settings.Normalize();
 
@@ -55,6 +57,7 @@ public sealed class AppSettingsTests
         Assert.Equal(60, normalized.HighPercentage);
         Assert.Equal(85, normalized.CriticalPercentage);
         Assert.Equal("a", normalized.DeepSeekApiKey);
+        Assert.Equal("d", normalized.ElevenLabsApiKey);
     }
 
     [Fact]

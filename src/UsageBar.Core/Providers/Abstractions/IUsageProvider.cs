@@ -4,7 +4,7 @@ namespace UsageBar.Providers;
 
 /// <summary>
 /// A source of usage or balance information. Implement this directly for metric
-/// providers (Codex, Claude); derive from <see cref="BalanceUsageProvider"/> for
+/// providers (Codex, Claude, ElevenLabs); derive from <see cref="BalanceUsageProvider"/> for
 /// balance providers (DeepSeek, OpenRouter, Deepgram).
 /// </summary>
 public interface IUsageProvider

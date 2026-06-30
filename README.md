@@ -10,6 +10,7 @@ UsageBar is a minimal Windows notification-area app for showing LLM or API usage
 ## Supported LLMs and APIs
 - Codex OAuth
 - Claude OAuth
+- ElevenLabs API
 - DeepSeek API
 - OpenRouter API
 - Deepgram API
@@ -32,6 +33,7 @@ C:\Users\USERNAME\AppData\Roaming\UsageBar\settings.json
   "refreshPeriodMinute": 5,
   "highPercentage": 70,
   "criticalPercentage": 90,
+  "ELEVENLABS_API_KEY": "",
   "DEEPSEEK_API_KEY": "",
   "OPENROUTER_API_KEY": "",
   "DEEPGRAM_API_KEY": "",
@@ -51,6 +53,7 @@ C:\Users\USERNAME\AppData\Roaming\UsageBar\settings.json
 [System.Environment]::SetEnvironmentVariable("DEEPSEEK_API_KEY", "API_KEY", "User")
 [System.Environment]::SetEnvironmentVariable("OPENROUTER_API_KEY", "API_KEY", "User")
 [System.Environment]::SetEnvironmentVariable("DEEPGRAM_API_KEY", "API_KEY", "User")
+[System.Environment]::SetEnvironmentVariable("ELEVENLABS_API_KEY", "API_KEY", "User")
 ```
 
 Providers with blank or missing API keys will not be enabled
