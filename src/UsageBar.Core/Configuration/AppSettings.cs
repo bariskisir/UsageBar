@@ -16,12 +16,13 @@ public sealed record AppSettings(
     [property: JsonPropertyName("OPENROUTER_API_KEY")] string? OpenRouterApiKey,
     [property: JsonPropertyName("DEEPGRAM_API_KEY")] string? DeepgramApiKey,
     [property: JsonPropertyName("ELEVENLABS_API_KEY")] string? ElevenLabsApiKey,
+    [property: JsonPropertyName("iconLayout")] TrayIconLayoutSettings? IconLayout,
     [property: JsonPropertyName("telegram")] TelegramSettings? Telegram,
     [property: JsonPropertyName("discord")] DiscordSettings? Discord)
 {
     /// <summary>The built-in defaults used when no settings file exists yet.</summary>
     public static AppSettings Default { get; } =
-        new(5, 70, 95, string.Empty, string.Empty, string.Empty, string.Empty, null, null);
+        new(5, 70, 95, string.Empty, string.Empty, string.Empty, string.Empty, TrayIconLayoutSettings.Default, null, null);
 
     /// <summary>Maximum allowed refresh period in minutes (24 hours).</summary>
     private const int MaxRefreshPeriodMinutes = 1440;
@@ -42,6 +43,7 @@ public sealed record AppSettings(
             OpenRouterApiKey = OpenRouterApiKey ?? string.Empty,
             DeepgramApiKey = DeepgramApiKey ?? string.Empty,
             ElevenLabsApiKey = ElevenLabsApiKey ?? string.Empty,
+            IconLayout = (IconLayout ?? TrayIconLayoutSettings.Default).Normalize(),
             Telegram = Telegram ?? TelegramSettings.Default,
             Discord = Discord ?? DiscordSettings.Default,
         };
@@ -73,4 +75,43 @@ public sealed record AppSettings(
     /// </summary>
     public override string ToString() =>
         $"AppSettings {{ RefreshPeriodMinute = {RefreshPeriodMinute}, HighPercentage = {HighPercentage}, CriticalPercentage = {CriticalPercentage}, DeepSeekApiKey = ***, OpenRouterApiKey = ***, DeepgramApiKey = ***, ElevenLabsApiKey = ***, Telegram = {(Telegram is not null ? "***" : "null")}, Discord = {(Discord is not null ? "***" : "null")} }}";
+}
+
+/// <summary>
+/// User-configurable tray icon layout. Auto mode shows every metric window equally in
+/// provider display order. Manual mode shows only the configured window keys, in JSON order,
+/// using each value as the bar height percentage.
+/// </summary>
+public sealed record TrayIconLayoutSettings(
+    [property: JsonPropertyName("mode")] string? Mode,
+    [property: JsonPropertyName("bars")] Dictionary<string, double>? Bars)
+{
+    public const string AutoMode = "auto";
+    public const string ManualMode = "manual";
+
+    public static TrayIconLayoutSettings Default { get; } = new(AutoMode, []);
+
+    [JsonIgnore]
+    public bool IsManual => string.Equals(Mode, ManualMode, StringComparison.OrdinalIgnoreCase);
+
+    public TrayIconLayoutSettings Normalize()
+    {
+        var mode = string.Equals(Mode, ManualMode, StringComparison.OrdinalIgnoreCase)
+            ? ManualMode
+            : AutoMode;
+
+        var bars = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+        if (Bars is not null)
+        {
+            foreach (var (key, value) in Bars)
+            {
+                if (!string.IsNullOrWhiteSpace(key) && double.IsFinite(value) && value > 0)
+                {
+                    bars[key.Trim()] = value;
+                }
+            }
+        }
+
+        return new TrayIconLayoutSettings(mode, bars);
+    }
 }

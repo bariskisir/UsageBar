@@ -104,7 +104,7 @@ public sealed class UsageRefreshService : IUsageRefreshService, IDisposable
                 .RefreshAsync(_providers, context, _logger, _shutdown.Token)
                 .ConfigureAwait(false);
 
-            _view.ShowIcon(IconLayout.Compute(snapshot.Results));
+            _view.ShowIcon(IconLayout.Compute(snapshot.Results, settings.IconLayout));
             _view.ShowCards(TooltipCardBuilder.Build(snapshot));
 
             await _notifications.EmitAsync(snapshot.Windows, settings, _shutdown.Token).ConfigureAwait(false);

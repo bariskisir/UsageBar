@@ -1,5 +1,6 @@
 using UsageBar.Configuration;
 using UsageBar.Domain;
+using System.Text.Json;
 using Xunit;
 
 namespace UsageBar.Tests;
@@ -13,6 +14,7 @@ public sealed class AppSettingsTests
         Assert.Equal(5, defaults.RefreshPeriodMinute);
         Assert.Equal(70, defaults.HighPercentage);
         Assert.Equal(95, defaults.CriticalPercentage);
+        Assert.Equal(TrayIconLayoutSettings.AutoMode, defaults.IconLayout!.Mode);
     }
 
     [Fact]
@@ -26,6 +28,7 @@ public sealed class AppSettingsTests
             OpenRouterApiKey: null,
             DeepgramApiKey: null,
             ElevenLabsApiKey: null,
+            IconLayout: null,
             Telegram: null,
             Discord: null);
 
@@ -38,6 +41,7 @@ public sealed class AppSettingsTests
         Assert.Equal(string.Empty, normalized.OpenRouterApiKey);
         Assert.Equal(string.Empty, normalized.DeepgramApiKey);
         Assert.Equal(string.Empty, normalized.ElevenLabsApiKey);
+        Assert.Equal(TrayIconLayoutSettings.AutoMode, normalized.IconLayout!.Mode);
         Assert.NotNull(normalized.Telegram);
         Assert.Null(normalized.Telegram!.Token);
         Assert.Equal(0, normalized.Telegram.ChatId);
@@ -49,7 +53,10 @@ public sealed class AppSettingsTests
     [Fact]
     public void Normalize_keeps_valid_values()
     {
-        var settings = new AppSettings(15, 60, 85, "a", "b", "c", "d", null, null);
+        var iconLayout = new TrayIconLayoutSettings(
+            TrayIconLayoutSettings.ManualMode,
+            new Dictionary<string, double> { ["codex_session"] = 25 });
+        var settings = new AppSettings(15, 60, 85, "a", "b", "c", "d", iconLayout, null, null);
 
         var normalized = settings.Normalize();
 
@@ -58,6 +65,31 @@ public sealed class AppSettingsTests
         Assert.Equal(85, normalized.CriticalPercentage);
         Assert.Equal("a", normalized.DeepSeekApiKey);
         Assert.Equal("d", normalized.ElevenLabsApiKey);
+        Assert.True(normalized.IconLayout!.IsManual);
+        Assert.Equal(25, normalized.IconLayout.Bars!["codex_session"]);
+    }
+
+    [Fact]
+    public void Icon_layout_serialization_does_not_emit_computed_is_manual_property()
+    {
+        var settings = new TrayIconLayoutSettings(
+            TrayIconLayoutSettings.ManualMode,
+            new Dictionary<string, double> { ["codex_session"] = 10 });
+
+        var json = JsonSerializer.Serialize(settings);
+
+        Assert.Contains("\"mode\":\"manual\"", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("IsManual", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Default_settings_serialize_icon_layout_as_auto()
+    {
+        var json = JsonSerializer.Serialize(AppSettings.Default);
+
+        Assert.Contains("\"iconLayout\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"mode\":\"auto\"", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"mode\":\"default\"", json, StringComparison.Ordinal);
     }
 
     [Fact]

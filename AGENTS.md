@@ -123,15 +123,15 @@ Two standards:
   yield a `BalanceResult`.
 - **Metric** providers implement `IUsageProvider` directly, returning a `MetricResult` with
   one or more `UsageWindow`s (used percent clamped 0–100, reset countdown), a plan label,
-  and the `IconBar`s they contribute to the tray icon (the provider owns its own bar count/weight,
-  e.g. Codex Free → one Weekly bar at double weight; ElevenLabs → one Session bar). Auth is read
+  and legacy `IconBar` data for the existing constructor shape. Tray icon bar count/order/weight is
+  decided by `iconLayout` settings from the metric window keys, not by providers. Auth is read
   through an injected `I{Codex,Claude}AuthReader` when OAuth-backed, or through
   `ProviderQueryContext` when API-key-backed; tokens are never logged.
 
 Shared plumbing keeps providers small and uniform: `ProviderHttp.GetJsonAsync` (send + status
 check + streaming JSON parse; the caller builds the request and disposes the document),
 `ProviderJson` (tolerant value reads), and `MetricWindows` (non-null window collection with the
-standard no-windows `ProviderException`, plus the common equal-weight icon bars).
+standard no-windows `ProviderException`, plus legacy equal-weight icon bars).
 
 ElevenLabs calls `GET https://api.elevenlabs.io/v1/user/subscription` with the `xi-api-key`
 header from `ELEVENLABS_API_KEY`. It reports a single Session bar using only
@@ -142,18 +142,23 @@ DeepSeek shows the USD balance and additionally the CNY balance when CNY is non-
 (`"$x / ¥y"`); when CNY is zero only USD is shown.
 
 To add a provider: new folder under `Providers/`, implement the right base/interface (declare a
-`Descriptor`; for metric providers, build its `IconBar`s), and add one registration in
+`Descriptor`; for metric providers, return stable `UsageWindow` labels used for icon-layout keys),
+and add one registration in
 `ServiceConfiguration.cs`. Nothing else — ordering, tray-icon layout, and tooltip cards are all
 driven by the descriptor and result, with no provider names hardcoded anywhere.
 
 ### Tray icon
 
-Each metric provider decides its own bars in `MetricResult.IconBars` (Codex Free → one Weekly bar
-at double weight; Codex Pro / Claude → Session + Weekly at equal weight). `IconLayout.Compute`
-(Core, unit-tested) concatenates those across providers in display order — pure geometry with no
-provider names — and falls back to a single empty bar when there is nothing to show. `IconRenderer`
-(App) rasterizes the laid-out bars to an HICON using the CodexBar palette (green <50%, amber <80%,
-orange <95%, red ≥95%), sizing each bar by its weight.
+`IconLayout.Compute` (Core, unit-tested) builds tray bars from `MetricResult.Windows`, not from
+balance results. `settings.json` controls the layout through `iconLayout`. Auto mode shows
+every metric window equally in provider display order. Manual mode shows only configured keys, in
+JSON order, using values as bar height percentages (e.g. `codex_session`, `codex_weekly`,
+`claude_session`, `claude_weekly`, `elevenlabs_session`). Unknown or non-positive manual entries
+are ignored. In manual mode, configured values below a total of 100 leave the remaining icon space
+as an empty bottom bar; there is no serialized `IsManual` field. The layout falls back to a single
+empty bar when there is nothing to show.
+`IconRenderer` (App) rasterizes the laid-out bars to an HICON using the CodexBar palette
+(green <50%, amber <80%, orange <95%, red ≥95%), sizing each bar by its weight.
 
 ### Tooltip
 
@@ -170,7 +175,7 @@ WebView2 init fails the popup is torn down (`Hwnd == 0`) and the app runs withou
 
 `ThresholdNotifier` compares each window against the previous refresh. High, critical, and
 limit-reached (crossing from below 100% to 100%, shown with the critical icon) each fire once per
-window per episode (high/critical defaults 70% / 90%, configurable); a usage drop emits a reset
+window per episode (high/critical defaults 70% / 95%, configurable); a usage drop emits a reset
 and clears that window's state. Per refresh a window emits only its most severe new milestone. The
 service groups messages per severity into one balloon each.
 

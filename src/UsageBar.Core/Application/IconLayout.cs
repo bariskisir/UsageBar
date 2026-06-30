@@ -1,11 +1,12 @@
+using UsageBar.Configuration;
 using UsageBar.Domain;
 
 namespace UsageBar.Application;
 
 /// <summary>
-/// Flattens the per-provider tray bars from a refresh into the final ordered list the shell
-/// rasterizes. Each metric provider decides its own bars (count + weight) in its result, so this
-/// is pure ordering/concatenation — provider-agnostic and unit-testable.
+/// Builds the final ordered tray-icon bars from metric windows. Default mode shows all metric
+/// windows equally in provider display order; manual mode uses user-configured window keys and
+/// weights.
 /// </summary>
 public static class IconLayout
 {
@@ -16,11 +17,34 @@ public static class IconLayout
     public readonly record struct Bar(double? UsedPercent, double Weight, string Provider);
 
     /// <summary>
-    /// Concatenates each metric result's <see cref="MetricResult.IconBars"/> in the order the
-    /// results are given (the aggregator pre-sorts by display order). Returns a single empty bar
-    /// when there is nothing to show.
+    /// Builds bars from metric windows in default mode. Kept as the simple default for tests and
+    /// callers that do not have settings.
     /// </summary>
-    public static IReadOnlyList<Bar> Compute(IReadOnlyList<ProviderResult> results)
+    public static IReadOnlyList<Bar> Compute(IReadOnlyList<ProviderResult> results) =>
+        Compute(results, TrayIconLayoutSettings.Default);
+
+    /// <summary>
+    /// Builds bars from metric windows using the configured icon layout. Returns a single empty
+    /// bar when there is nothing to show.
+    /// </summary>
+    public static IReadOnlyList<Bar> Compute(IReadOnlyList<ProviderResult> results, TrayIconLayoutSettings? settings)
+    {
+        var normalized = (settings ?? TrayIconLayoutSettings.Default).Normalize();
+        var bars = normalized.IsManual
+            ? ManualBars(results, normalized)
+            : DefaultBars(results);
+
+        if (bars.Count == 0)
+        {
+            bars.Add(new Bar(UsedPercent: null, Weight: 1.0, Provider: "None"));
+        }
+
+        return bars;
+    }
+
+    public static string WindowKey(string providerName, string label) => NormalizeKey($"{providerName}_{label}");
+
+    private static List<Bar> DefaultBars(IReadOnlyList<ProviderResult> results)
     {
         var bars = new List<Bar>();
 
@@ -31,17 +55,76 @@ public static class IconLayout
                 continue;
             }
 
-            foreach (var bar in metric.IconBars)
+            foreach (var window in metric.Windows)
             {
-                bars.Add(new Bar(bar.UsedPercent, bar.Weight, metric.ProviderName));
+                bars.Add(new Bar(window.UsedPercent, Weight: 1.0, metric.ProviderName));
             }
         }
 
-        if (bars.Count == 0)
+        return bars;
+    }
+
+    private static List<Bar> ManualBars(IReadOnlyList<ProviderResult> results, TrayIconLayoutSettings settings)
+    {
+        var windowsByKey = new Dictionary<string, UsageWindow>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var result in results)
         {
-            bars.Add(new Bar(UsedPercent: null, Weight: 1.0, Provider: "None"));
+            if (result is not MetricResult metric)
+            {
+                continue;
+            }
+
+            foreach (var window in metric.Windows)
+            {
+                windowsByKey[WindowKey(window.ProviderName, window.Label)] = window;
+            }
+        }
+
+        var bars = new List<Bar>();
+        var totalWeight = 0.0;
+        foreach (var (key, weight) in settings.Bars ?? [])
+        {
+            if (windowsByKey.TryGetValue(key, out var window))
+            {
+                bars.Add(new Bar(window.UsedPercent, weight, window.ProviderName));
+                totalWeight += weight;
+            }
+        }
+
+        if (bars.Count > 0 && totalWeight < 100.0)
+        {
+            bars.Add(new Bar(UsedPercent: null, Weight: 100.0 - totalWeight, Provider: "None"));
         }
 
         return bars;
+    }
+
+    private static string NormalizeKey(string value)
+    {
+        Span<char> buffer = stackalloc char[value.Length];
+        var length = 0;
+        var lastWasSeparator = false;
+
+        foreach (var c in value)
+        {
+            if (char.IsLetterOrDigit(c))
+            {
+                buffer[length++] = char.ToLowerInvariant(c);
+                lastWasSeparator = false;
+            }
+            else if (!lastWasSeparator && length > 0)
+            {
+                buffer[length++] = '_';
+                lastWasSeparator = true;
+            }
+        }
+
+        if (length > 0 && buffer[length - 1] == '_')
+        {
+            length--;
+        }
+
+        return new string(buffer[..length]);
     }
 }

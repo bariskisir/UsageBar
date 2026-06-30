@@ -32,11 +32,15 @@ C:\Users\USERNAME\AppData\Roaming\UsageBar\settings.json
 {
   "refreshPeriodMinute": 5,
   "highPercentage": 70,
-  "criticalPercentage": 90,
+  "criticalPercentage": 95,
   "ELEVENLABS_API_KEY": "",
   "DEEPSEEK_API_KEY": "",
   "OPENROUTER_API_KEY": "",
   "DEEPGRAM_API_KEY": "",
+  "iconLayout": {
+    "mode": "auto",
+    "bars": {}
+  },
   "telegram": {
     "token": "",
     "chatId": 0
@@ -58,9 +62,57 @@ C:\Users\USERNAME\AppData\Roaming\UsageBar\settings.json
 
 Providers with blank or missing API keys will not be enabled
 
+### Tray icon layout
+
+`iconLayout.mode` controls which usage bars are drawn in the tray icon.
+
+Auto mode shows every metric window in provider display order, split equally. If Codex has
+Session/Weekly, Claude has Session/Weekly, and ElevenLabs has Session, the icon is split into
+five equal bars.
+
+```json
+"iconLayout": {
+  "mode": "auto",
+  "bars": {}
+}
+```
+
+Manual mode shows only the listed keys, in the same order as the JSON object. Values are layout
+percentages.
+
+```json
+"iconLayout": {
+  "mode": "manual",
+  "bars": {
+    "codex_session": 25,
+    "codex_weekly": 25,
+    "claude_session": 25,
+    "claude_weekly": 25
+  }
+}
+```
+
+```json
+"iconLayout": {
+  "mode": "manual",
+  "bars": {
+    "codex_session": 10,
+    "elevenlabs_session": 10
+  }
+}
+```
+
+Available icon layout keys:
+
+- `codex_session`
+- `codex_weekly`
+- `claude_session`
+- `claude_weekly`
+- `elevenlabs_session`
+
 ## Notifications
 
-Notifications are sent when a usage window crosses a threshold (defaults: 70% high, 90% critical) or resets. Supported channels:
+Notifications are sent when a usage window crosses a threshold (defaults: 70% high, 95% critical) or resets. Supported channels:
 
 - **Telegram** — set `telegram.token` and `telegram.chatId`
 - **Discord** — set `discord.webhookUrl`

@@ -8,13 +8,14 @@ namespace UsageBar.Domain;
 public abstract record ProviderResult(string ProviderName);
 
 /// <summary>
-/// A metric provider's result: usage windows, an optional plan/tier label, and the tray bars the
-/// provider contributes (ordered, weighted).
+/// A metric provider's result: usage windows and an optional plan/tier label. Tray icon layout is
+/// computed from <see cref="Windows"/> plus user settings; <see cref="IconBars"/> is retained for
+/// existing provider construction paths.
 /// </summary>
 /// <param name="ProviderName">Display name of the provider that produced this result.</param>
 /// <param name="Plan">Plan/tier label (e.g. "Pro", "Max", "Free"), or <see langword="null"/>.</param>
 /// <param name="Windows">Usage windows for the tooltip and threshold checks.</param>
-/// <param name="IconBars">The provider's contribution to the tray icon (ordered, weighted).</param>
+/// <param name="IconBars">Legacy provider bar data; current tray layout uses <paramref name="Windows"/>.</param>
 public sealed record MetricResult(
     string ProviderName,
     string? Plan,

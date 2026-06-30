@@ -149,6 +149,40 @@ public sealed class UsageRefreshServiceTests
         Assert.Equal(80, window.UsedPercent);
     }
 
+    [Fact]
+    public async Task Refresh_applies_manual_icon_layout_from_settings()
+    {
+        var settings = new StubSettingsStore(AppSettings.Default with
+        {
+            RefreshPeriodMinute = 60,
+            IconLayout = new TrayIconLayoutSettings(
+                TrayIconLayoutSettings.ManualMode,
+                new Dictionary<string, double>
+                {
+                    ["codex_weekly"] = 75,
+                    ["codex_session"] = 25,
+                }),
+        });
+        var provider = new StubProvider("Codex", () => new MetricResult("Codex", "Pro",
+            [
+                TestData.Window("Codex", "Session", 10),
+                TestData.Window("Codex", "Weekly", 90),
+            ],
+            []));
+        var view = new RecordingUsageView();
+        var dispatcher = new GateDispatcher();
+
+        var service = CreateService(
+            providers: [provider], settings: settings, view: view, dispatcher: dispatcher);
+
+        service.Start();
+        await dispatcher.WaitForEmitAsync(TimeSpan.FromSeconds(3));
+
+        var bars = Assert.Single(view.IconBars);
+        Assert.Equal([90.0, 10.0], bars.Select(bar => bar.UsedPercent));
+        Assert.Equal([75.0, 25.0], bars.Select(bar => bar.Weight));
+    }
+
     private static UsageRefreshService CreateService(
         IEnumerable<IUsageProvider>? providers = null,
         ISettingsStore? settings = null,
