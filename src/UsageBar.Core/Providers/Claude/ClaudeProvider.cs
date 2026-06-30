@@ -28,35 +28,21 @@ public sealed class ClaudeProvider(HttpClient httpClient, IClaudeAuthReader auth
             return null;
         }
 
-        if (ShouldRefresh(auth, context.Now))
-        {
-            auth = await RefreshAuthAsync(auth, cancellationToken).ConfigureAwait(false);
-        }
+        auth = await ProviderAuthFlow
+            .RefreshIfNeededAsync(auth, context.Now, ShouldRefresh, RefreshAuthAsync, cancellationToken)
+            .ConfigureAwait(false);
 
         var plan = PlanLabel(auth.SubscriptionType ?? auth.RateLimitTier);
 
-        using var document = await GetUsageDocumentWithRefreshRetryAsync(auth, cancellationToken).ConfigureAwait(false);
+        using var document = await ProviderAuthFlow
+            .ExecuteWithRefreshRetryAsync(auth, GetUsageDocumentAsync, IsAuthFailure, HasRefreshToken, RefreshAuthAsync, cancellationToken)
+            .ConfigureAwait(false);
 
         var session = ReadWindow(document.RootElement, "five_hour", "Session", Descriptor.Name, context.Now);
         var weekly = ReadWindow(document.RootElement, "seven_day", "Weekly", Descriptor.Name, context.Now);
 
         var windows = MetricWindows.Require(Descriptor.Name, session, weekly);
         return new MetricResult(Descriptor.Name, plan, windows, MetricWindows.EqualWeightBars(session, weekly));
-    }
-
-    private async Task<JsonDocument> GetUsageDocumentWithRefreshRetryAsync(
-        ClaudeAuth auth,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            return await GetUsageDocumentAsync(auth, cancellationToken).ConfigureAwait(false);
-        }
-        catch (HttpRequestException exception) when (exception.StatusCode == HttpStatusCode.Unauthorized && HasRefreshToken(auth))
-        {
-            var refreshed = await RefreshAuthAsync(auth, cancellationToken).ConfigureAwait(false);
-            return await GetUsageDocumentAsync(refreshed, cancellationToken).ConfigureAwait(false);
-        }
     }
 
     private async Task<JsonDocument> GetUsageDocumentAsync(ClaudeAuth auth, CancellationToken cancellationToken)
@@ -130,6 +116,8 @@ public sealed class ClaudeProvider(HttpClient httpClient, IClaudeAuthReader auth
     }
 
     private static bool HasRefreshToken(ClaudeAuth auth) => !string.IsNullOrWhiteSpace(auth.RefreshToken);
+
+    private static bool IsAuthFailure(HttpStatusCode? statusCode) => statusCode == HttpStatusCode.Unauthorized;
 
     private static DateTimeOffset? ReadExpiresAt(JsonElement root)
     {

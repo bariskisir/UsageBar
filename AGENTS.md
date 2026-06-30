@@ -32,11 +32,14 @@ testable; keep all Win32/WebView2/registry code in App.
 - `Configuration/AppSettings.cs` — settings record + `Default` + `Normalize`.
 - `Providers/Abstractions/` — `IUsageProvider`, `ProviderDescriptor`, `BalanceUsageProvider`,
   `ProviderQueryContext`, `CredentialNames`, `ProviderJson`, `ProviderHttp`, `MetricWindows`,
-  `UsageFormatting`.
+  `UsageFormatting`, provider-facing auth-reader interfaces.
 - `Providers/<Name>/` — one folder per provider (Codex, Claude, DeepSeek, OpenRouter, Deepgram).
 - `Application/` — `UsageRefreshService`, `UsageAggregator`, `ThresholdNotifier`,
   `TooltipCardBuilder`, `IconLayout`, and the `Abstractions/` the shell implements
-  (`IUsageView`, `ISettingsStore`, `IClock`).
+  (`IUsageView`, `ISettingsStore`, `IClock`) plus internal orchestration seams.
+- `Application/Notifications/` - notification implementations and helpers
+  (`DiscordNotificationService`, `TelegramNotificationService`, threshold notification dispatch,
+  payload records, and source-generated notification JSON context).
 
 ### App layout
 
@@ -45,10 +48,11 @@ testable; keep all Win32/WebView2/registry code in App.
 - `ServiceConfiguration.cs` — all DI registrations.
 - `Tray/` — `TrayApplication` (lifecycle), `TrayIconWindow` (Win32 window/icon/balloon),
   `TrayContextMenu`, `IconRenderer`, `TrayUsageView` (`IUsageView`), `NativeMethods`,
-  `TrayUiSyncContext`.
-- `Tooltip/WebViewTooltip.cs` — WebView2 popup.
+  `TrayUiSyncContext`; tray-specific interfaces live under `Tray/Abstractions/`.
+- `Tooltip/WebViewTooltip.cs` — WebView2 popup; tooltip interfaces live under
+  `Tooltip/Abstractions/`.
 - `Infrastructure/` — `JsonSettingsStore`, `ApplicationPaths`, `StartupRegistrationService`,
-  `SystemClock`.
+  `SystemClock`; infrastructure interfaces live under `Infrastructure/Abstractions/`.
 - `Assets/` — `AppIcon.*` and `index.html` (the whole tooltip page — inline CSS + JS, no separate
   base/override split, UsageBar-native class names `panel` / `stack` / `card` / `metric`;
   embedded-resource name `UsageBar.Assets.index.html`, loaded verbatim by the host).

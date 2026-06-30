@@ -27,12 +27,13 @@ public sealed class CodexProvider(HttpClient httpClient, ICodexAuthReader authRe
             return null;
         }
 
-        if (ShouldRefresh(auth, context.Now))
-        {
-            auth = await RefreshAuthAsync(auth, cancellationToken).ConfigureAwait(false);
-        }
+        auth = await ProviderAuthFlow
+            .RefreshIfNeededAsync(auth, context.Now, ShouldRefresh, RefreshAuthAsync, cancellationToken)
+            .ConfigureAwait(false);
 
-        using var document = await GetUsageDocumentWithRefreshRetryAsync(auth, cancellationToken).ConfigureAwait(false);
+        using var document = await ProviderAuthFlow
+            .ExecuteWithRefreshRetryAsync(auth, GetUsageDocumentAsync, IsAuthFailure, HasRefreshToken, RefreshAuthAsync, cancellationToken)
+            .ConfigureAwait(false);
 
         var plan = PlanLabel(ProviderJson.GetString(document.RootElement, "plan_type"));
         var rateLimit = GetRateLimit(document.RootElement);
@@ -42,21 +43,6 @@ public sealed class CodexProvider(HttpClient httpClient, ICodexAuthReader authRe
 
         var windows = MetricWindows.Require(Descriptor.Name, session, weekly);
         return new MetricResult(Descriptor.Name, plan, windows, BuildIconBars(plan, session, weekly));
-    }
-
-    private async Task<JsonDocument> GetUsageDocumentWithRefreshRetryAsync(
-        CodexAuth auth,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            return await GetUsageDocumentAsync(auth, cancellationToken).ConfigureAwait(false);
-        }
-        catch (HttpRequestException exception) when (IsAuthFailure(exception.StatusCode) && HasRefreshToken(auth))
-        {
-            var refreshed = await RefreshAuthAsync(auth, cancellationToken).ConfigureAwait(false);
-            return await GetUsageDocumentAsync(refreshed, cancellationToken).ConfigureAwait(false);
-        }
     }
 
     private async Task<JsonDocument> GetUsageDocumentAsync(CodexAuth auth, CancellationToken cancellationToken)
@@ -92,13 +78,13 @@ public sealed class CodexProvider(HttpClient httpClient, ICodexAuthReader authRe
             return auth;
         }
 
-        var body = JsonSerializer.Serialize(new Dictionary<string, string>
-        {
-            ["client_id"] = OAuthClientId,
-            ["grant_type"] = "refresh_token",
-            ["refresh_token"] = auth.RefreshToken,
-            ["scope"] = "openid profile email",
-        });
+        var body = JsonSerializer.Serialize(
+            new CodexRefreshTokenRequest(
+                OAuthClientId,
+                "refresh_token",
+                auth.RefreshToken,
+                "openid profile email"),
+            CodexJsonContext.Default.CodexRefreshTokenRequest);
 
         using var request = new HttpRequestMessage(HttpMethod.Post, RefreshEndpoint)
         {

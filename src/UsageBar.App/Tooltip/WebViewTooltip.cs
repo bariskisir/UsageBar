@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Web.WebView2.Core;
 using UsageBar.Domain;
@@ -87,6 +88,7 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
             _controller = await _env.CreateCoreWebView2ControllerAsync(_hwnd).ConfigureAwait(true);
             _core = _controller.CoreWebView2;
             _controller.Bounds = new System.Drawing.Rectangle(0, 0, initialWidth, initialHeight);
+            _controller.DefaultBackgroundColor = System.Drawing.Color.FromArgb(0x1c, 0x1c, 0x1e);
 
             // The popup window starts hidden; keep the controller hidden and in the low
             // memory band until the first hover so the idle footprint stays small.
@@ -331,52 +333,36 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
             return;
         }
 
-        var scale = WindowScale();
-        var heightCss = Math.Max(_heightCss, MinHeight);
-        var width = Scaled(Width, scale);
-        var height = Scaled(heightCss, scale);
-        var gap = Scaled(8, scale);
-        var radius = Scaled(CornerRadius, scale);
+        var placement = TooltipPlacementCalculator.Compute(
+            _lastIconRect,
+            WorkArea(),
+            Width,
+            _heightCss,
+            MinHeight,
+            CornerRadius,
+            WindowScale());
 
-        var icon = _lastIconRect;
-        var work = WorkArea();
-
-        // Anchor above the tray icon, flipping below when it would clip the top.
-        var x = icon.Right - width;
-        var y = icon.Top - height - gap;
-        if (y < work.Top)
-        {
-            y = icon.Bottom + gap;
-        }
-
-        if (x + width > work.Right)
-        {
-            x = work.Right - width - 4;
-        }
-
-        if (x < work.Left)
-        {
-            x = work.Left + 4;
-        }
-
-        if (y + height > work.Bottom)
-        {
-            y = work.Bottom - height - 4;
-        }
-
-        if (y < work.Top)
-        {
-            y = work.Top + 4;
-        }
-
-        NativeMethods.SetWindowPos(_hwnd, NativeMethods.HWND_TOPMOST, x, y, width, height, NativeMethods.SWP_NOACTIVATE);
+        NativeMethods.SetWindowPos(
+            _hwnd,
+            NativeMethods.HWND_TOPMOST,
+            placement.X,
+            placement.Y,
+            placement.Width,
+            placement.Height,
+            NativeMethods.SWP_NOACTIVATE);
 
         if (_controller is not null)
         {
-            _controller.Bounds = new System.Drawing.Rectangle(0, 0, width, height);
+            _controller.Bounds = new System.Drawing.Rectangle(0, 0, placement.Width, placement.Height);
         }
 
-        var region = NativeMethods.CreateRoundRectRgn(0, 0, width + 1, height + 1, radius, radius);
+        var region = NativeMethods.CreateRoundRectRgn(
+            0,
+            0,
+            placement.Width + 1,
+            placement.Height + 1,
+            placement.CornerRadius * 2,
+            placement.CornerRadius * 2);
         NativeMethods.SetWindowRgn(_hwnd, region, true);
     }
 
@@ -398,14 +384,6 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
             0, 0,
             instance,
             0);
-
-        if (hwnd != 0)
-        {
-            // Disable the DWM shadow that Windows 11 draws around borderless popup windows —
-            // it appears as a tiny gray corner artifact at the rounded edges.
-            var margins = new NativeMethods.Margins { Left = -1, Right = -1, Top = -1, Bottom = -1 };
-            NativeMethods.DwmExtendFrameIntoClientArea(hwnd, ref margins);
-        }
 
         return hwnd;
     }
@@ -454,6 +432,17 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
         var assembly = Assembly.GetExecutingAssembly();
         using var stream = assembly.GetManifestResourceStream("UsageBar.Assets.index.html")!;
         using var reader = new StreamReader(stream);
-        return reader.ReadToEnd();
+        return reader
+            .ReadToEnd()
+            .Replace("{{OPENAI_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Assets.openai.svg"), StringComparison.Ordinal)
+            .Replace("{{CLAUDE_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Assets.claude.svg"), StringComparison.Ordinal);
+    }
+
+    private static string ReadSvgDataUri(Assembly assembly, string resourceName)
+    {
+        using var stream = assembly.GetManifestResourceStream(resourceName)!;
+        using var reader = new StreamReader(stream);
+        var bytes = Encoding.UTF8.GetBytes(reader.ReadToEnd());
+        return $"data:image/svg+xml;base64,{Convert.ToBase64String(bytes)}";
     }
 }

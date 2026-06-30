@@ -1,6 +1,5 @@
 using Microsoft.Extensions.Logging;
 using UsageBar.Configuration;
-using UsageBar.Domain;
 using UsageBar.Providers;
 
 namespace UsageBar.Application;
@@ -16,12 +15,9 @@ public sealed class UsageRefreshService : IUsageRefreshService, IDisposable
     private readonly ISettingsStore _settings;
     private readonly IUsageView _view;
     private readonly IClock _clock;
-    private readonly IReadOnlyList<IRemoteNotificationService> _remoteServices;
+    private readonly IThresholdNotificationDispatcher _notifications;
     private readonly ILogger<UsageRefreshService> _logger;
-    private static readonly NotificationLevel[] SeverityOrder =
-        [NotificationLevel.Critical, NotificationLevel.High, NotificationLevel.Reset];
 
-    private readonly ThresholdNotifier _thresholds = new();
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
     private readonly Lock _timerGate = new();
     private Timer? _timer;
@@ -34,12 +30,29 @@ public sealed class UsageRefreshService : IUsageRefreshService, IDisposable
         IClock clock,
         IEnumerable<IRemoteNotificationService> remoteServices,
         ILogger<UsageRefreshService> logger)
+        : this(
+            providers,
+            settings,
+            view,
+            clock,
+            new ThresholdNotificationDispatcher(view, remoteServices),
+            logger)
+    {
+    }
+
+    internal UsageRefreshService(
+        IEnumerable<IUsageProvider> providers,
+        ISettingsStore settings,
+        IUsageView view,
+        IClock clock,
+        IThresholdNotificationDispatcher notifications,
+        ILogger<UsageRefreshService> logger)
     {
         _providers = providers.ToArray();
         _settings = settings;
         _view = view;
         _clock = clock;
-        _remoteServices = remoteServices.ToArray();
+        _notifications = notifications;
         _logger = logger;
     }
 
@@ -54,15 +67,7 @@ public sealed class UsageRefreshService : IUsageRefreshService, IDisposable
         _ = RefreshAsync(anchor);
     }
 
-    public void SendTestNotification()
-    {
-        var message = FormatMessage(NotificationLevel.Critical, "Test: Limit reached 100%");
-        _view.Notify(NotificationLevel.Critical, message);
-        foreach (var svc in _remoteServices)
-        {
-            _ = svc.SendAsync(message, CancellationToken.None);
-        }
-    }
+    public void SendTestNotification() => _notifications.SendTestNotification();
 
     /// <summary>Stops scheduling further refreshes.</summary>
     public void Stop()
@@ -97,7 +102,7 @@ public sealed class UsageRefreshService : IUsageRefreshService, IDisposable
             _view.ShowIcon(IconLayout.Compute(snapshot.Results));
             _view.ShowCards(TooltipCardBuilder.Build(snapshot));
 
-            await EmitThresholdNotifications(snapshot.Windows, settings).ConfigureAwait(false);
+            await _notifications.EmitAsync(snapshot.Windows, settings).ConfigureAwait(false);
 
             _logger.LogInformation(
                 "Refresh complete: {ProviderCount} provider(s), {WindowCount} window(s).",
@@ -114,47 +119,6 @@ public sealed class UsageRefreshService : IUsageRefreshService, IDisposable
         }
 
         ScheduleNext(settings.RefreshPeriodMinute, scheduleAnchor);
-    }
-
-    private async Task EmitThresholdNotifications(IReadOnlyList<UsageWindow> windows, AppSettings settings)
-    {
-        var notifications = _thresholds.Evaluate(windows, settings);
-        if (notifications.Count == 0)
-        {
-            return;
-        }
-
-        foreach (var level in SeverityOrder)
-        {
-            var lines = notifications.Where(n => n.Level == level).Select(n => n.Message).ToList();
-            if (lines.Count == 0)
-            {
-                continue;
-            }
-
-            var message = FormatMessage(level, string.Join(Environment.NewLine, lines));
-            _view.Notify(level, message);
-
-            foreach (var svc in _remoteServices)
-            {
-                await svc
-                    .SendAsync(message, CancellationToken.None)
-                    .ConfigureAwait(false);
-            }
-        }
-    }
-
-    private static string FormatMessage(NotificationLevel level, string raw)
-    {
-        var emoji = level switch
-        {
-            NotificationLevel.Critical => "\u26a0\ufe0f ",
-            NotificationLevel.High => "\u26a1 ",
-            NotificationLevel.Reset => "\u2705 ",
-            _ => string.Empty,
-        };
-
-        return $"{emoji}{raw}";
     }
 
     private void ScheduleNext(int refreshPeriodMinute, DateTimeOffset? scheduleAnchor)

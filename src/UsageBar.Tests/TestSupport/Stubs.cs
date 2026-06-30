@@ -1,5 +1,7 @@
 using UsageBar.Domain;
 using UsageBar.Providers;
+using UsageBar.Configuration;
+using UsageBar.Application;
 
 namespace UsageBar.Tests;
 
@@ -40,6 +42,17 @@ internal sealed class StubProvider(string name, Func<ProviderResult?> result, in
 
     public Task<ProviderResult?> GetUsageAsync(ProviderQueryContext context, CancellationToken cancellationToken) =>
         Task.FromResult(result());
+}
+
+internal sealed class StubSettingsStore(AppSettings settings) : ISettingsStore
+{
+    public AppSettings Current { get; set; } = settings;
+
+    public Task<AppSettings> ReadAsync(CancellationToken cancellationToken = default) => Task.FromResult(Current);
+
+    public AppSettings Read() => Current;
+
+    public void Write(AppSettings settings) => Current = settings;
 }
 
 internal static class TestData
