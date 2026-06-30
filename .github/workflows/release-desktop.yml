@@ -31,7 +31,7 @@ jobs:
           if ($version.StartsWith("v")) {
             $version = $version.Substring(1)
           }
-          "APP_VERSION=$version" >> $env:GITHUB_ENV
+          Add-Content -Path $env:GITHUB_ENV -Value "APP_VERSION=$version"
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v4

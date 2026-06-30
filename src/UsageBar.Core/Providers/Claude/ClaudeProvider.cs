@@ -18,6 +18,8 @@ public sealed class ClaudeProvider(HttpClient httpClient, IClaudeAuthReader auth
     private const string BetaHeader = "oauth-2025-04-20";
     private const string ClaudeCodeUserAgent = "claude-code/2.1.0";
 
+    private readonly SemaphoreSlim _refreshGate = new(1, 1);
+
     public ProviderDescriptor Descriptor { get; } = new("Claude", DisplayOrder: 10);
 
     public async Task<ProviderResult?> GetUsageAsync(ProviderQueryContext context, CancellationToken cancellationToken)
@@ -28,9 +30,18 @@ public sealed class ClaudeProvider(HttpClient httpClient, IClaudeAuthReader auth
             return null;
         }
 
-        auth = await ProviderAuthFlow
-            .RefreshIfNeededAsync(auth, context.Now, ShouldRefresh, RefreshAuthAsync, cancellationToken)
-            .ConfigureAwait(false);
+        // Serialize auth refresh so two concurrent calls don't race on the same token.
+        await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            auth = await ProviderAuthFlow
+                .RefreshIfNeededAsync(auth, context.Now, ShouldRefresh, RefreshAuthAsync, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            _refreshGate.Release();
+        }
 
         var plan = PlanLabel(auth.SubscriptionType ?? auth.RateLimitTier);
 
@@ -117,7 +128,8 @@ public sealed class ClaudeProvider(HttpClient httpClient, IClaudeAuthReader auth
 
     private static bool HasRefreshToken(ClaudeAuth auth) => !string.IsNullOrWhiteSpace(auth.RefreshToken);
 
-    private static bool IsAuthFailure(HttpStatusCode? statusCode) => statusCode == HttpStatusCode.Unauthorized;
+    private static bool IsAuthFailure(HttpStatusCode? statusCode) =>
+        statusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden;
 
     private static DateTimeOffset? ReadExpiresAt(JsonElement root)
     {

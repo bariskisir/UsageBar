@@ -12,7 +12,7 @@ namespace UsageBar.Providers;
 public sealed class CodexAuthReader : ICodexAuthReader
 {
     private readonly string _authFilePath;
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
 
     public CodexAuthReader()
         : this(DefaultAuthFilePath())
@@ -85,7 +85,7 @@ public sealed class CodexAuthReader : ICodexAuthReader
             }
 
             root["tokens"] = tokens;
-            root["last_refresh"] = FormatLastRefresh(DateTimeOffset.UtcNow);
+            root["last_refresh"] = FormatLastRefresh(auth.LastRefresh ?? DateTimeOffset.UtcNow);
             WriteRootObject(root);
         }
     }
@@ -134,7 +134,7 @@ public sealed class CodexAuthReader : ICodexAuthReader
         var fractionalTicks = utc.Ticks % TimeSpan.TicksPerSecond;
         return string.Format(
             CultureInfo.InvariantCulture,
-            "{0:yyyy-MM-dd'T'HH:mm:ss}.{1:D7}00Z",
+            "{0:yyyy-MM-dd'T'HH:mm:ss}.{1:D7}Z",
             utc,
             fractionalTicks);
     }

@@ -41,6 +41,11 @@ internal static class ProviderJson
 
     public static string? GetString(JsonElement element, params string[] propertyNames)
     {
+        if (propertyNames is null)
+        {
+            return null;
+        }
+
         foreach (var propertyName in propertyNames)
         {
             if (TryGetProperty(element, propertyName, out var property) && property.ValueKind == JsonValueKind.String)

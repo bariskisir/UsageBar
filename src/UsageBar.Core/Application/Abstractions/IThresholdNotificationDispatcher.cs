@@ -7,5 +7,5 @@ internal interface IThresholdNotificationDispatcher
 {
     void SendTestNotification();
 
-    Task EmitAsync(IReadOnlyList<UsageWindow> windows, AppSettings settings);
+    Task EmitAsync(IReadOnlyList<UsageWindow> windows, AppSettings settings, CancellationToken cancellationToken = default);
 }

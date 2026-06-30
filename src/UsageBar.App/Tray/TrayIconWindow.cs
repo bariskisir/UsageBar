@@ -39,7 +39,24 @@ internal sealed class TrayIconWindow : ITrayIconWindow, IDisposable
         }
 
         _iconHandle = IconRenderer.CreateUsageIcon([]);
-        AddIcon();
+        try
+        {
+            AddIcon();
+        }
+        catch
+        {
+            // AddIcon failed — the icon was never registered with the shell, but the
+            // window and icon handles must still be freed since Dispose is never called
+            // on a partially-constructed object.
+            if (_iconHandle != 0)
+            {
+                NativeMethods.DestroyIcon(_iconHandle);
+                _iconHandle = 0;
+            }
+
+            NativeMethods.DestroyWindow(_windowHandle);
+            throw;
+        }
     }
 
     /// <summary>The hidden tray message-loop window handle.</summary>

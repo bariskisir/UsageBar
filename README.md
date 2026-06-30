@@ -67,8 +67,8 @@ Notifications are sent when a usage window crosses a threshold (defaults: 70% hi
 
 ```bash
 git clone https://github.com/bariskisir/usagebar.git
-cd usagebar/src/UsageBar.App
-dotnet run
+cd usagebar
+dotnet run --project src/UsageBar.App
 ```
 
 ## License

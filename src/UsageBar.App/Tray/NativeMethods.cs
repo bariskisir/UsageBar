@@ -168,8 +168,11 @@ internal static class NativeMethods
     [DllImport("user32.dll")]
     public static extern nint DefWindowProc(nint hWnd, uint msg, nint wParam, nint lParam);
 
+    /// <summary>
+    /// Returns 1 for a regular message, 0 for <c>WM_QUIT</c>, or -1 on error.
+    /// </summary>
     [DllImport("user32.dll")]
-    public static extern sbyte GetMessage(out Msg lpMsg, nint hWnd, uint wMsgFilterMin, uint wMsgFilterMax);
+    public static extern int GetMessage(out Msg lpMsg, nint hWnd, uint wMsgFilterMin, uint wMsgFilterMax);
 
     [DllImport("user32.dll")]
     public static extern bool TranslateMessage(ref Msg lpMsg);

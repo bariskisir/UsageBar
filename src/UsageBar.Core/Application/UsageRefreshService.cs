@@ -20,6 +20,7 @@ public sealed class UsageRefreshService : IUsageRefreshService, IDisposable
 
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
     private readonly Lock _timerGate = new();
+    private readonly CancellationTokenSource _shutdown = new();
     private Timer? _timer;
     private bool _stopped;
 
@@ -69,9 +70,11 @@ public sealed class UsageRefreshService : IUsageRefreshService, IDisposable
 
     public void SendTestNotification() => _notifications.SendTestNotification();
 
-    /// <summary>Stops scheduling further refreshes.</summary>
+    /// <summary>Stops scheduling further refreshes and signals the in-flight refresh to abort.</summary>
     public void Stop()
     {
+        _shutdown.Cancel();
+
         lock (_timerGate)
         {
             _stopped = true;
@@ -82,36 +85,46 @@ public sealed class UsageRefreshService : IUsageRefreshService, IDisposable
 
     private async Task RefreshAsync(DateTimeOffset? scheduleAnchor)
     {
-        // Single-flight: skip if a refresh is already running.
+        // Single-flight: skip if a refresh is already running, but still reschedule so the
+        // periodic cycle never silently dies when a refresh overruns its timer period.
         if (!await _refreshGate.WaitAsync(0).ConfigureAwait(false))
         {
+            _ = ScheduleNextFallbackAsync(scheduleAnchor);
             return;
         }
 
-        var settings = AppSettings.Default;
+        AppSettings settings = AppSettings.Default;
 
         try
         {
-            settings = await _settings.ReadAsync().ConfigureAwait(false);
+            settings = await _settings.ReadAsync(_shutdown.Token).ConfigureAwait(false);
 
             var context = ProviderQueryContext.FromSettings(settings, _clock.Now);
             var snapshot = await UsageAggregator
-                .RefreshAsync(_providers, context, _logger, CancellationToken.None)
+                .RefreshAsync(_providers, context, _logger, _shutdown.Token)
                 .ConfigureAwait(false);
 
             _view.ShowIcon(IconLayout.Compute(snapshot.Results));
             _view.ShowCards(TooltipCardBuilder.Build(snapshot));
 
-            await _notifications.EmitAsync(snapshot.Windows, settings).ConfigureAwait(false);
+            await _notifications.EmitAsync(snapshot.Windows, settings, _shutdown.Token).ConfigureAwait(false);
 
             _logger.LogInformation(
                 "Refresh complete: {ProviderCount} provider(s), {WindowCount} window(s).",
                 snapshot.Results.Count,
                 snapshot.Windows.Count);
         }
+        catch (OperationCanceledException)
+        {
+            // Shutdown requested — do not reschedule.
+            return;
+        }
         catch (Exception exception)
         {
             _logger.LogError(exception, "Unexpected refresh failure.");
+            // Read fresh settings on failure so the timer period stays current.
+            try { settings = await _settings.ReadAsync(_shutdown.Token).ConfigureAwait(false); }
+            catch { settings = AppSettings.Default; }
         }
         finally
         {
@@ -119,6 +132,23 @@ public sealed class UsageRefreshService : IUsageRefreshService, IDisposable
         }
 
         ScheduleNext(settings.RefreshPeriodMinute, scheduleAnchor);
+    }
+
+    /// <summary>
+    /// Reschedules the next refresh when we skipped this one due to single-flight. Reads the
+    /// current refresh period from settings so the fallback respects user configuration.
+    /// </summary>
+    private async Task ScheduleNextFallbackAsync(DateTimeOffset? scheduleAnchor)
+    {
+        try
+        {
+            var settings = await _settings.ReadAsync().ConfigureAwait(false);
+            ScheduleNext(settings.RefreshPeriodMinute, scheduleAnchor);
+        }
+        catch
+        {
+            ScheduleNext(AppSettings.Default.RefreshPeriodMinute, scheduleAnchor);
+        }
     }
 
     private void ScheduleNext(int refreshPeriodMinute, DateTimeOffset? scheduleAnchor)
@@ -155,6 +185,13 @@ public sealed class UsageRefreshService : IUsageRefreshService, IDisposable
     public void Dispose()
     {
         Stop();
+
+        // Wait for the in-flight refresh to complete before disposing the gate so
+        // the finally block never releases a disposed semaphore.
+        try { _refreshGate.Wait(TimeSpan.FromSeconds(5)); }
+        catch { /* best-effort; shutdown must not throw */ }
+
         _refreshGate.Dispose();
+        _shutdown.Dispose();
     }
 }

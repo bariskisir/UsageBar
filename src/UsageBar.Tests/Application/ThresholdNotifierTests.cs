@@ -12,10 +12,18 @@ public sealed class ThresholdNotifierTests
     private static IReadOnlyList<UsageWindow> Codex(double percent) => [TestData.Window("Codex", "Session", percent)];
 
     [Fact]
-    public void First_evaluation_has_no_previous_so_emits_nothing()
+    public void First_evaluation_skips_without_baseline()
     {
+        // On the very first evaluation there is no previous window, so the notifier
+        // records the current values as a baseline and emits no notification — a fresh
+        // launch should not spam the user. The next refresh compares against real data.
         var notifier = new ThresholdNotifier();
         Assert.Empty(notifier.Evaluate(Codex(80), Settings));
+
+        // Second evaluation: 80% → 95% crosses the critical (90%) threshold.
+        var crossed = notifier.Evaluate(Codex(95), Settings);
+        var notification = Assert.Single(crossed);
+        Assert.Equal(NotificationLevel.Critical, notification.Level);
     }
 
     [Fact]
@@ -91,6 +99,38 @@ public sealed class ThresholdNotifierTests
 
         var notification = Assert.Single(crossed);
         Assert.Equal(NotificationLevel.Critical, notification.Level);
+        Assert.Contains("Codex Session", notification.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Disappearing_window_clears_state_and_fires_fresh_when_reappears()
+    {
+        var notifier = new ThresholdNotifier();
+        notifier.Evaluate(
+            [TestData.Window("Codex", "Session", 60)],
+            Settings);
+        var crossed = notifier.Evaluate(
+            [TestData.Window("Codex", "Session", 75)],  // fires High
+            Settings);
+        Assert.Single(crossed);
+
+        // Codex Session disappears — state should be purged.
+        Assert.Empty(notifier.Evaluate(
+            [TestData.Window("Claude", "Weekly", 40)],
+            Settings));
+
+        // Codex Session reappears — needs a new baseline first, so nothing fires.
+        Assert.Empty(notifier.Evaluate(
+            [TestData.Window("Codex", "Session", 65)],
+            Settings));
+
+        // Now crossing the threshold should fire again because stale state was purged.
+        crossed = notifier.Evaluate(
+            [TestData.Window("Codex", "Session", 80)],
+            Settings);
+
+        var notification = Assert.Single(crossed);
+        Assert.Equal(NotificationLevel.High, notification.Level);
         Assert.Contains("Codex Session", notification.Message, StringComparison.Ordinal);
     }
 }

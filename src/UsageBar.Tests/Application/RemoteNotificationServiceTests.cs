@@ -69,7 +69,7 @@ public sealed class RemoteNotificationServiceTests
         using var payload = JsonDocument.Parse(Assert.Single(handler.Bodies));
         Assert.Equal(42, payload.RootElement.GetProperty("chat_id").GetInt64());
         Assert.Equal("usage high", payload.RootElement.GetProperty("text").GetString());
-        Assert.Equal("Markdown", payload.RootElement.GetProperty("parse_mode").GetString());
+        Assert.False(payload.RootElement.TryGetProperty("parse_mode", out _));
     }
 
     private static CapturingHttpMessageHandler CaptureHandler() =>

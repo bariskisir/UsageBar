@@ -10,4 +10,8 @@ public sealed record TelegramSettings(
 
     [JsonIgnore]
     public bool IsEnabled => !string.IsNullOrWhiteSpace(Token) && ChatId != 0;
+
+    /// <summary>Redacts the bot token so this record is safe to log.</summary>
+    public override string ToString() =>
+        $"TelegramSettings {{ Token = ***, ChatId = {ChatId} }}";
 }

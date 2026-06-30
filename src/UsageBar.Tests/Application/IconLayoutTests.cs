@@ -14,8 +14,8 @@ public sealed class IconLayoutTests
     {
         IReadOnlyList<ProviderResult> results =
         [
-            Metric("Codex", new IconBar(10, 1.0), new IconBar(20, 1.0)),
-            Metric("Claude", new IconBar(30, 1.0), new IconBar(40, 1.0)),
+            Metric("Codex", IconBar.Create(10, 1.0), IconBar.Create(20, 1.0)),
+            Metric("Claude", IconBar.Create(30, 1.0), IconBar.Create(40, 1.0)),
         ];
 
         var bars = IconLayout.Compute(results);
@@ -30,8 +30,8 @@ public sealed class IconLayoutTests
     {
         IReadOnlyList<ProviderResult> results =
         [
-            Metric("Codex", new IconBar(25, 2.0)),
-            Metric("Claude", new IconBar(30, 1.0), new IconBar(40, 1.0)),
+            Metric("Codex", IconBar.Create(25, 2.0)),
+            Metric("Claude", IconBar.Create(30, 1.0), IconBar.Create(40, 1.0)),
         ];
 
         var bars = IconLayout.Compute(results);

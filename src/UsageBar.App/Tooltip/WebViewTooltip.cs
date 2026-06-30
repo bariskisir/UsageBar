@@ -26,7 +26,7 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
 
     private readonly NativeMethods.WndProc _wndProc;
 
-    private nint _hwnd;
+    private volatile nint _hwnd;
     private CoreWebView2Environment? _env;
     private CoreWebView2Controller? _controller;
     private CoreWebView2? _core;
@@ -39,6 +39,7 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
     private volatile bool _visible;
     private bool _suspended;
     private bool _disposed;
+    private int _suspendVersion;
 
     public WebViewTooltip() => _wndProc = WndProc;
 
@@ -106,7 +107,9 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
 
             _core.WebMessageReceived += OnWebMessageReceived;
             _core.NavigateToString(ReadHtmlDocument());
-            _navigated = true;
+            // _navigated is set to true only after the page signals "ready" — see
+            // OnWebMessageReceived. Setting it here would race with data pushes that
+            // arrive before the DOM and window.__render are available.
             return true;
         }
         catch (Exception)
@@ -164,7 +167,7 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
             NativeMethods.ShowWindow(_hwnd, NativeMethods.SW_HIDE);
         }
 
-        SuspendCore();
+        _ = SuspendCore();
         NativeMethods.TrimWorkingSet();
     }
 
@@ -172,10 +175,17 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
     /// Wakes the WebView before showing: makes the controller visible, restores the normal
     /// memory band, resumes the suspended renderer, and re-renders the latest content (updates
     /// pushed while suspended are skipped, so the freshest payload is applied here).
+    /// Bumps the suspend version so any in-flight <see cref="SuspendCore"/> continuation
+    /// recognises it is stale and discards its result.
     /// </summary>
     private void ResumeCore()
     {
-        if (_controller is null || _core is null)
+        // Invalidate any in-flight suspend before touching visibility/suspended state so a
+        // SuspendCore continuation that lands after this point sees a stale version and
+        // does NOT overwrite _suspended back to true.
+        Interlocked.Increment(ref _suspendVersion);
+
+        if (_disposed || _controller is null || _core is null)
         {
             return;
         }
@@ -206,18 +216,37 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
     /// Frees renderer memory while hidden: hides the controller, drops to the low memory band,
     /// and suspends the renderer. Suspend requires a hidden controller and a completed initial
     /// navigation, so it is a no-op before the page is ready.
+    /// Captures the current suspend version before awaiting; if <see cref="ResumeCore"/> bumps
+    /// the version while the async operation is in-flight the continuation discards the stale
+    /// result so <c>_suspended</c> never flips back to <see langword="true"/> after a resume.
     /// </summary>
-    private void SuspendCore()
+    private async Task SuspendCore()
     {
-        if (_controller is null || _core is null || !_navigated || _suspended)
+        if (_disposed || _controller is null || _core is null || !_navigated || _suspended)
         {
             return;
         }
 
         _controller.IsVisible = false;
         _core.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Low;
-        _suspended = true;
-        _ = _core.TrySuspendAsync();
+
+        var version = _suspendVersion;
+
+        // Only mark suspended after a successful suspend; TrySuspendAsync can
+        // return false (controller is visible, renderer is busy, etc.) and
+        // calling Resume() on a non-suspended core throws InvalidOperationException.
+        try
+        {
+            var suspended = await _core.TrySuspendAsync();
+            if (suspended && version == _suspendVersion)
+            {
+                _suspended = true;
+            }
+        }
+        catch
+        {
+            // Silently ignore — the popup simply won't enter low-memory mode this cycle.
+        }
     }
 
     public void Dispose()
@@ -229,16 +258,21 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
 
         _disposed = true;
 
+        // Close and dispose the WebView2 controller first — its child window is hosted
+        // inside the popup window and must be torn down before the parent is destroyed.
+        _controller?.Close();
+        (_controller as IDisposable)?.Dispose();
+        _controller = null;
+        _core = null;
+        (_env as IDisposable)?.Dispose();
+        _env = null;
+
+        // Now destroy the popup window itself.
         if (_hwnd != 0)
         {
             NativeMethods.DestroyWindow(_hwnd);
             _hwnd = 0;
         }
-
-        _controller?.Close();
-        _controller = null;
-        _core = null;
-        _env = null;
     }
 
     private nint WndProc(nint hWnd, uint msg, nint wParam, nint lParam)
@@ -260,9 +294,9 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
         return NativeMethods.DefWindowProc(hWnd, msg, wParam, lParam);
     }
 
-    private void HandleSetData()
+    private async void HandleSetData()
     {
-        if (!_navigated || _core is null || _suspended)
+        if (_disposed || !_navigated || _core is null || _suspended)
         {
             return;
         }
@@ -273,7 +307,16 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
             json = _pendingJson;
         }
 
-        _ = _core.ExecuteScriptAsync($"window.__render && window.__render({json})");
+        try
+        {
+            await _core.ExecuteScriptAsync($"window.__render && window.__render({json})");
+        }
+        catch (Exception)
+        {
+            // The WebView may be mid-navigation, disposed, or otherwise unavailable.
+            // Silently skip this push — the next hover-triggered ResumeCore will
+            // re-post the latest payload via WmTooltipSetData.
+        }
     }
 
     private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
@@ -293,6 +336,7 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
         switch (typeProperty.GetString())
         {
             case "ready":
+                _navigated = true;
                 if (_visible)
                 {
                     if (_hwnd != 0)
@@ -305,7 +349,7 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
                     // Hidden at startup: suspend now so the renderer sits in the low band
                     // until the first hover wakes it (ResumeCore renders the latest payload),
                     // then hand the startup churn back to the OS.
-                    SuspendCore();
+                    _ = SuspendCore();
                     NativeMethods.TrimWorkingSet();
                 }
 
@@ -416,8 +460,10 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
     private void TearDownPartialInit()
     {
         _controller?.Close();
+        (_controller as IDisposable)?.Dispose();
         _controller = null;
         _core = null;
+        (_env as IDisposable)?.Dispose();
         _env = null;
 
         if (_hwnd != 0)
@@ -430,19 +476,29 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
     private static string ReadHtmlDocument()
     {
         var assembly = Assembly.GetExecutingAssembly();
-        using var stream = assembly.GetManifestResourceStream("UsageBar.Assets.index.html")!;
-        using var reader = new StreamReader(stream);
+        var html = assembly.GetManifestResourceStream("UsageBar.Assets.index.html")
+                   ?? throw new InvalidOperationException("Embedded resource 'UsageBar.Assets.index.html' is missing.");
+        using var reader = new StreamReader(html);
         return reader
             .ReadToEnd()
             .Replace("{{OPENAI_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Assets.openai.svg"), StringComparison.Ordinal)
-            .Replace("{{CLAUDE_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Assets.claude.svg"), StringComparison.Ordinal);
+            .Replace("{{CLAUDE_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Assets.claude.svg"), StringComparison.Ordinal)
+            .Replace("{{GENERIC_ICON}}", GenericIconDataUri(), StringComparison.Ordinal);
     }
 
     private static string ReadSvgDataUri(Assembly assembly, string resourceName)
     {
-        using var stream = assembly.GetManifestResourceStream(resourceName)!;
+        var stream = assembly.GetManifestResourceStream(resourceName)
+                     ?? throw new InvalidOperationException($"Embedded resource '{resourceName}' is missing.");
         using var reader = new StreamReader(stream);
         var bytes = Encoding.UTF8.GetBytes(reader.ReadToEnd());
+        return $"data:image/svg+xml;base64,{Convert.ToBase64String(bytes)}";
+    }
+
+    private static string GenericIconDataUri()
+    {
+        var svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"15\" height=\"15\" viewBox=\"0 0 15 15\"><circle cx=\"7.5\" cy=\"7.5\" r=\"6\" fill=\"none\" stroke=\"#8e8e93\" stroke-width=\"1.5\"/><circle cx=\"7.5\" cy=\"7.5\" r=\"2.5\" fill=\"#8e8e93\"/></svg>";
+        var bytes = Encoding.UTF8.GetBytes(svg);
         return $"data:image/svg+xml;base64,{Convert.ToBase64String(bytes)}";
     }
 }

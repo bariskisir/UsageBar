@@ -11,7 +11,7 @@ namespace UsageBar.Providers;
 public sealed class ClaudeAuthReader : IClaudeAuthReader
 {
     private readonly string _authFilePath;
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
 
     public ClaudeAuthReader()
         : this(DefaultAuthFilePath())

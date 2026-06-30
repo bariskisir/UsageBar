@@ -33,7 +33,7 @@ public sealed class CodexAuthReaderTests
             Assert.DoesNotContain(@"\u002B00:00", json, StringComparison.Ordinal);
             Assert.DoesNotContain("+00:00", json, StringComparison.Ordinal);
             Assert.Matches(
-                new Regex("\"last_refresh\": \"\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{9}Z\""),
+                new Regex("\"last_refresh\": \"\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{7}Z\""),
                 json);
         }
         finally

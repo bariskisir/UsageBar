@@ -53,9 +53,11 @@ testable; keep all Win32/WebView2/registry code in App.
   `Tooltip/Abstractions/`.
 - `Infrastructure/` — `JsonSettingsStore`, `ApplicationPaths`, `StartupRegistrationService`,
   `SystemClock`; infrastructure interfaces live under `Infrastructure/Abstractions/`.
-- `Assets/` — `AppIcon.*` and `index.html` (the whole tooltip page — inline CSS + JS, no separate
-  base/override split, UsageBar-native class names `panel` / `stack` / `card` / `metric`;
-  embedded-resource name `UsageBar.Assets.index.html`, loaded verbatim by the host).
+- `Assets/` — `AppIcon.*`, `openai.svg`, `claude.svg`, and `index.html` (the whole tooltip page —
+  inline CSS + JS, no separate base/override split, UsageBar-native class names
+  `panel` / `stack` / `card` / `metric`; embedded-resource name `UsageBar.Assets.index.html`,
+  loaded verbatim by the host). The SVGs are embedded as base64 data URIs into the HTML at load
+  time and referenced by the tooltip JS via `providerIcon()`.
 
 ## Commands
 

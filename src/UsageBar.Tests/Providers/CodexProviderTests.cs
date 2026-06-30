@@ -44,7 +44,7 @@ public sealed class CodexProviderTests
             {
                 Assert.Equal("Weekly", weekly.Label);
                 Assert.Equal(12.5, weekly.UsedPercent);
-                Assert.Equal("3d 0h", weekly.ResetText);
+                Assert.Equal("3d", weekly.ResetText);
             });
     }
 

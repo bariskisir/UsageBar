@@ -16,8 +16,15 @@ internal static class UsageFormatting
         string.Create(CultureInfo.InvariantCulture, $"{symbol}{value:0.00}");
 
     /// <summary>Capitalizes the first character of a plan/tier token for display (invariant).</summary>
-    public static string Capitalize(string value) =>
-        value.Length == 0 ? value : char.ToUpperInvariant(value[0]) + value[1..];
+    public static string Capitalize(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return string.Empty;
+        }
+
+        return char.ToUpperInvariant(value[0]) + value[1..];
+    }
 
     /// <summary>
     /// Formats a reset countdown as <c>now</c>, <c>5m</c>, <c>2h 10m</c>, or <c>1d 3h</c>.
@@ -33,7 +40,15 @@ internal static class UsageFormatting
         if (duration >= TimeSpan.FromDays(1))
         {
             duration = TimeSpan.FromMinutes(Math.Ceiling(duration.TotalMinutes));
-            return $"{(int)duration.TotalDays}d {duration.Hours}h";
+            var h = duration.Hours;
+            if (h > 0)
+            {
+                return $"{(int)duration.TotalDays}d {h}h";
+            }
+
+            return duration.Minutes > 0
+                ? $"{(int)duration.TotalDays}d {duration.Minutes}m"
+                : $"{(int)duration.TotalDays}d";
         }
 
         var totalMinutes = Math.Max(1, (int)Math.Ceiling(duration.TotalMinutes));

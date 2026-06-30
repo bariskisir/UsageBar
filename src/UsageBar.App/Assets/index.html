@@ -18,9 +18,10 @@
   --text-secondary: #8e8e93;
   --panel-bg: var(--app-bg);
   --usage-bar-track: rgba(255, 255, 255, 0.15);
-  --usage-bar-normal: #0a84ff;
-  --usage-bar-high: #ffd60a;
-  --usage-bar-critical: #ff9f0a;
+  --usage-bar-low: #4CAF50;
+  --usage-bar-medium: #FFC107;
+  --usage-bar-high: #FF9800;
+  --usage-bar-critical: #F44336;
 }
 
 * {
@@ -264,8 +265,12 @@ body {
 .metric__bar-fill {
   height: 100%;
   border-radius: 3px;
-  background: var(--usage-bar-normal);
+  background: var(--usage-bar-low);
   transition: width 0.3s ease;
+}
+
+.metric__bar-fill[data-level="medium"] {
+  background: var(--usage-bar-medium);
 }
 
 .metric__bar-fill[data-level="high"] {
@@ -310,7 +315,7 @@ function providerIcon(title) {
   const name = (title || "").toLowerCase();
   if (name === "codex") return iconImage("{{OPENAI_ICON}}", "OpenAI");
   if (name === "claude") return iconImage("{{CLAUDE_ICON}}", "Claude");
-  return null;
+  return iconImage("{{GENERIC_ICON}}", title || "Provider");
 }
 
 function iconImage(src, label) {
@@ -322,9 +327,11 @@ function iconImage(src, label) {
 }
 
 function levelOf(remainPct) {
+  // Matches IconRenderer.LevelFromPercent: Low <50%, Medium <80%, High <95%, Critical >=95%.
   if (remainPct <= 5) return "critical";
-  if (remainPct <= 25) return "high";
-  return "normal";
+  if (remainPct <= 20) return "high";
+  if (remainPct <= 50) return "medium";
+  return "low";
 }
 
 function resetText(detail) {

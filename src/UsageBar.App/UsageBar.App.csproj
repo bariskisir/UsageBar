@@ -12,6 +12,7 @@
     <Product>Usage Bar</Product>
     <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>1.0.0</Version>
     <!-- P/Invoke declarations are intentionally hand-written DllImports;
          silence the LibraryImport source-generator suggestion. -->
     <NoWarn>$(NoWarn);SYSLIB1054</NoWarn>
@@ -28,7 +29,7 @@
          ConserveMemory (0-9) makes the GC compact and release segments to the OS more eagerly;
          5 is a moderate balance (refresh only runs ~every 5 min, so no need for the aggressive 9). -->
     <ServerGarbageCollection>false</ServerGarbageCollection>
-    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <GarbageCollectionConcurrent>false</GarbageCollectionConcurrent>
   </PropertyGroup>
 
   <ItemGroup>

@@ -26,6 +26,12 @@ internal sealed class ThresholdNotifier
 
         foreach (var current in currentWindows)
         {
+            // When a window appears for the first time (or reappears after a gap), skip
+            // notification evaluation — there is no real baseline to compare against.
+            // The window is recorded as-is in _previousWindows below, so the next refresh
+            // has a genuine previous value for threshold comparison. Without this, a fresh
+            // launch with e.g. 80% usage would fire a spurious high notification because
+            // the synthetic 0% baseline makes it look like a sudden jump.
             var previous = FindWindow(_previousWindows, current.ProviderName, current.Label);
             if (previous is null)
             {
@@ -71,6 +77,7 @@ internal sealed class ThresholdNotifier
         }
 
         _previousWindows = currentWindows;
+        PurgeStaleState(currentWindows);
         return notifications;
     }
 
@@ -87,5 +94,28 @@ internal sealed class ThresholdNotifier
         }
 
         return null;
+    }
+
+    private void PurgeStaleState(IReadOnlyList<UsageWindow> currentWindows)
+    {
+        var active = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var window in currentWindows)
+        {
+            active.Add($"{window.ProviderName}|{window.Label}");
+        }
+
+        var stale = new List<string>();
+        foreach (var key in _firedLevel.Keys)
+        {
+            if (!active.Contains(key))
+            {
+                stale.Add(key);
+            }
+        }
+
+        foreach (var key in stale)
+        {
+            _firedLevel.Remove(key);
+        }
     }
 }

@@ -61,6 +61,12 @@ internal static class UsageAggregator
         {
             return await provider.GetUsageAsync(context, cancellationToken).ConfigureAwait(false);
         }
+        catch (OperationCanceledException)
+        {
+            // Cancellation is not a provider failure — propagate so the refresh can abort
+            // promptly on shutdown instead of logging a warning per provider.
+            throw;
+        }
         catch (Exception exception)
         {
             logger.LogWarning(exception, "{Provider} refresh failed.", provider.Descriptor.Name);

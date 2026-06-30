@@ -17,6 +17,8 @@ public sealed class CodexProvider(HttpClient httpClient, ICodexAuthReader authRe
     private const string OAuthClientId = "app_EMoamEEZ73f0CkXaXp7hrann";
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromDays(8);
 
+    private readonly SemaphoreSlim _refreshGate = new(1, 1);
+
     public ProviderDescriptor Descriptor { get; } = new("Codex", DisplayOrder: 0);
 
     public async Task<ProviderResult?> GetUsageAsync(ProviderQueryContext context, CancellationToken cancellationToken)
@@ -27,9 +29,18 @@ public sealed class CodexProvider(HttpClient httpClient, ICodexAuthReader authRe
             return null;
         }
 
-        auth = await ProviderAuthFlow
-            .RefreshIfNeededAsync(auth, context.Now, ShouldRefresh, RefreshAuthAsync, cancellationToken)
-            .ConfigureAwait(false);
+        // Serialize auth refresh so two concurrent calls don't race on the same token.
+        await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            auth = await ProviderAuthFlow
+                .RefreshIfNeededAsync(auth, context.Now, ShouldRefresh, RefreshAuthAsync, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            _refreshGate.Release();
+        }
 
         using var document = await ProviderAuthFlow
             .ExecuteWithRefreshRetryAsync(auth, GetUsageDocumentAsync, IsAuthFailure, HasRefreshToken, RefreshAuthAsync, cancellationToken)
@@ -138,7 +149,7 @@ public sealed class CodexProvider(HttpClient httpClient, ICodexAuthReader authRe
         }
 
         var single = weekly ?? session;
-        return single is null ? [] : [new IconBar(single.UsedPercent, 2.0)];
+        return single is null ? [] : [IconBar.Create(single.UsedPercent, 2.0)];
     }
 
     /// <summary>Maps a Codex <c>plan_type</c> to a short plan/tier label.</summary>

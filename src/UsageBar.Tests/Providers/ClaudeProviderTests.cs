@@ -40,7 +40,7 @@ public sealed class ClaudeProviderTests
             {
                 Assert.Equal("Weekly", weekly.Label);
                 Assert.Equal(40.0, weekly.UsedPercent);
-                Assert.Equal("7d 0h", weekly.ResetText);
+                Assert.Equal("7d", weekly.ResetText);
             });
     }
 

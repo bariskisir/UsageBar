@@ -13,6 +13,7 @@ internal sealed class JsonSettingsStore : ISettingsStore
 {
     private readonly string _filePath;
     private readonly ILogger<JsonSettingsStore> _logger;
+    private readonly Lock _gate = new();
 
     public JsonSettingsStore(string filePath, ILogger<JsonSettingsStore> logger)
     {
@@ -26,21 +27,19 @@ internal sealed class JsonSettingsStore : ISettingsStore
     {
         try
         {
-            EnsureFile();
-
-            AppSettings? settings;
-            await using (var stream = File.OpenRead(_filePath))
+            string raw;
+            lock (_gate)
             {
-                settings = await JsonSerializer
-                    .DeserializeAsync(stream, SettingsJsonContext.Default.AppSettings, cancellationToken)
-                    .ConfigureAwait(false);
+                EnsureFile();
+                raw = File.ReadAllText(_filePath);
             }
 
-            var normalized = settings?.Normalize() ?? AppSettings.Default;
-            await File.WriteAllTextAsync(_filePath, Serialize(normalized), cancellationToken).ConfigureAwait(false);
-            return normalized;
+            cancellationToken.ThrowIfCancellationRequested();
+            var settings = JsonSerializer.Deserialize(raw, SettingsJsonContext.Default.AppSettings)?.Normalize()
+                           ?? AppSettings.Default;
+            return settings;
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             _logger.LogWarning(exception, "Failed to read settings.json; using defaults.");
             return AppSettings.Default;
@@ -51,8 +50,14 @@ internal sealed class JsonSettingsStore : ISettingsStore
     {
         try
         {
-            EnsureFile();
-            var settings = JsonSerializer.Deserialize(File.ReadAllText(_filePath), SettingsJsonContext.Default.AppSettings);
+            string raw;
+            lock (_gate)
+            {
+                EnsureFile();
+                raw = File.ReadAllText(_filePath);
+            }
+
+            var settings = JsonSerializer.Deserialize(raw, SettingsJsonContext.Default.AppSettings);
             return (settings ?? AppSettings.Default).Normalize();
         }
         catch (Exception exception)
@@ -66,7 +71,10 @@ internal sealed class JsonSettingsStore : ISettingsStore
     {
         try
         {
-            File.WriteAllText(_filePath, Serialize(settings));
+            lock (_gate)
+            {
+                File.WriteAllText(_filePath, Serialize(settings));
+            }
         }
         catch (Exception exception)
         {

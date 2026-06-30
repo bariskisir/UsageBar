@@ -30,7 +30,7 @@ internal sealed class ThresholdNotificationDispatcher : IThresholdNotificationDi
         }
     }
 
-    public async Task EmitAsync(IReadOnlyList<UsageWindow> windows, AppSettings settings)
+    public async Task EmitAsync(IReadOnlyList<UsageWindow> windows, AppSettings settings, CancellationToken cancellationToken = default)
     {
         var notifications = _thresholds.Evaluate(windows, settings);
         if (notifications.Count == 0)
@@ -40,6 +40,8 @@ internal sealed class ThresholdNotificationDispatcher : IThresholdNotificationDi
 
         foreach (var level in SeverityOrder)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             var lines = notifications
                 .Where(notification => notification.Level == level)
                 .Select(notification => notification.Message)
@@ -55,7 +57,7 @@ internal sealed class ThresholdNotificationDispatcher : IThresholdNotificationDi
             foreach (var service in _remoteServices)
             {
                 await service
-                    .SendAsync(message, CancellationToken.None)
+                    .SendAsync(message, cancellationToken)
                     .ConfigureAwait(false);
             }
         }

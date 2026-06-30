@@ -30,7 +30,7 @@ public sealed class TelegramNotificationService : IRemoteNotificationService
             .PostJsonAsync(
                 _httpClient,
                 $"https://api.telegram.org/bot{settings.Token}/sendMessage",
-                new TelegramMessagePayload(settings.ChatId, message, "Markdown"),
+                new TelegramMessagePayload(settings.ChatId, message, null),
                 RemoteNotificationJsonContext.Default.TelegramMessagePayload,
                 "Telegram API",
                 "Telegram",

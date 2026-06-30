@@ -42,7 +42,7 @@ internal static class MetricWindows
         {
             if (window is not null)
             {
-                bars.Add(new IconBar(window.UsedPercent, 1.0));
+                bars.Add(IconBar.Create(window.UsedPercent, 1.0));
             }
         }
 

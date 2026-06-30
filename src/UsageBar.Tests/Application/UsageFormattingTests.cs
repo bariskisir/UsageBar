@@ -12,6 +12,11 @@ public sealed class UsageFormattingTests
     [InlineData(65, "1h 5m")]
     [InlineData(130, "2h 10m")]
     [InlineData(60 * 25, "1d 1h")]
+    [InlineData(60 * 24, "1d")]          // exactly 1 day
+    [InlineData(60 * 24 + 5, "1d 5m")]    // 1d 5m, hours=0 → shows minutes
+    [InlineData(60 * 24 + 65, "1d 1h")]   // 1d 1h 5m → 1d 1h
+    [InlineData(60 * 48, "2d")]           // 2 days
+    [InlineData(60 * 48 + 30, "2d 30m")]  // 2d 30m, hours=0 → shows minutes
     public void ResetDuration_formats_expected(int minutes, string expected)
     {
         Assert.Equal(expected, UsageFormatting.ResetDuration(TimeSpan.FromMinutes(minutes)));

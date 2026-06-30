@@ -18,7 +18,7 @@ internal sealed class TrayContextMenu(ISettingsStore settings) : ITrayContextMen
     private const uint CriticalLevelBase = 4001;
 
     private static readonly int[] RefreshEveryValues = [1, 5, 15, 60];
-    private static readonly int[] LevelValues = [10, 20, 30, 40, 50, 60, 70, 80, 90];
+    private static readonly int[] LevelValues = [50, 60, 70, 75, 80, 85, 90, 95];
 
     /// <summary>Raised when an immediate refresh is requested (Refresh item or a settings change).</summary>
     public event Action? RefreshRequested;
@@ -95,15 +95,15 @@ internal sealed class TrayContextMenu(ISettingsStore settings) : ITrayContextMen
                 ExitRequested?.Invoke();
                 break;
 
-            case >= RefreshEveryBase and < RefreshEveryBase + 4:
+            case >= RefreshEveryBase and < RefreshEveryBase + 4 when commandId - RefreshEveryBase < RefreshEveryValues.Length:
                 ApplySettings(current with { RefreshPeriodMinute = RefreshEveryValues[(int)(commandId - RefreshEveryBase)] });
                 break;
 
-            case >= HighLevelBase and < HighLevelBase + 9:
+            case >= HighLevelBase and < HighLevelBase + 8 when commandId - HighLevelBase < LevelValues.Length:
                 ApplySettings(current with { HighPercentage = LevelValues[(int)(commandId - HighLevelBase)] });
                 break;
 
-            case >= CriticalLevelBase and < CriticalLevelBase + 9:
+            case >= CriticalLevelBase and < CriticalLevelBase + 8 when commandId - CriticalLevelBase < LevelValues.Length:
                 ApplySettings(current with { CriticalPercentage = LevelValues[(int)(commandId - CriticalLevelBase)] });
                 break;
         }

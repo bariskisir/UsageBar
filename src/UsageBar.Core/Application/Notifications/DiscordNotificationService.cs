@@ -26,10 +26,13 @@ public sealed class DiscordNotificationService : IRemoteNotificationService
             return;
         }
 
+        // IsEnabled guarantees WebhookUrl is non-null and non-whitespace.
+        var webhookUrl = discordSettings.WebhookUrl!;
+
         await RemoteNotificationSender
             .PostJsonAsync(
                 _httpClient,
-                discordSettings.WebhookUrl!,
+                webhookUrl,
                 new DiscordWebhookPayload(
                     message,
                     discordSettings.Username ?? "Usage Bar",

@@ -12,7 +12,7 @@ public sealed class AppSettingsTests
         var defaults = AppSettings.Default;
         Assert.Equal(5, defaults.RefreshPeriodMinute);
         Assert.Equal(70, defaults.HighPercentage);
-        Assert.Equal(90, defaults.CriticalPercentage);
+        Assert.Equal(95, defaults.CriticalPercentage);
     }
 
     [Fact]
@@ -32,7 +32,7 @@ public sealed class AppSettingsTests
 
         Assert.Equal(5, normalized.RefreshPeriodMinute);
         Assert.Equal(70, normalized.HighPercentage);
-        Assert.Equal(90, normalized.CriticalPercentage);
+        Assert.Equal(95, normalized.CriticalPercentage);
         Assert.Equal(string.Empty, normalized.DeepSeekApiKey);
         Assert.Equal(string.Empty, normalized.OpenRouterApiKey);
         Assert.Equal(string.Empty, normalized.DeepgramApiKey);
@@ -55,5 +55,71 @@ public sealed class AppSettingsTests
         Assert.Equal(60, normalized.HighPercentage);
         Assert.Equal(85, normalized.CriticalPercentage);
         Assert.Equal("a", normalized.DeepSeekApiKey);
+    }
+
+    [Fact]
+    public void Normalize_caps_refresh_period_at_maximum()
+    {
+        var settings = AppSettings.Default with { RefreshPeriodMinute = 10080 };
+
+        var normalized = settings.Normalize();
+
+        Assert.Equal(5, normalized.RefreshPeriodMinute);
+    }
+
+    [Fact]
+    public void Normalize_allows_maximum_refresh_period()
+    {
+        var settings = AppSettings.Default with { RefreshPeriodMinute = 1440 };
+
+        var normalized = settings.Normalize();
+
+        Assert.Equal(1440, normalized.RefreshPeriodMinute);
+    }
+
+    [Fact]
+    public void Normalize_nudges_high_down_when_both_at_100()
+    {
+        // When both thresholds are clamped at 100 the Normalize logic cannot nudge
+        // Critical up (it's already at the ceiling), so it must nudge High down.
+        var settings = AppSettings.Default with { HighPercentage = 100, CriticalPercentage = 100 };
+
+        var normalized = settings.Normalize();
+
+        Assert.Equal(90, normalized.HighPercentage);
+        Assert.Equal(100, normalized.CriticalPercentage);
+    }
+
+    [Fact]
+    public void Normalize_nudges_critical_up_when_high_equals_critical()
+    {
+        var settings = AppSettings.Default with { HighPercentage = 80, CriticalPercentage = 80 };
+
+        var normalized = settings.Normalize();
+
+        Assert.Equal(80, normalized.HighPercentage);
+        Assert.Equal(90, normalized.CriticalPercentage);
+        Assert.True(normalized.HighPercentage < normalized.CriticalPercentage);
+    }
+
+    [Fact]
+    public void Normalize_nudges_critical_up_capped_at_100()
+    {
+        var settings = AppSettings.Default with { HighPercentage = 95, CriticalPercentage = 95 };
+
+        var normalized = settings.Normalize();
+
+        Assert.Equal(95, normalized.HighPercentage);
+        Assert.Equal(100, normalized.CriticalPercentage);
+    }
+
+    [Fact]
+    public void Normalize_clamps_high_at_1_minimum()
+    {
+        var settings = AppSettings.Default with { HighPercentage = 0, CriticalPercentage = 5 };
+
+        var normalized = settings.Normalize();
+
+        Assert.Equal(70, normalized.HighPercentage); // 0 is out of range → default
     }
 }

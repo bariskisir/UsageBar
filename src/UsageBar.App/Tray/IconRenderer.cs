@@ -75,7 +75,7 @@ internal static class IconRenderer
             totalSeparator += ordered[i].Provider != ordered[i + 1].Provider ? SepCrossProvider : SepSameProvider;
         }
 
-        var available = ContentHeight - totalSeparator;
+        var available = Math.Max(1, ContentHeight - totalSeparator);
         var totalWeight = 0.0;
         foreach (var bar in ordered)
         {
@@ -91,8 +91,8 @@ internal static class IconRenderer
         for (var i = 0; i < count; i++)
         {
             var height = i == count - 1
-                ? ContentBottom - y                                        // last bar absorbs rounding
-                : (int)Math.Round(available * ordered[i].Weight / totalWeight);
+                ? Math.Max(1, ContentBottom - y)                           // last bar absorbs rounding
+                : Math.Max(1, (int)Math.Round(available * ordered[i].Weight / totalWeight));
 
             bars.Add(new BarSpec(y, height, ordered[i].UsedPercent));
             y += height;

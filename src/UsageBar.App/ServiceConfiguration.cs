@@ -24,7 +24,13 @@ internal static class ServiceConfiguration
 
         services.AddLogging(builder => builder.AddSerilog(serilogLogger, dispose: false));
 
-        services.AddHttpClient(UsageHttpClientName, client => client.Timeout = TimeSpan.FromSeconds(20));
+        services.AddHttpClient(UsageHttpClientName, client => client.Timeout = TimeSpan.FromSeconds(20))
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+            {
+                // Recycle connections every 10 minutes so DNS changes are picked up even
+                // though the HttpClient itself is held as a singleton for the app lifetime.
+                PooledConnectionLifetime = TimeSpan.FromMinutes(10),
+            });
         services.AddSingleton(sp => sp.GetRequiredService<IHttpClientFactory>().CreateClient(UsageHttpClientName));
 
         // Configuration + cross-cutting services.

@@ -10,4 +10,8 @@ public sealed record DiscordSettings(
 
     [JsonIgnore]
     public bool IsEnabled => !string.IsNullOrWhiteSpace(WebhookUrl);
+
+    /// <summary>Redacts the webhook URL so this record is safe to log.</summary>
+    public override string ToString() =>
+        $"DiscordSettings {{ WebhookUrl = ***, Username = {Username ?? "null"} }}";
 }
