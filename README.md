@@ -47,9 +47,23 @@ UsageBar is a minimal Windows notification-area app for showing LLM or API usage
 
 ## Configuration
 
-#### Option - 1
+#### Option - 1 — Right-click menu
 
-C:\Users\USERNAME\AppData\Roaming\UsageBar\settings.json
+Right-click the tray icon to open the context menu. Most settings can be configured directly from here without editing files:
+
+- **Refresh every** / **High Level** / **Critical Level** — select preset values
+- **Provider** — hover to see all providers; a check mark means an API key is already configured (from `settings.json` or an environment variable). Click a provider to enter or edit its API key. Codex and Claude use OAuth and are not listed here.
+- **Hide Provider Under X Balance** — choose a threshold (`Show All`, `0`, `1`, `5`, `10`). Balance providers at or below the threshold are hidden from the tooltip.
+- **Telegram** — enter a bot token and numeric chat ID for notifications
+- **Discord** — enter a webhook URL and optional custom username
+- **Test Notification** — send a test balloon and remote notification
+- **Refresh** — trigger an immediate provider refresh
+
+All changes are written to `settings.json` automatically. When editing a value the dialog shows the current setting; leave the field blank to disable it.
+
+#### Option - 2 — settings.json
+
+`C:\Users\USERNAME\AppData\Roaming\UsageBar\settings.json`
 
 ```json
 {
@@ -90,7 +104,7 @@ C:\Users\USERNAME\AppData\Roaming\UsageBar\settings.json
 }
 ```
 
-#### Option - 2
+#### Option - 3 — Environment variables
 ```powershell
 [System.Environment]::SetEnvironmentVariable("DEEPSEEK_API_KEY", "API_KEY", "User")
 [System.Environment]::SetEnvironmentVariable("OPENROUTER_API_KEY", "API_KEY", "User")

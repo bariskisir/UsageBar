@@ -37,13 +37,32 @@ public sealed record AppSettings(
 {
     /// <summary>The built-in defaults used when no settings file exists yet.</summary>
     public static AppSettings Default { get; } =
-        new(5, 70, 95,
-            string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty,
-            string.Empty, string.Empty, string.Empty,
-            string.Empty, string.Empty, string.Empty,
-            string.Empty, string.Empty, string.Empty,
-            string.Empty, string.Empty, string.Empty,
-            TrayIconLayoutSettings.Default, -1, null, null);
+        new(
+            RefreshPeriodMinute: 5,
+            HighPercentage: 70,
+            CriticalPercentage: 95,
+            DeepSeekApiKey: string.Empty,
+            OpenRouterApiKey: string.Empty,
+            MoonshotApiKey: string.Empty,
+            DeepgramApiKey: string.Empty,
+            ElevenLabsApiKey: string.Empty,
+            KiloApiKey: string.Empty,
+            OpenAiApiKey: string.Empty,
+            VeniceApiKey: string.Empty,
+            CopilotApiKey: string.Empty,
+            CrofApiKey: string.Empty,
+            CodebuffApiKey: string.Empty,
+            WarpApiKey: string.Empty,
+            ZaiApiKey: string.Empty,
+            SyntheticApiKey: string.Empty,
+            ChutesApiKey: string.Empty,
+            MiniMaxApiKey: string.Empty,
+            PoeApiKey: string.Empty,
+            AlibabaApiKey: string.Empty,
+            IconLayout: TrayIconLayoutSettings.Default,
+            BalanceHidingThreshold: -1,
+            Telegram: null,
+            Discord: null);
 
     /// <summary>Maximum allowed refresh period in minutes (24 hours).</summary>
     private const int MaxRefreshPeriodMinutes = 1440;

@@ -40,6 +40,24 @@ internal static class NativeMethods
     public const uint WmTooltipSetData = WM_APP + 3;   // re-render trigger
     public const uint WmRunDelegate = WM_APP + 4;      // pump SynchronizationContext
 
+    // ── Input dialog ────────────────────────────────────────
+    public const uint WS_CAPTION = 0x00C00000;
+    public const uint WS_SYSMENU = 0x00080000;
+    public const uint WS_CHILD = 0x40000000;
+    public const uint WS_VISIBLE = 0x10000000;
+    public const uint WS_BORDER = 0x00800000;
+    public const uint WS_TABSTOP = 0x00010000;
+    public const uint WS_EX_DLGMODALFRAME = 0x00000001;
+    public const uint WS_EX_CLIENTEDGE = 0x00000200;
+    public const uint ES_AUTOHSCROLL = 0x0080;
+    public const uint BS_DEFPUSHBUTTON = 0x0001;
+    public const int CW_USEDEFAULT = unchecked((int)0x80000000);
+
+    // ── Window messages ─────────────────────────────────────
+    public const int WM_CLOSE = 0x0010;
+    public const int WM_COMMAND = 0x0111;
+    public const int BN_CLICKED = 0;
+
     // ── Menu flags ──────────────────────────────────────────
     public const uint MfString = 0x00000000;
     public const uint MfChecked = 0x00000008;
@@ -274,4 +292,36 @@ internal static class NativeMethods
 
         return RegisterClassEx(ref windowClass) == 0 ? null : className;
     }
+
+    // ── Input-dialog P/Invoke ────────────────────────────────
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool EnableWindow(nint hWnd, bool bEnable);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern nint SetFocus(nint hWnd);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowTextW", SetLastError = true, CharSet = CharSet.Unicode)]
+    public static extern bool SetWindowText(nint hWnd, string lpString);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern uint GetWindowTextLengthW(nint hWnd);
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowTextW", SetLastError = true, CharSet = CharSet.Unicode)]
+    public static extern int GetWindowText(nint hWnd, System.Text.StringBuilder lpString, int nMaxCount);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool IsDialogMessage(nint hDlg, ref Msg lpMsg);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool GetWindowRect(nint hWnd, out Rect lpRect);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool MoveWindow(nint hWnd, int X, int Y, int nWidth, int nHeight, bool bRepaint);
+
+    /// <summary>Extracts the low 16 bits of a WPARAM/LPARAM.</summary>
+    public static int LoWord(nint value) => (int)((long)value & 0xFFFF);
+
+    /// <summary>Extracts the high 16 bits of a WPARAM/LPARAM.</summary>
+    public static int HiWord(nint value) => (int)(((long)value >> 16) & 0xFFFF);
 }
