@@ -129,9 +129,13 @@ public sealed class AntigravityProvider(HttpClient httpClient, IAntigravityAuthR
                     resetText = UsageFormatting.ResetDuration(resetTime - context.Now);
                 }
 
-                var label = !string.IsNullOrWhiteSpace(window)
-                    ? $"{groupName} - {window}"
-                    : groupName;
+                var firstWord = groupName.Split(' ', StringSplitOptions.RemoveEmptyEntries) is { Length: > 0 } parts
+                    ? UsageFormatting.Capitalize(parts[0])
+                    : string.Empty;
+
+                var label = !string.IsNullOrWhiteSpace(window) && !string.IsNullOrWhiteSpace(firstWord)
+                    ? $"{window} ({firstWord})"
+                    : !string.IsNullOrWhiteSpace(window) ? window : firstWord;
 
                 windows.Add(new UsageWindow(Descriptor.Name, label, Math.Clamp(usedPercent, 0, 100), resetText));
             }
