@@ -33,7 +33,7 @@ testable; keep all Win32/WebView2/registry code in App.
 - `Providers/Abstractions/` — `IUsageProvider`, `ProviderDescriptor`, `BalanceUsageProvider`,
   `ProviderQueryContext`, `CredentialNames`, `ProviderJson`, `ProviderHttp`, `MetricWindows`,
   `UsageFormatting`, `IResultDisplayOrderProvider`, provider-facing auth-reader interfaces.
-- `Providers/<Name>/` — one folder per provider (Codex, Claude, ElevenLabs, Kilo, DeepSeek, OpenRouter, Moonshot, Deepgram, OpenAI, Venice, Copilot, Crof, Codebuff, Warp, Zai, Synthetic, Chutes, MiniMax, Poe, Alibaba).
+- `Providers/<Name>/` — one folder per provider (Codex, Claude, Antigravity, ElevenLabs, Kilo, DeepSeek, OpenRouter, Moonshot, Deepgram, OpenAI, Venice, Copilot, Crof, Codebuff, Warp, Zai, Synthetic, Chutes, MiniMax, Poe, Alibaba).
 - `Application/` — `UsageRefreshService`, `UsageAggregator`, `ThresholdNotifier`,
   `TooltipCardBuilder`, `IconLayout`, and the `Abstractions/` the shell implements
   (`IUsageView`, `ISettingsStore`, `IClock`) plus internal orchestration seams.
@@ -125,7 +125,7 @@ accordingly. Disabled providers are skipped — no task is created for them. The
 - **API-key providers** (Kilo, ElevenLabs, DeepSeek, OpenRouter, Moonshot, Deepgram,
   OpenAI, Venice, Copilot, Crof, Codebuff, Warp, Zai, Synthetic, Chutes, MiniMax, Poe, Alibaba):
   `!string.IsNullOrEmpty(context.GetApiKey(CredentialName))`
-- **OAuth providers** (Codex, Claude):
+- **OAuth providers** (Codex, Claude, Antigravity):
   `!string.IsNullOrEmpty(authReader.Read()?.AccessToken)`
 - **Test providers** use the default implementation which sets `IsEnabled = true`.
 
@@ -167,6 +167,17 @@ Kilo calls the app.kilo.ai tRPC batch endpoint for `user.getCreditBlocks`,
 from `KILO_API_KEY`. If Kilo Pass subscription data is present it returns a `MetricResult`
 with a single `Pass` window ordered after Claude; otherwise it returns a credit-only
 `BalanceResult` ordered after Moonshot (Kimi).
+
+Antigravity (Gemini Code Assist) is an OAuth-backed metric provider. It reads the access token
+from `%USERPROFILE%\.gemini\oauth_creds.json` via `IAntigravityAuthReader`. On the first
+refresh it calls `POST loadCodeAssist` once to cache the `cloudaicompanionProject` and tier
+name, and fetches the latest CLI version tag from GitHub Releases to build the User-Agent
+header. Subsequent refreshes call `POST retrieveUserQuotaSummary` with the cached project ID.
+Each quota group's buckets become usage windows: `usedPercent = (1 - remainingFraction) * 100`,
+the group `description` is split on `:` to extract model names, and the label combines model
+names with the bucket's `window` type (e.g. "Claude Opus, Claude Sonnet, GPT-OSS (weekly)").
+The `resetTime` field provides the reset countdown. No refresh token flow — the access token
+is used as-is; if it expires the user must re-authenticate externally.
 
 **New providers (not yet live-tested with real API keys):**
 

@@ -42,6 +42,7 @@ internal static class ServiceConfiguration
         // Metric-provider auth readers.
         services.AddSingleton<ICodexAuthReader, CodexAuthReader>();
         services.AddSingleton<IClaudeAuthReader, ClaudeAuthReader>();
+        services.AddSingleton<IAntigravityAuthReader, AntigravityAuthReader>();
 
         // Providers — add a new one here (and its folder under Providers/) to extend the app.
         // When USAGEBAR_TEST=1, test providers are used instead so every provider returns
@@ -68,6 +69,7 @@ internal static class ServiceConfiguration
             services.AddSingleton<IUsageProvider, TestMiniMaxProvider>();
             services.AddSingleton<IUsageProvider, TestPoeProvider>();
             services.AddSingleton<IUsageProvider, TestAlibabaProvider>();
+            services.AddSingleton<IUsageProvider, TestAntigravityProvider>();
         }
         else
         {
@@ -91,6 +93,7 @@ internal static class ServiceConfiguration
             services.AddSingleton<IUsageProvider, MiniMaxProvider>();
             services.AddSingleton<IUsageProvider, PoeProvider>();
             services.AddSingleton<IUsageProvider, AlibabaProvider>();
+            services.AddSingleton<IUsageProvider, AntigravityProvider>();
         }
 
         // Windows shell.

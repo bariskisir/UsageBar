@@ -64,6 +64,7 @@
     <EmbeddedResource Include="Assets\alibaba.svg" />
     <EmbeddedResource Include="Assets\minimax.svg" />
     <EmbeddedResource Include="Assets\codebuff.svg" />
+    <EmbeddedResource Include="Assets\antigravity.svg" />
   </ItemGroup>
 
   <!-- WebView2 pulls WPF/WinForms assemblies we don't use; their WPF dependency

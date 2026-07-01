@@ -17,6 +17,7 @@ UsageBar is a minimal Windows notification-area app for showing LLM or API usage
 ## Supported LLMs and APIs
 - Codex OAuth
 - Claude OAuth
+- Antigravity OAuth (Gemini Code Assist)
 - ElevenLabs API
 - DeepSeek API
 - OpenRouter API
@@ -52,7 +53,7 @@ UsageBar is a minimal Windows notification-area app for showing LLM or API usage
 Right-click the tray icon to open the context menu. Most settings can be configured directly from here without editing files:
 
 - **Refresh every** / **High Level** / **Critical Level** — select preset values
-- **Provider** — hover to see all providers; a check mark means an API key is already configured (from `settings.json` or an environment variable). Click a provider to enter or edit its API key. Codex and Claude use OAuth and are not listed here.
+- **Provider** — hover to see all providers; a check mark means an API key is already configured (from `settings.json` or an environment variable). Click a provider to enter or edit its API key. Codex, Claude, and Antigravity use OAuth and are not listed here.
 - **Hide Provider Under X Balance** — choose a threshold (`Show All`, `0`, `1`, `5`, `10`). Balance providers at or below the threshold are hidden from the tooltip.
 - **Telegram** — enter a bot token and numeric chat ID for notifications
 - **Discord** — enter a webhook URL and optional custom username
@@ -206,6 +207,7 @@ Available icon layout keys (format: `{providername}_{label}`, case-insensitive, 
 - `codex_weekly`
 - `claude_session`
 - `claude_weekly`
+- `antigravity_*` — wildcard, matches all Antigravity quota buckets (labels vary by account)
 - `elevenlabs_session`
 - `kilo_pass`
 - `copilot_premium`

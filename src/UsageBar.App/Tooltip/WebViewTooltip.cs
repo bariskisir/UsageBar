@@ -529,7 +529,8 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
             .Replace("{{ZAI_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Assets.zai.svg"), StringComparison.Ordinal)
             .Replace("{{ALIBABA_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Assets.alibaba.svg"), StringComparison.Ordinal)
             .Replace("{{MINIMAX_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Assets.minimax.svg"), StringComparison.Ordinal)
-            .Replace("{{CODEBUFF_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Assets.codebuff.svg"), StringComparison.Ordinal);
+            .Replace("{{CODEBUFF_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Assets.codebuff.svg"), StringComparison.Ordinal)
+            .Replace("{{ANTIGRAVITY_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Assets.antigravity.svg"), StringComparison.Ordinal);
     }
 
     private static string ReadSvgDataUri(Assembly assembly, string resourceName)
