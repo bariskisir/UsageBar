@@ -63,4 +63,56 @@ public sealed class TooltipCardBuilderTests
         var card = Assert.Single(TooltipCardBuilder.Build(new UsageSnapshot(results, [])));
         Assert.Equal("DeepSeek", card.Title);
     }
+
+    [Fact]
+    public void Balance_card_is_not_hidden_when_threshold_is_disabled()
+    {
+        IReadOnlyList<ProviderResult> results = [new BalanceResult("OpenRouter", "$0.00", UsdAmount: 0)];
+
+        var card = Assert.Single(TooltipCardBuilder.Build(new UsageSnapshot(results, []), balanceHidingThreshold: -1));
+
+        Assert.False(card.Hide);
+    }
+
+    [Fact]
+    public void Balance_card_is_hidden_when_at_or_below_threshold()
+    {
+        IReadOnlyList<ProviderResult> results = [new BalanceResult("OpenRouter", "$0.00", UsdAmount: 0)];
+
+        var card = Assert.Single(TooltipCardBuilder.Build(new UsageSnapshot(results, []), balanceHidingThreshold: 0));
+
+        Assert.True(card.Hide);
+    }
+
+    [Fact]
+    public void Balance_card_is_not_hidden_when_above_threshold()
+    {
+        IReadOnlyList<ProviderResult> results = [new BalanceResult("OpenRouter", "$5.00", UsdAmount: 5)];
+
+        var card = Assert.Single(TooltipCardBuilder.Build(new UsageSnapshot(results, []), balanceHidingThreshold: 0));
+
+        Assert.False(card.Hide);
+    }
+
+    [Fact]
+    public void DeepSeek_hide_requires_both_usd_and_cny_at_or_below_threshold()
+    {
+        // USD is 0 (≤0) but CNY is 10 (>0) — should NOT hide.
+        IReadOnlyList<ProviderResult> results = [new BalanceResult("DeepSeek", "$0.00 / ¥10.00", UsdAmount: 0, CnyAmount: 10)];
+
+        var card = Assert.Single(TooltipCardBuilder.Build(new UsageSnapshot(results, []), balanceHidingThreshold: 0));
+
+        Assert.False(card.Hide);
+    }
+
+    [Fact]
+    public void DeepSeek_hides_when_both_balances_are_at_or_below_threshold()
+    {
+        // Both USD and CNY are ≤0 — should hide.
+        IReadOnlyList<ProviderResult> results = [new BalanceResult("DeepSeek", "$0.00 / ¥0.00", UsdAmount: 0, CnyAmount: 0)];
+
+        var card = Assert.Single(TooltipCardBuilder.Build(new UsageSnapshot(results, []), balanceHidingThreshold: 0));
+
+        Assert.True(card.Hide);
+    }
 }

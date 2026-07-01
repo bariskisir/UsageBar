@@ -37,6 +37,7 @@ public sealed class ProviderQueryContext
             [CredentialNames.Moonshot] = Resolve(settings.MoonshotApiKey, CredentialNames.Moonshot),
             [CredentialNames.Deepgram] = Resolve(settings.DeepgramApiKey, CredentialNames.Deepgram),
             [CredentialNames.ElevenLabs] = Resolve(settings.ElevenLabsApiKey, CredentialNames.ElevenLabs),
+            [CredentialNames.Kilo] = Resolve(settings.KiloApiKey, CredentialNames.Kilo),
         };
 
         return new ProviderQueryContext(now, apiKeys);

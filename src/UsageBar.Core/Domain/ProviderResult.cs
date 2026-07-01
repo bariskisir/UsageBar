@@ -25,4 +25,10 @@ public sealed record MetricResult(
 /// <summary>A balance provider's result: a pre-formatted balance string (e.g. "$12.34").</summary>
 /// <param name="ProviderName">Display name of the provider that produced this result.</param>
 /// <param name="BalanceText">Display-ready balance, e.g. "$12.34" or "$1.00 / ¥7.00".</param>
-public sealed record BalanceResult(string ProviderName, string BalanceText) : ProviderResult(ProviderName);
+/// <param name="UsdAmount">Raw USD balance for threshold hiding, or <see langword="null"/>.</param>
+/// <param name="CnyAmount">Raw CNY balance for threshold hiding (DeepSeek only), or <see langword="null"/>.</param>
+public sealed record BalanceResult(
+    string ProviderName,
+    string BalanceText,
+    decimal? UsdAmount = null,
+    decimal? CnyAmount = null) : ProviderResult(ProviderName);

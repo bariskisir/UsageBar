@@ -44,13 +44,30 @@ internal static class ServiceConfiguration
         services.AddSingleton<IClaudeAuthReader, ClaudeAuthReader>();
 
         // Providers — add a new one here (and its folder under Providers/) to extend the app.
-        services.AddSingleton<IUsageProvider, CodexProvider>();
-        services.AddSingleton<IUsageProvider, ClaudeProvider>();
-        services.AddSingleton<IUsageProvider, ElevenLabsProvider>();
-        services.AddSingleton<IUsageProvider, DeepSeekProvider>();
-        services.AddSingleton<IUsageProvider, OpenRouterProvider>();
-        services.AddSingleton<IUsageProvider, MoonshotProvider>();
-        services.AddSingleton<IUsageProvider, DeepgramProvider>();
+        // When USAGEBAR_TEST=1, test providers are used instead so every provider returns
+        // random mock data on every refresh without real API keys or auth files.
+        if (Environment.GetEnvironmentVariable("USAGEBAR_TEST") == "1")
+        {
+            services.AddSingleton<IUsageProvider, TestCodexProvider>();
+            services.AddSingleton<IUsageProvider, TestClaudeProvider>();
+            services.AddSingleton<IUsageProvider, TestElevenLabsProvider>();
+            services.AddSingleton<IUsageProvider, TestKiloProvider>();
+            services.AddSingleton<IUsageProvider, TestDeepSeekProvider>();
+            services.AddSingleton<IUsageProvider, TestOpenRouterProvider>();
+            services.AddSingleton<IUsageProvider, TestMoonshotProvider>();
+            services.AddSingleton<IUsageProvider, TestDeepgramProvider>();
+        }
+        else
+        {
+            services.AddSingleton<IUsageProvider, CodexProvider>();
+            services.AddSingleton<IUsageProvider, ClaudeProvider>();
+            services.AddSingleton<IUsageProvider, ElevenLabsProvider>();
+            services.AddSingleton<IUsageProvider, KiloProvider>();
+            services.AddSingleton<IUsageProvider, DeepSeekProvider>();
+            services.AddSingleton<IUsageProvider, OpenRouterProvider>();
+            services.AddSingleton<IUsageProvider, MoonshotProvider>();
+            services.AddSingleton<IUsageProvider, DeepgramProvider>();
+        }
 
         // Windows shell.
         services.AddSingleton<IStartupRegistrationService, StartupRegistrationService>();

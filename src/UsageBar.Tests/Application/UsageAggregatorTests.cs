@@ -48,6 +48,43 @@ public sealed class UsageAggregatorTests
     }
 
     [Fact]
+    public async Task Allows_provider_to_order_by_result_kind()
+    {
+        ProviderResult claude = new MetricResult("Claude", "Max", [TestData.Window("Claude", "Session", 10)], []);
+        ProviderResult elevenLabs = new MetricResult("ElevenLabs", "Pro", [TestData.Window("ElevenLabs", "Session", 20)], []);
+        ProviderResult kimi = new BalanceResult("Moonshot (Kimi)", "$5.00");
+        ProviderResult kiloMetric = new MetricResult("Kilo", "Pro", [TestData.Window("Kilo", "Pass", 30)], []);
+        ProviderResult kiloBalance = new BalanceResult("Kilo", "$12.50");
+
+        var metricSnapshot = await UsageAggregator.RefreshAsync(
+            [
+                new StubProvider("Claude", () => claude, 10),
+                new StubProvider("ElevenLabs", () => elevenLabs, 20),
+                new DynamicOrderProvider("Kilo", () => kiloMetric, metricOrder: 15, balanceOrder: 116),
+                new StubProvider("Moonshot (Kimi)", () => kimi, 115),
+            ],
+            TestData.Context(),
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Equal(["Claude", "Kilo", "ElevenLabs", "Moonshot (Kimi)"], metricSnapshot.Results.Select(r => r.ProviderName));
+        Assert.Equal(["Claude", "Kilo", "ElevenLabs"], metricSnapshot.Windows.Select(w => w.ProviderName));
+
+        var balanceSnapshot = await UsageAggregator.RefreshAsync(
+            [
+                new StubProvider("Claude", () => claude, 10),
+                new StubProvider("ElevenLabs", () => elevenLabs, 20),
+                new StubProvider("Moonshot (Kimi)", () => kimi, 115),
+                new DynamicOrderProvider("Kilo", () => kiloBalance, metricOrder: 15, balanceOrder: 116),
+            ],
+            TestData.Context(),
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Equal(["Claude", "ElevenLabs", "Moonshot (Kimi)", "Kilo"], balanceSnapshot.Results.Select(r => r.ProviderName));
+    }
+
+    [Fact]
     public async Task Isolates_a_throwing_provider()
     {
         ProviderResult good = new BalanceResult("DeepSeek", "$5.00");

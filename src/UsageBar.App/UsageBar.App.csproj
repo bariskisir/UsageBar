@@ -55,6 +55,7 @@
     <EmbeddedResource Include="Assets\openai.svg" />
     <EmbeddedResource Include="Assets\claude.svg" />
     <EmbeddedResource Include="Assets\elevenlabs.svg" />
+    <EmbeddedResource Include="Assets\kilo.svg" />
   </ItemGroup>
 
   <!-- WebView2 pulls WPF/WinForms assemblies we don't use; their WPF dependency

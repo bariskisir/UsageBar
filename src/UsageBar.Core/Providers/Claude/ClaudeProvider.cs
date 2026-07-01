@@ -22,6 +22,9 @@ public sealed class ClaudeProvider(HttpClient httpClient, IClaudeAuthReader auth
 
     public ProviderDescriptor Descriptor { get; } = new("Claude", DisplayOrder: 10);
 
+    public void RefreshEnabled(ProviderQueryContext context) =>
+        Descriptor.IsEnabled = !string.IsNullOrEmpty(authReader.Read()?.AccessToken);
+
     public async Task<ProviderResult?> GetUsageAsync(ProviderQueryContext context, CancellationToken cancellationToken)
     {
         var auth = authReader.Read();

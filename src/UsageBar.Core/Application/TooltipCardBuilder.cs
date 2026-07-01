@@ -10,7 +10,7 @@ namespace UsageBar.Application;
 /// </summary>
 internal static class TooltipCardBuilder
 {
-    public static IReadOnlyList<TooltipCard> Build(UsageSnapshot snapshot)
+    public static IReadOnlyList<TooltipCard> Build(UsageSnapshot snapshot, double balanceHidingThreshold = -1)
     {
         var cards = new List<TooltipCard>(snapshot.Results.Count);
 
@@ -26,11 +26,43 @@ internal static class TooltipCardBuilder
                     break;
 
                 case BalanceResult balance:
-                    cards.Add(new TooltipCard(balance.ProviderName, Plan: null, [], [balance.BalanceText]));
+                    var hide = ShouldHide(balance, balanceHidingThreshold);
+                    cards.Add(new TooltipCard(balance.ProviderName, Plan: null, [], [balance.BalanceText], Hide: hide));
                     break;
             }
         }
 
         return cards;
+    }
+
+    /// <summary>
+    /// Returns <see langword="true"/> when a balance card should be hidden based on the
+    /// configured threshold. A threshold of -1 or NaN disables hiding. For providers with
+    /// dual currencies (DeepSeek), both values must satisfy the threshold to hide.
+    /// </summary>
+    private static bool ShouldHide(BalanceResult balance, double threshold)
+    {
+        // Threshold of -1 (or NaN) means the feature is disabled.
+        if (threshold < 0 || double.IsNaN(threshold))
+        {
+            return false;
+        }
+
+        var thresholdDecimal = (decimal)threshold;
+
+        // For dual-currency providers: hide only when BOTH balances are at or below the threshold.
+        if (balance.UsdAmount is { } usd && balance.CnyAmount is { } cny)
+        {
+            return usd <= thresholdDecimal && cny <= thresholdDecimal;
+        }
+
+        // For single-currency providers: hide when the USD amount is at or below the threshold.
+        if (balance.UsdAmount is { } usdOnly)
+        {
+            return usdOnly <= thresholdDecimal;
+        }
+
+        // If no raw amounts are available (should not happen), show the card.
+        return false;
     }
 }

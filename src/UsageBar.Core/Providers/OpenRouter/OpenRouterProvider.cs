@@ -10,7 +10,7 @@ public sealed class OpenRouterProvider(HttpClient httpClient) : BalanceUsageProv
 
     protected override string CredentialName => CredentialNames.OpenRouter;
 
-    protected override async Task<string> FetchBalanceAsync(HttpClient httpClient, string apiKey, CancellationToken cancellationToken)
+    protected override async Task<BalanceFetchResult> FetchBalanceAsync(HttpClient httpClient, string apiKey, CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, "https://openrouter.ai/api/v1/credits");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
@@ -30,6 +30,7 @@ public sealed class OpenRouterProvider(HttpClient httpClient) : BalanceUsageProv
             throw new ProviderException("OpenRouter response did not contain total_credits and total_usage.");
         }
 
-        return UsageFormatting.Currency(totalCredits.Value - totalUsage.Value);
+        var remaining = totalCredits.Value - totalUsage.Value;
+        return new BalanceFetchResult(UsageFormatting.Currency(remaining), remaining);
     }
 }

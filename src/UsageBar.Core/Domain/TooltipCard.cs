@@ -19,4 +19,5 @@ public sealed record TooltipCard(
     [property: JsonPropertyName("title")] string Title,
     [property: JsonPropertyName("plan")] string? Plan,
     [property: JsonPropertyName("metrics")] IReadOnlyList<TooltipMetric> Metrics,
-    [property: JsonPropertyName("lines")] IReadOnlyList<string> Lines);
+    [property: JsonPropertyName("lines")] IReadOnlyList<string> Lines,
+    [property: JsonPropertyName("hide")] bool Hide = false);

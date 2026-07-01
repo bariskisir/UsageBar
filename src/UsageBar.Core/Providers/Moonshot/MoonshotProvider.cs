@@ -10,7 +10,7 @@ public sealed class MoonshotProvider(HttpClient httpClient) : BalanceUsageProvid
 
     protected override string CredentialName => CredentialNames.Moonshot;
 
-    protected override async Task<string> FetchBalanceAsync(HttpClient httpClient, string apiKey, CancellationToken cancellationToken)
+    protected override async Task<BalanceFetchResult> FetchBalanceAsync(HttpClient httpClient, string apiKey, CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, "https://api.moonshot.ai/v1/users/me/balance");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
@@ -28,6 +28,6 @@ public sealed class MoonshotProvider(HttpClient httpClient) : BalanceUsageProvid
             throw new ProviderException("Moonshot response did not contain available_balance.");
         }
 
-        return UsageFormatting.Currency(availableBalance.Value);
+        return new BalanceFetchResult(UsageFormatting.Currency(availableBalance.Value), availableBalance.Value);
     }
 }

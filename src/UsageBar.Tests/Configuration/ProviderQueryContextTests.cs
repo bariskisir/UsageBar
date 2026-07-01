@@ -74,4 +74,20 @@ public sealed class ProviderQueryContextTests
             Environment.SetEnvironmentVariable(CredentialNames.Moonshot, null);
         }
     }
+
+    [Fact]
+    public void Kilo_falls_back_to_environment_variable_when_blank()
+    {
+        var settings = AppSettings.Default with { KiloApiKey = "" };
+        Environment.SetEnvironmentVariable(CredentialNames.Kilo, "kilo-env");
+        try
+        {
+            var context = ProviderQueryContext.FromSettings(settings, TestData.FixedNow);
+            Assert.Equal("kilo-env", context.GetApiKey(CredentialNames.Kilo));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(CredentialNames.Kilo, null);
+        }
+    }
 }

@@ -21,6 +21,9 @@ public sealed class CodexProvider(HttpClient httpClient, ICodexAuthReader authRe
 
     public ProviderDescriptor Descriptor { get; } = new("Codex", DisplayOrder: 0);
 
+    public void RefreshEnabled(ProviderQueryContext context) =>
+        Descriptor.IsEnabled = !string.IsNullOrEmpty(authReader.Read()?.AccessToken);
+
     public async Task<ProviderResult?> GetUsageAsync(ProviderQueryContext context, CancellationToken cancellationToken)
     {
         var auth = authReader.Read();

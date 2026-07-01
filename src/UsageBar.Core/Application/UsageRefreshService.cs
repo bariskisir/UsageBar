@@ -104,8 +104,13 @@ public sealed class UsageRefreshService : IUsageRefreshService, IDisposable
                 .RefreshAsync(_providers, context, _logger, _shutdown.Token)
                 .ConfigureAwait(false);
 
-            _view.ShowIcon(IconLayout.Compute(snapshot.Results, settings.IconLayout));
-            _view.ShowCards(TooltipCardBuilder.Build(snapshot));
+            // Force auto icon layout in test mode so all bar windows are visible regardless
+            // of the user's saved iconLayout settings.
+            var iconLayout = Environment.GetEnvironmentVariable("USAGEBAR_TEST") == "1"
+                ? TrayIconLayoutSettings.Default
+                : settings.IconLayout;
+            _view.ShowIcon(IconLayout.Compute(snapshot.Results, iconLayout));
+            _view.ShowCards(TooltipCardBuilder.Build(snapshot, settings.BalanceHidingThreshold ?? -1));
 
             await _notifications.EmitAsync(snapshot.Windows, settings, _shutdown.Token).ConfigureAwait(false);
 

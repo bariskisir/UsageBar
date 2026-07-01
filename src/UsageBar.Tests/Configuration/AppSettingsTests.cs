@@ -29,7 +29,9 @@ public sealed class AppSettingsTests
             MoonshotApiKey: null,
             DeepgramApiKey: null,
             ElevenLabsApiKey: null,
+            KiloApiKey: null,
             IconLayout: null,
+            BalanceHidingThreshold: -1,
             Telegram: null,
             Discord: null);
 
@@ -43,6 +45,7 @@ public sealed class AppSettingsTests
         Assert.Equal(string.Empty, normalized.MoonshotApiKey);
         Assert.Equal(string.Empty, normalized.DeepgramApiKey);
         Assert.Equal(string.Empty, normalized.ElevenLabsApiKey);
+        Assert.Equal(string.Empty, normalized.KiloApiKey);
         Assert.Equal(TrayIconLayoutSettings.AutoMode, normalized.IconLayout!.Mode);
         Assert.NotNull(normalized.Telegram);
         Assert.Null(normalized.Telegram!.Token);
@@ -58,7 +61,7 @@ public sealed class AppSettingsTests
         var iconLayout = new TrayIconLayoutSettings(
             TrayIconLayoutSettings.ManualMode,
             new Dictionary<string, double> { ["codex_session"] = 25 });
-        var settings = new AppSettings(15, 60, 85, "a", "b", "c", "d", "e", iconLayout, null, null);
+        var settings = new AppSettings(15, 60, 85, "a", "b", "c", "d", "e", "f", iconLayout, -1, null, null);
 
         var normalized = settings.Normalize();
 
@@ -68,6 +71,7 @@ public sealed class AppSettingsTests
         Assert.Equal("a", normalized.DeepSeekApiKey);
         Assert.Equal("c", normalized.MoonshotApiKey);
         Assert.Equal("e", normalized.ElevenLabsApiKey);
+        Assert.Equal("f", normalized.KiloApiKey);
         Assert.True(normalized.IconLayout!.IsManual);
         Assert.Equal(25, normalized.IconLayout.Bars!["codex_session"]);
     }

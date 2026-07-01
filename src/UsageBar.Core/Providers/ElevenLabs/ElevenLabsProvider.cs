@@ -10,6 +10,9 @@ public sealed class ElevenLabsProvider(HttpClient httpClient) : IUsageProvider
 
     public ProviderDescriptor Descriptor { get; } = new("ElevenLabs", DisplayOrder: 20);
 
+    public void RefreshEnabled(ProviderQueryContext context) =>
+        Descriptor.IsEnabled = !string.IsNullOrEmpty(context.GetApiKey(CredentialNames.ElevenLabs));
+
     public async Task<ProviderResult?> GetUsageAsync(ProviderQueryContext context, CancellationToken cancellationToken)
     {
         var apiKey = context.GetApiKey(CredentialNames.ElevenLabs);

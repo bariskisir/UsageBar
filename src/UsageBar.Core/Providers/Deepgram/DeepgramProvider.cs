@@ -13,11 +13,11 @@ public sealed class DeepgramProvider(HttpClient httpClient) : BalanceUsageProvid
 
     protected override string CredentialName => CredentialNames.Deepgram;
 
-    protected override async Task<string> FetchBalanceAsync(HttpClient httpClient, string apiKey, CancellationToken cancellationToken)
+    protected override async Task<BalanceFetchResult> FetchBalanceAsync(HttpClient httpClient, string apiKey, CancellationToken cancellationToken)
     {
         var projectId = await GetFirstProjectIdAsync(httpClient, apiKey, cancellationToken).ConfigureAwait(false);
         var balance = await GetBalanceAsync(httpClient, apiKey, projectId, cancellationToken).ConfigureAwait(false);
-        return UsageFormatting.Currency(balance);
+        return new BalanceFetchResult(UsageFormatting.Currency(balance), balance);
     }
 
     private static async Task<string> GetFirstProjectIdAsync(HttpClient httpClient, string apiKey, CancellationToken cancellationToken)

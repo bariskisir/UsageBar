@@ -316,6 +316,7 @@ function providerIcon(title) {
   if (name === "codex") return iconImage("{{OPENAI_ICON}}", "OpenAI");
   if (name === "claude") return iconImage("{{CLAUDE_ICON}}", "Claude");
   if (name === "elevenlabs") return iconImage("{{ELEVENLABS_ICON}}", "ElevenLabs");
+  if (name === "kilo") return iconImage("{{KILO_ICON}}", "Kilo");
   return iconImage("{{GENERIC_ICON}}", title || "Provider");
 }
 
@@ -342,12 +343,13 @@ function resetText(detail) {
   return "Resets in " + d;
 }
 
-function metricRow(m) {
+function metricRow(m, showLabel) {
   const pct = Math.min(100, Math.max(0, m.percent));
   const remain = 100 - pct;
   const level = levelOf(remain);
   const wrap = el("div", "metric");
-  wrap.appendChild(el("span", "metric__title", m.label));
+  const label = (m.label || "").trim();
+  if (showLabel && label) wrap.appendChild(el("span", "metric__title", label));
   const bar = el("div", "metric__bar");
   const fill = el("div", "metric__bar-fill");
   fill.dataset.level = level;
@@ -393,7 +395,8 @@ function renderCard(card) {
     art.appendChild(el("div", "card__divider"));
     const content = el("div", "card__content");
     const group = el("section", "card__metrics");
-    card.metrics.forEach((m) => group.appendChild(metricRow(m)));
+    const showMetricLabels = card.metrics.length > 1;
+    card.metrics.forEach((m) => group.appendChild(metricRow(m, showMetricLabels)));
     content.appendChild(group);
     art.appendChild(content);
   }
@@ -415,7 +418,8 @@ window.__render = function (data) {
   const panel = el("div", "panel panel--tray");
   const body = el("div", "panel__body");
   const stack = el("div", "stack");
-  (data.cards || []).forEach((card, i) => {
+  var visible = (data.cards || []).filter(function (card) { return !card.hide; });
+  visible.forEach(function (card, i) {
     if (i > 0) stack.appendChild(el("div", "stack__sep"));
     const item = el("div", "stack__item");
     item.appendChild(renderCard(card));
@@ -424,7 +428,7 @@ window.__render = function (data) {
   body.appendChild(stack);
   panel.appendChild(body);
   app.appendChild(panel);
-  requestAnimationFrame(() => requestAnimationFrame(reportHeight));
+  requestAnimationFrame(function () { return requestAnimationFrame(reportHeight); });
 };
 
 function signalReady() {

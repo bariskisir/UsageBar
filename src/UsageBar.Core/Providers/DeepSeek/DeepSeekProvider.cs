@@ -11,7 +11,7 @@ public sealed class DeepSeekProvider(HttpClient httpClient) : BalanceUsageProvid
 
     protected override string CredentialName => CredentialNames.DeepSeek;
 
-    protected override async Task<string> FetchBalanceAsync(HttpClient httpClient, string apiKey, CancellationToken cancellationToken)
+    protected override async Task<BalanceFetchResult> FetchBalanceAsync(HttpClient httpClient, string apiKey, CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, "https://api.deepseek.com/user/balance");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
@@ -63,6 +63,6 @@ public sealed class DeepSeekProvider(HttpClient httpClient) : BalanceUsageProvid
             throw new ProviderException("DeepSeek response did not contain a USD or CNY balance.");
         }
 
-        return string.Join(" / ", parts);
+        return new BalanceFetchResult(string.Join(" / ", parts), usd, cny);
     }
 }

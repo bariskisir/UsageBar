@@ -32,8 +32,8 @@ testable; keep all Win32/WebView2/registry code in App.
 - `Configuration/AppSettings.cs` — settings record + `Default` + `Normalize`.
 - `Providers/Abstractions/` — `IUsageProvider`, `ProviderDescriptor`, `BalanceUsageProvider`,
   `ProviderQueryContext`, `CredentialNames`, `ProviderJson`, `ProviderHttp`, `MetricWindows`,
-  `UsageFormatting`, provider-facing auth-reader interfaces.
-- `Providers/<Name>/` — one folder per provider (Codex, Claude, ElevenLabs, DeepSeek, OpenRouter, Moonshot, Deepgram).
+  `UsageFormatting`, `IResultDisplayOrderProvider`, provider-facing auth-reader interfaces.
+- `Providers/<Name>/` — one folder per provider (Codex, Claude, ElevenLabs, Kilo, DeepSeek, OpenRouter, Moonshot, Deepgram).
 - `Application/` — `UsageRefreshService`, `UsageAggregator`, `ThresholdNotifier`,
   `TooltipCardBuilder`, `IconLayout`, and the `Abstractions/` the shell implements
   (`IUsageView`, `ISettingsStore`, `IClock`) plus internal orchestration seams.
@@ -112,9 +112,25 @@ are not copied. JSON uses System.Text.Json **source generation** (`SettingsJsonC
 
 ### Providers
 
-Every provider exposes a `ProviderDescriptor` (`Name`, `DisplayOrder`) and returns exactly one
-concrete result kind — never a value that conflates both. `IUsageProvider.GetUsageAsync` returns
-`null` when not configured; it throws on API/parse failures (the aggregator logs and isolates).
+Every provider exposes a `ProviderDescriptor` (`Name`, `DisplayOrder`, `IsEnabled`) and returns
+one or more concrete results via `GetUsageResultsAsync` (the default implementation wraps
+`GetUsageAsync` to preserve backward compatibility). Providers that can report both usage and
+balance (Kilo) override `GetUsageResultsAsync` to return multiple results in a single refresh.
+
+Before each refresh the aggregator calls `IUsageProvider.RefreshEnabled(context)` so every
+provider can synchronously check whether credentials exist and set `Descriptor.IsEnabled`
+accordingly. Disabled providers are skipped — no task is created for them. The check is:
+
+- **API-key providers** (Kilo, ElevenLabs, DeepSeek, OpenRouter, Moonshot, Deepgram):
+  `!string.IsNullOrEmpty(context.GetApiKey(CredentialName))`
+- **OAuth providers** (Codex, Claude):
+  `!string.IsNullOrEmpty(authReader.Read()?.AccessToken)`
+- **Test providers** use the default implementation which sets `IsEnabled = true`.
+
+`IUsageProvider.GetUsageAsync` returns `null` when not configured; it throws on API/parse
+failures (the aggregator logs and isolates). Providers whose placement depends on their concrete
+result may implement `IResultDisplayOrderProvider`; the aggregator applies that order after
+refresh and flattens metric windows from the ordered results.
 Two standards:
 
 - **Balance** providers derive from `BalanceUsageProvider`, declare their `Descriptor` and
@@ -144,6 +160,12 @@ DeepSeek shows the USD balance and additionally the CNY balance when CNY is non-
 Moonshot calls `GET https://api.moonshot.ai/v1/users/me/balance` with `Authorization: Bearer KEY`
 from `MOONSHOT_API_KEY` and shows `data.available_balance` as a USD balance.
 
+Kilo calls the app.kilo.ai tRPC batch endpoint for `user.getCreditBlocks`,
+`kiloPass.getState`, and `user.getAutoTopUpPaymentMethod` with `Authorization: Bearer KEY`
+from `KILO_API_KEY`. If Kilo Pass subscription data is present it returns a `MetricResult`
+with a single `Pass` window ordered after Claude; otherwise it returns a credit-only
+`BalanceResult` ordered after Moonshot (Kimi).
+
 To add a provider: new folder under `Providers/`, implement the right base/interface (declare a
 `Descriptor`; for metric providers, return stable `UsageWindow` labels used for icon-layout keys),
 and add one registration in
@@ -156,7 +178,7 @@ driven by the descriptor and result, with no provider names hardcoded anywhere.
 balance results. `settings.json` controls the layout through `iconLayout`. Auto mode shows
 every metric window equally in provider display order. Manual mode shows only configured keys, in
 JSON order, using values as bar height percentages (e.g. `codex_session`, `codex_weekly`,
-`claude_session`, `claude_weekly`, `elevenlabs_session`). Unknown or non-positive manual entries
+`claude_session`, `claude_weekly`, `elevenlabs_session`, `kilo_pass`). Unknown or non-positive manual entries
 are ignored. In manual mode, configured values below a total of 100 leave the remaining icon space
 as an empty bottom bar; there is no serialized `IsManual` field. The layout falls back to a single
 empty bar when there is nothing to show.

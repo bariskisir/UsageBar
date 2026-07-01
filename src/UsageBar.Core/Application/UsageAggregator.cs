@@ -24,34 +24,51 @@ internal static class UsageAggregator
 
         // Query in display order so the resulting tray bars and tooltip cards come out ordered.
         var ordered = providers.OrderBy(provider => provider.Descriptor.DisplayOrder).ToArray();
+
+        // Check credentials for every provider before each refresh so providers that
+        // gain credentials mid-session are automatically picked up, and providers
+        // without credentials are skipped without creating tasks for them.
+        foreach (var provider in ordered)
+        {
+            provider.RefreshEnabled(context);
+        }
+
         var tasks = ordered
+            .Where(provider => provider.Descriptor.IsEnabled)
             .Select(provider => RefreshProviderAsync(provider, context, logger, timeout.Token))
             .ToArray();
 
-        var results = await Task.WhenAll(tasks).ConfigureAwait(false);
+        var refreshes = await Task.WhenAll(tasks).ConfigureAwait(false);
 
-        var succeeded = new List<ProviderResult>(results.Length);
-        var windows = new List<UsageWindow>();
+        var succeeded = new List<(ProviderResult Result, int DisplayOrder)>(refreshes.Length);
 
-        foreach (var result in results)
+        foreach (var refresh in refreshes)
         {
-            if (result is null)
+            foreach (var result in refresh.Results)
             {
-                continue;
-            }
+                var displayOrder = refresh.Provider is IResultDisplayOrderProvider dynamicOrder
+                    ? dynamicOrder.GetDisplayOrder(result)
+                    : refresh.Provider.Descriptor.DisplayOrder;
 
-            succeeded.Add(result);
-
-            if (result is MetricResult metric)
-            {
-                windows.AddRange(metric.Windows);
+                succeeded.Add((result, displayOrder));
             }
         }
 
-        return new UsageSnapshot(succeeded, windows);
+        var orderedResults = succeeded
+            .OrderBy(item => item.DisplayOrder)
+            .Select(item => item.Result)
+            .ToList();
+        var windows = orderedResults
+            .OfType<MetricResult>()
+            .SelectMany(metric => metric.Windows)
+            .ToList();
+
+        return new UsageSnapshot(
+            orderedResults,
+            windows);
     }
 
-    private static async Task<ProviderResult?> RefreshProviderAsync(
+    private static async Task<ProviderRefresh> RefreshProviderAsync(
         IUsageProvider provider,
         ProviderQueryContext context,
         ILogger logger,
@@ -59,7 +76,8 @@ internal static class UsageAggregator
     {
         try
         {
-            return await provider.GetUsageAsync(context, cancellationToken).ConfigureAwait(false);
+            var results = await provider.GetUsageResultsAsync(context, cancellationToken).ConfigureAwait(false);
+            return new ProviderRefresh(provider, results);
         }
         catch (OperationCanceledException)
         {
@@ -70,7 +88,9 @@ internal static class UsageAggregator
         catch (Exception exception)
         {
             logger.LogWarning(exception, "{Provider} refresh failed.", provider.Descriptor.Name);
-            return null;
+            return new ProviderRefresh(provider, Results: Array.Empty<ProviderResult>());
         }
     }
+
+    private readonly record struct ProviderRefresh(IUsageProvider Provider, IReadOnlyList<ProviderResult> Results);
 }

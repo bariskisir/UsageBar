@@ -44,6 +44,25 @@ internal sealed class StubProvider(string name, Func<ProviderResult?> result, in
         Task.FromResult(result());
 }
 
+internal sealed class DynamicOrderProvider(
+    string name,
+    Func<ProviderResult?> result,
+    int metricOrder,
+    int balanceOrder) : IUsageProvider, IResultDisplayOrderProvider
+{
+    public ProviderDescriptor Descriptor { get; } = new(name, DisplayOrder: 0);
+
+    public Task<ProviderResult?> GetUsageAsync(ProviderQueryContext context, CancellationToken cancellationToken) =>
+        Task.FromResult(result());
+
+    public int GetDisplayOrder(ProviderResult providerResult) => providerResult switch
+    {
+        MetricResult => metricOrder,
+        BalanceResult => balanceOrder,
+        _ => Descriptor.DisplayOrder,
+    };
+}
+
 internal sealed class StubSettingsStore(AppSettings settings) : ISettingsStore
 {
     public AppSettings Current { get; set; } = settings;

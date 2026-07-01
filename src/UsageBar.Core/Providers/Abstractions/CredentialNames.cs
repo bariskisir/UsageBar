@@ -11,4 +11,5 @@ public static class CredentialNames
     public const string Moonshot = "MOONSHOT_API_KEY";
     public const string Deepgram = "DEEPGRAM_API_KEY";
     public const string ElevenLabs = "ELEVENLABS_API_KEY";
+    public const string Kilo = "KILO_API_KEY";
 }
