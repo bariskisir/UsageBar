@@ -33,7 +33,7 @@ testable; keep all Win32/WebView2/registry code in App.
 - `Providers/Abstractions/` — `IUsageProvider`, `ProviderDescriptor`, `BalanceUsageProvider`,
   `ProviderQueryContext`, `CredentialNames`, `ProviderJson`, `ProviderHttp`, `MetricWindows`,
   `UsageFormatting`, `IResultDisplayOrderProvider`, provider-facing auth-reader interfaces.
-- `Providers/<Name>/` — one folder per provider (Codex, Claude, ElevenLabs, Kilo, DeepSeek, OpenRouter, Moonshot, Deepgram).
+- `Providers/<Name>/` — one folder per provider (Codex, Claude, ElevenLabs, Kilo, DeepSeek, OpenRouter, Moonshot, Deepgram, OpenAI, Venice, Copilot, Crof, Codebuff, Warp, Zai, Synthetic, Chutes, MiniMax, Poe, Alibaba).
 - `Application/` — `UsageRefreshService`, `UsageAggregator`, `ThresholdNotifier`,
   `TooltipCardBuilder`, `IconLayout`, and the `Abstractions/` the shell implements
   (`IUsageView`, `ISettingsStore`, `IClock`) plus internal orchestration seams.
@@ -121,7 +121,8 @@ Before each refresh the aggregator calls `IUsageProvider.RefreshEnabled(context)
 provider can synchronously check whether credentials exist and set `Descriptor.IsEnabled`
 accordingly. Disabled providers are skipped — no task is created for them. The check is:
 
-- **API-key providers** (Kilo, ElevenLabs, DeepSeek, OpenRouter, Moonshot, Deepgram):
+- **API-key providers** (Kilo, ElevenLabs, DeepSeek, OpenRouter, Moonshot, Deepgram,
+  OpenAI, Venice, Copilot, Crof, Codebuff, Warp, Zai, Synthetic, Chutes, MiniMax, Poe, Alibaba):
   `!string.IsNullOrEmpty(context.GetApiKey(CredentialName))`
 - **OAuth providers** (Codex, Claude):
   `!string.IsNullOrEmpty(authReader.Read()?.AccessToken)`
@@ -166,6 +167,57 @@ from `KILO_API_KEY`. If Kilo Pass subscription data is present it returns a `Met
 with a single `Pass` window ordered after Claude; otherwise it returns a credit-only
 `BalanceResult` ordered after Moonshot (Kimi).
 
+**New providers (not yet live-tested with real API keys):**
+
+OpenAI calls `GET https://api.openai.com/v1/dashboard/billing/credit_grants` with
+`Authorization: Bearer KEY` from `OPENAI_API_KEY` and shows `total_available` as a USD
+balance. Uses a legacy/user API key; project keys return 403.
+
+Venice calls `GET https://api.venice.ai/api/v1/billing/balance` with
+`Authorization: Bearer KEY` from `VENICE_API_KEY`. Prefers USD balance when
+`consumptionCurrency` is "USD"; falls back to DIEM credits with epoch allocation percentage.
+
+Copilot calls `GET https://api.github.com/copilot_internal/user` with
+`Authorization: token KEY` from `COPILOT_API_KEY` (GitHub OAuth token, not Copilot token).
+Reports Premium and Chat quota windows with placeholder/unlimited detection.
+
+Crof calls `GET https://crof.ai/usage_api/` with `Authorization: Bearer KEY` from
+`CROF_API_KEY` and shows `credits` as a USD balance.
+
+Codebuff calls `POST {baseURL}/api/v1/usage` with body `{"fingerprintId":"codexbar-usage"}`
+and `Authorization: Bearer KEY` from `CODEBUFF_API_KEY`. Reports a Quota window with usage
+percentage and remaining balance. Default base URL: `https://www.codebuff.com`.
+
+Warp calls `POST https://app.warp.dev/graphql/v2?op=GetRequestLimitInfo` with a GraphQL
+query including `$requestContext` variables, `Authorization: Bearer KEY` from `WARP_API_KEY`,
+and headers `x-warp-client-id`, `x-warp-os-category`, `User-Agent: Warp/1.0`. Parses
+request limit, bonus grants (user + workspace-level), and unlimited status.
+
+Zai calls `GET {baseURL}/api/monitor/usage/quota/limit` with `Authorization: Bearer KEY`
+from `ZAI_API_KEY`. Parses limit entries with type/unit labels and percentage or
+usage/number calculations. Default base URL: `https://api.z.ai`.
+
+Synthetic calls `GET https://api.synthetic.new/v2/quotas` with `Authorization: Bearer KEY`
+from `SYNTHETIC_API_KEY`. Parses quota windows from JSON array or object with `usedPercent`,
+`label`, and optional `windowMinutes`/`resetsAt`.
+
+Chutes calls `GET {baseURL}/users/me/subscription_usage` with `Authorization: Bearer KEY`
+from `CHUTES_API_KEY`. Reports 4h Rolling and Monthly windows. Default base URL:
+`https://api.chutes.ai`.
+
+MiniMax calls `GET https://api.minimax.io/v1/token_plan/remains` (international) or
+`https://api.minimaxi.com/v1/token_plan/remains` (China) with `Authorization: Bearer KEY`
+from `MINIMAX_API_KEY` and header `MM-API-Source: CodexBar`. Reports model-level usage
+windows with remaining percent and points balance.
+
+Poe calls `GET https://api.poe.com/usage/current_balance` with `Authorization: Bearer KEY`
+from `POE_API_KEY` and shows `current_point_balance` as a points display.
+
+Alibaba calls `POST https://modelstudio.console.alibabacloud.com/data/api.json?...` with
+body `{"queryCodingPlanInstanceInfoRequest":{"commodityCode":"sfm_codingplan_public_intl"}}`
+and multiple auth headers (`Authorization: Bearer`, `x-api-key`, `X-DashScope-API-Key`)
+from `ALIBABA_API_KEY`. Reports 5h, Weekly, and Monthly quota windows.
+
 To add a provider: new folder under `Providers/`, implement the right base/interface (declare a
 `Descriptor`; for metric providers, return stable `UsageWindow` labels used for icon-layout keys),
 and add one registration in
@@ -178,11 +230,13 @@ driven by the descriptor and result, with no provider names hardcoded anywhere.
 balance results. `settings.json` controls the layout through `iconLayout`. Auto mode shows
 every metric window equally in provider display order. Manual mode shows only configured keys, in
 JSON order, using values as bar height percentages (e.g. `codex_session`, `codex_weekly`,
-`claude_session`, `claude_weekly`, `elevenlabs_session`, `kilo_pass`). Unknown or non-positive manual entries
-are ignored. In manual mode, configured values below a total of 100 leave the remaining icon space
-as an empty bottom bar; there is no serialized `IsManual` field. The layout falls back to a single
-empty bar when there is nothing to show.
-`IconRenderer` (App) rasterizes the laid-out bars to an HICON using the CodexBar palette
+`claude_session`, `claude_weekly`, `elevenlabs_session`, `kilo_pass`, `copilot_premium`,
+`copilot_chat`, `warp_requests`, `synthetic_rolling_5h`, `codebuff_quota`). Keys ending with `*`
+act as a wildcard prefix (e.g. `minimax_*` matches all MiniMax model windows, `zai_*` matches all
+Zai limit windows). Unknown or non-positive manual entries are ignored. In manual mode, configured
+values below a total of 100 leave the remaining icon space as an empty bottom bar; there is no
+serialized `IsManual` field. The layout falls back to a single empty bar when there is nothing to
+show. `IconRenderer` (App) rasterizes the laid-out bars to an HICON using the CodexBar palette
 (green <50%, amber <80%, orange <95%, red ≥95%), sizing each bar by its weight.
 
 ### Tooltip
@@ -216,6 +270,9 @@ service groups messages per severity into one balloon each.
 ## Known gaps / TODO
 
 - Providers are registered explicitly (no assembly scanning) for clarity.
+- New providers (OpenAI, Venice, Copilot, Crof, Codebuff, Warp, Zai, Synthetic, Chutes, MiniMax,
+  Poe, Alibaba) are implemented but not yet tested with real API keys — endpoint URLs, response
+  shapes, and auth mechanisms are documented but unverified against live APIs.
 - Tray/WebView2 interop is validated manually (not unit-tested); Core logic is covered by tests.
 - Publish is **not trimmed**: the WebView2 SDK emits trim warnings (errors here under
   warnings-as-errors). Revisit if a trim-safe WebView2 ships.

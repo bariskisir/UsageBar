@@ -20,7 +20,7 @@ namespace UsageBar.Tooltip;
 /// </remarks>
 internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
 {
-    private const int Width = 300;
+    private const int DefaultWidth = 300;
     private const int CornerRadius = 10;
     private const int MinHeight = 60;
 
@@ -35,6 +35,7 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
     private readonly Lock _gate = new();
     private string _pendingJson = """{"cards":[]}""";
     private NativeMethods.Rect _lastIconRect;
+    private int _widthCss = DefaultWidth;
     private int _heightCss;
     private volatile bool _visible;
     private bool _suspended;
@@ -58,10 +59,9 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
             return false;
         }
 
-        // Size the window at WIDTH logical pixels before attaching the controller so the
-        // page always lays out at WIDTH CSS px.
+        // Size the window at default width before attaching the controller.
         var scale = WindowScale();
-        var initialWidth = Scaled(Width, scale);
+        var initialWidth = Scaled(DefaultWidth, scale);
         var initialHeight = Scaled(MinHeight, scale);
         NativeMethods.SetWindowPos(
             _hwnd, 0, 0, 0, initialWidth, initialHeight,
@@ -370,15 +370,22 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
 
                     break;
 
-                case "height":
-                    if (document.RootElement.TryGetProperty("value", out var heightProperty) &&
+                case "size":
+                    if (document.RootElement.TryGetProperty("width", out var widthProperty) &&
+                        widthProperty.TryGetInt32(out var width) && width > 0)
+                    {
+                        _widthCss = Math.Max(DefaultWidth, width);
+                    }
+
+                    if (document.RootElement.TryGetProperty("height", out var heightProperty) &&
                         heightProperty.TryGetInt32(out var height))
                     {
                         _heightCss = Math.Max(MinHeight, height);
-                        if (_visible)
-                        {
-                            Reposition();
-                        }
+                    }
+
+                    if (_visible)
+                    {
+                        Reposition();
                     }
 
                     break;
@@ -396,7 +403,7 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
         var placement = TooltipPlacementCalculator.Compute(
             _lastIconRect,
             WorkArea(),
-            Width,
+            _widthCss,
             _heightCss,
             MinHeight,
             CornerRadius,
@@ -444,7 +451,7 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
             "UsageBarWebTooltip",
             NativeMethods.WS_POPUP,
             0, 0,
-            Width, MinHeight,
+            _widthCss, MinHeight,
             0, 0,
             instance,
             0);
@@ -515,7 +522,14 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
             .Replace("{{CLAUDE_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Assets.claude.svg"), StringComparison.Ordinal)
             .Replace("{{ELEVENLABS_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Assets.elevenlabs.svg"), StringComparison.Ordinal)
             .Replace("{{KILO_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Assets.kilo.svg"), StringComparison.Ordinal)
-            .Replace("{{GENERIC_ICON}}", GenericIconDataUri(), StringComparison.Ordinal);
+            .Replace("{{COPILOT_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Assets.copilot.svg"), StringComparison.Ordinal)
+            .Replace("{{WARP_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Assets.warp.svg"), StringComparison.Ordinal)
+            .Replace("{{SYNTHETIC_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Assets.synthetic.svg"), StringComparison.Ordinal)
+            .Replace("{{CHUTES_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Assets.chutes.svg"), StringComparison.Ordinal)
+            .Replace("{{ZAI_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Assets.zai.svg"), StringComparison.Ordinal)
+            .Replace("{{ALIBABA_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Assets.alibaba.svg"), StringComparison.Ordinal)
+            .Replace("{{MINIMAX_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Assets.minimax.svg"), StringComparison.Ordinal)
+            .Replace("{{CODEBUFF_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Assets.codebuff.svg"), StringComparison.Ordinal);
     }
 
     private static string ReadSvgDataUri(Assembly assembly, string resourceName)
@@ -527,10 +541,4 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
         return $"data:image/svg+xml;base64,{Convert.ToBase64String(bytes)}";
     }
 
-    private static string GenericIconDataUri()
-    {
-        var svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"15\" height=\"15\" viewBox=\"0 0 15 15\"><circle cx=\"7.5\" cy=\"7.5\" r=\"6\" fill=\"none\" stroke=\"#8e8e93\" stroke-width=\"1.5\"/><circle cx=\"7.5\" cy=\"7.5\" r=\"2.5\" fill=\"#8e8e93\"/></svg>";
-        var bytes = Encoding.UTF8.GetBytes(svg);
-        return $"data:image/svg+xml;base64,{Convert.ToBase64String(bytes)}";
-    }
 }

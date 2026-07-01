@@ -38,6 +38,18 @@ public sealed class ProviderQueryContext
             [CredentialNames.Deepgram] = Resolve(settings.DeepgramApiKey, CredentialNames.Deepgram),
             [CredentialNames.ElevenLabs] = Resolve(settings.ElevenLabsApiKey, CredentialNames.ElevenLabs),
             [CredentialNames.Kilo] = Resolve(settings.KiloApiKey, CredentialNames.Kilo),
+            [CredentialNames.OpenAI] = Resolve(settings.OpenAiApiKey, CredentialNames.OpenAI),
+            [CredentialNames.Venice] = Resolve(settings.VeniceApiKey, CredentialNames.Venice),
+            [CredentialNames.Copilot] = Resolve(settings.CopilotApiKey, CredentialNames.Copilot),
+            [CredentialNames.Crof] = Resolve(settings.CrofApiKey, CredentialNames.Crof),
+            [CredentialNames.Codebuff] = Resolve(settings.CodebuffApiKey, CredentialNames.Codebuff),
+            [CredentialNames.Warp] = Resolve(settings.WarpApiKey, CredentialNames.Warp),
+            [CredentialNames.Zai] = Resolve(settings.ZaiApiKey, CredentialNames.Zai),
+            [CredentialNames.Synthetic] = Resolve(settings.SyntheticApiKey, CredentialNames.Synthetic),
+            [CredentialNames.Chutes] = Resolve(settings.ChutesApiKey, CredentialNames.Chutes),
+            [CredentialNames.MiniMax] = Resolve(settings.MiniMaxApiKey, CredentialNames.MiniMax),
+            [CredentialNames.Poe] = Resolve(settings.PoeApiKey, CredentialNames.Poe),
+            [CredentialNames.Alibaba] = Resolve(settings.AlibabaApiKey, CredentialNames.Alibaba),
         };
 
         return new ProviderQueryContext(now, apiKeys);

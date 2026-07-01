@@ -12,4 +12,16 @@ public static class CredentialNames
     public const string Deepgram = "DEEPGRAM_API_KEY";
     public const string ElevenLabs = "ELEVENLABS_API_KEY";
     public const string Kilo = "KILO_API_KEY";
+    public const string OpenAI = "OPENAI_API_KEY";
+    public const string Venice = "VENICE_API_KEY";
+    public const string Copilot = "COPILOT_API_KEY";
+    public const string Crof = "CROF_API_KEY";
+    public const string Codebuff = "CODEBUFF_API_KEY";
+    public const string Warp = "WARP_API_KEY";
+    public const string Zai = "ZAI_API_KEY";
+    public const string Synthetic = "SYNTHETIC_API_KEY";
+    public const string Chutes = "CHUTES_API_KEY";
+    public const string MiniMax = "MINIMAX_API_KEY";
+    public const string Poe = "POE_API_KEY";
+    public const string Alibaba = "ALIBABA_API_KEY";
 }

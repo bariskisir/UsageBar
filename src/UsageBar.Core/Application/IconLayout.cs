@@ -83,14 +83,45 @@ public static class IconLayout
 
         var bars = new List<Bar>();
         var totalWeight = 0.0;
-        foreach (var (key, weight) in settings.Bars ?? [])
+        foreach (var (rawKey, weight) in settings.Bars ?? [])
         {
-            // Normalize the user-configured key the same way window keys are built so
-            // manual-mode entries match regardless of whitespace, case, or separator
-            // characters typed in settings.json.
-            if (windowsByKey.TryGetValue(NormalizeKey(key), out var window))
+            var isWildcard = rawKey.Contains('*');
+            var normalizedKey = NormalizeKey(rawKey);
+
+            if (!isWildcard && windowsByKey.TryGetValue(normalizedKey, out var window))
             {
                 bars.Add(new Bar(window.UsedPercent, weight, window.ProviderName));
+                totalWeight += weight;
+                continue;
+            }
+
+            if (isWildcard)
+            {
+                // Wildcard: match all windows whose key starts with the normalized prefix + "_".
+                // e.g. "minimax_*" → normalized "minimax" → prefix "minimax_" matches "minimax_abab6_5s".
+                var prefix = string.IsNullOrEmpty(normalizedKey) ? "_" : normalizedKey + "_";
+                var matched = false;
+                foreach (var (windowKey, matchedWindow) in windowsByKey)
+                {
+                    if (windowKey.StartsWith(prefix, StringComparison.Ordinal))
+                    {
+                        bars.Add(new Bar(matchedWindow.UsedPercent, weight, matchedWindow.ProviderName));
+                        totalWeight += weight;
+                        matched = true;
+                    }
+                }
+
+                if (matched)
+                {
+                    continue;
+                }
+            }
+
+            // Fallback: try exact match on normalized key (handles keys that happen to
+            // contain '*' as a literal character after normalization).
+            if (isWildcard && windowsByKey.TryGetValue(normalizedKey, out var fallbackWindow))
+            {
+                bars.Add(new Bar(fallbackWindow.UsedPercent, weight, fallbackWindow.ProviderName));
                 totalWeight += weight;
             }
         }

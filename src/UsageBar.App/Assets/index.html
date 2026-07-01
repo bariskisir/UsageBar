@@ -96,6 +96,31 @@ body {
   overflow: visible;
 }
 
+.stack--multi {
+  display: grid;
+  gap: 2px 6px;
+  align-items: start;
+}
+
+.stack--multi .stack__item {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.stack--multi .stack__sep {
+  display: none;
+}
+
+.stack--multi .card { padding-left: 8px; padding-right: 8px; }
+.stack--multi .card__name { font-size: 11px; }
+.stack--multi .card__value { font-size: 10px; }
+.stack--multi .card__plan { font-size: 9px; }
+.stack--multi .metric { gap: 3px; }
+.stack--multi .metric__bar { height: 4px; }
+.stack--multi .metric__title { font-size: 11px; }
+.stack--multi .metric__pct,
+.stack--multi .metric__reset { font-size: 9px; }
+
 .stack__item {
   width: 100%;
   min-width: 0;
@@ -313,11 +338,19 @@ function el(tag, className, text) {
 
 function providerIcon(title) {
   const name = (title || "").toLowerCase();
-  if (name === "codex") return iconImage("{{OPENAI_ICON}}", "OpenAI");
+  if (name === "codex") return iconImage("{{OPENAI_ICON}}", "Codex");
   if (name === "claude") return iconImage("{{CLAUDE_ICON}}", "Claude");
   if (name === "elevenlabs") return iconImage("{{ELEVENLABS_ICON}}", "ElevenLabs");
   if (name === "kilo") return iconImage("{{KILO_ICON}}", "Kilo");
-  return iconImage("{{GENERIC_ICON}}", title || "Provider");
+  if (name === "copilot") return iconImage("{{COPILOT_ICON}}", "Copilot");
+  if (name === "warp") return iconImage("{{WARP_ICON}}", "Warp");
+  if (name === "synthetic") return iconImage("{{SYNTHETIC_ICON}}", "Synthetic");
+  if (name === "chutes") return iconImage("{{CHUTES_ICON}}", "Chutes");
+  if (name === "zai") return iconImage("{{ZAI_ICON}}", "Zai");
+  if (name === "alibaba") return iconImage("{{ALIBABA_ICON}}", "Alibaba");
+  if (name === "minimax") return iconImage("{{MINIMAX_ICON}}", "MiniMax");
+  if (name === "codebuff") return iconImage("{{CODEBUFF_ICON}}", "Codebuff");
+  return null;
 }
 
 function iconImage(src, label) {
@@ -387,7 +420,7 @@ function renderCard(card) {
     nameGroup.appendChild(el("span", "card__plan", card.plan));
   }
   titleRow.appendChild(nameGroup);
-  const icon = hasMetrics ? providerIcon(card.title) : null;
+  var icon = hasMetrics ? providerIcon(card.title) : null;
   if (icon) titleRow.appendChild(icon);
   header.appendChild(titleRow);
   art.appendChild(header);
@@ -403,32 +436,41 @@ function renderCard(card) {
   return art;
 }
 
-function reportHeight() {
+function reportSize(desiredWidth) {
   const app = document.getElementById("app");
   if (!app) return;
   const h = Math.ceil(app.getBoundingClientRect().height);
   if (h > 0 && window.ipc) {
-    window.ipc.postMessage(JSON.stringify({ type: "height", value: h }));
+    window.ipc.postMessage(JSON.stringify({ type: "size", width: desiredWidth, height: h }));
   }
 }
 
 window.__render = function (data) {
-  const app = document.getElementById("app");
+  var app = document.getElementById("app");
   app.innerHTML = "";
-  const panel = el("div", "panel panel--tray");
-  const body = el("div", "panel__body");
-  const stack = el("div", "stack");
+  var panel = el("div", "panel panel--tray");
+  var body = el("div", "panel__body");
+  var stack = el("div", "stack");
   var visible = (data.cards || []).filter(function (card) { return !card.hide; });
+  var total = visible.length;
+  // Target ~6 cards per column so the tooltip fits on screen.
+  var cols = total <= 6 ? 1 : Math.ceil(total / 6);
+  var colWidth = 150; // px per column for compact cards
+  var desiredWidth = Math.min(120 + cols * colWidth, 900);
+  if (cols > 1) {
+    stack.classList.add("stack--multi");
+    stack.style.gridTemplateColumns = "repeat(" + cols + ", 1fr)";
+  }
   visible.forEach(function (card, i) {
-    if (i > 0) stack.appendChild(el("div", "stack__sep"));
-    const item = el("div", "stack__item");
+    if (i > 0 && cols === 1) stack.appendChild(el("div", "stack__sep"));
+    var item = el("div", "stack__item");
     item.appendChild(renderCard(card));
     stack.appendChild(item);
   });
   body.appendChild(stack);
   panel.appendChild(body);
   app.appendChild(panel);
-  requestAnimationFrame(function () { return requestAnimationFrame(reportHeight); });
+  requestAnimationFrame(function () { return requestAnimationFrame(function () { return reportSize(desiredWidth); }); });
 };
 
 function signalReady() {

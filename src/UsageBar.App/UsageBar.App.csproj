@@ -56,6 +56,14 @@
     <EmbeddedResource Include="Assets\claude.svg" />
     <EmbeddedResource Include="Assets\elevenlabs.svg" />
     <EmbeddedResource Include="Assets\kilo.svg" />
+    <EmbeddedResource Include="Assets\copilot.svg" />
+    <EmbeddedResource Include="Assets\warp.svg" />
+    <EmbeddedResource Include="Assets\synthetic.svg" />
+    <EmbeddedResource Include="Assets\chutes.svg" />
+    <EmbeddedResource Include="Assets\zai.svg" />
+    <EmbeddedResource Include="Assets\alibaba.svg" />
+    <EmbeddedResource Include="Assets\minimax.svg" />
+    <EmbeddedResource Include="Assets\codebuff.svg" />
   </ItemGroup>
 
   <!-- WebView2 pulls WPF/WinForms assemblies we don't use; their WPF dependency

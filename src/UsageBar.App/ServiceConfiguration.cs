@@ -56,6 +56,18 @@ internal static class ServiceConfiguration
             services.AddSingleton<IUsageProvider, TestOpenRouterProvider>();
             services.AddSingleton<IUsageProvider, TestMoonshotProvider>();
             services.AddSingleton<IUsageProvider, TestDeepgramProvider>();
+            services.AddSingleton<IUsageProvider, TestOpenAIProvider>();
+            services.AddSingleton<IUsageProvider, TestVeniceProvider>();
+            services.AddSingleton<IUsageProvider, TestCopilotProvider>();
+            services.AddSingleton<IUsageProvider, TestCrofProvider>();
+            services.AddSingleton<IUsageProvider, TestCodebuffProvider>();
+            services.AddSingleton<IUsageProvider, TestWarpProvider>();
+            services.AddSingleton<IUsageProvider, TestZaiProvider>();
+            services.AddSingleton<IUsageProvider, TestSyntheticProvider>();
+            services.AddSingleton<IUsageProvider, TestChutesProvider>();
+            services.AddSingleton<IUsageProvider, TestMiniMaxProvider>();
+            services.AddSingleton<IUsageProvider, TestPoeProvider>();
+            services.AddSingleton<IUsageProvider, TestAlibabaProvider>();
         }
         else
         {
@@ -67,6 +79,18 @@ internal static class ServiceConfiguration
             services.AddSingleton<IUsageProvider, OpenRouterProvider>();
             services.AddSingleton<IUsageProvider, MoonshotProvider>();
             services.AddSingleton<IUsageProvider, DeepgramProvider>();
+            services.AddSingleton<IUsageProvider, OpenAIProvider>();
+            services.AddSingleton<IUsageProvider, VeniceProvider>();
+            services.AddSingleton<IUsageProvider, CopilotProvider>();
+            services.AddSingleton<IUsageProvider, CrofProvider>();
+            services.AddSingleton<IUsageProvider, CodebuffProvider>();
+            services.AddSingleton<IUsageProvider, WarpProvider>();
+            services.AddSingleton<IUsageProvider, ZaiProvider>();
+            services.AddSingleton<IUsageProvider, SyntheticProvider>();
+            services.AddSingleton<IUsageProvider, ChutesProvider>();
+            services.AddSingleton<IUsageProvider, MiniMaxProvider>();
+            services.AddSingleton<IUsageProvider, PoeProvider>();
+            services.AddSingleton<IUsageProvider, AlibabaProvider>();
         }
 
         // Windows shell.

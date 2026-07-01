@@ -67,7 +67,7 @@ internal static class IconRenderer
         }
 
         var count = ordered.Count;
-        var bars = new List<BarSpec>(count);
+        var bars = new List<BarSpec>(Math.Min(count, ContentHeight));
 
         var totalSeparator = 0;
         for (var i = 0; i < count - 1; i++)
@@ -90,9 +90,19 @@ internal static class IconRenderer
         var y = ContentTop;
         for (var i = 0; i < count; i++)
         {
-            var height = i == count - 1
-                ? Math.Max(1, ContentBottom - y)                           // last bar absorbs rounding
+            // Stop when we run out of vertical space (minimum 1 px per bar).
+            if (y >= ContentBottom)
+            {
+                break;
+            }
+
+            var isLast = i == count - 1;
+            var height = isLast
+                ? Math.Max(1, ContentBottom - y)
                 : Math.Max(1, (int)Math.Round(available * ordered[i].Weight / totalWeight));
+
+            // Clamp so the bar never pushes past the icon boundary.
+            height = Math.Min(height, Math.Max(1, ContentBottom - y));
 
             bars.Add(new BarSpec(y, height, ordered[i].UsedPercent));
             y += height;
@@ -101,6 +111,13 @@ internal static class IconRenderer
             {
                 y += ordered[i].Provider != ordered[i + 1].Provider ? SepCrossProvider : SepSameProvider;
             }
+        }
+
+        // If we dropped bars, enlarge the last bar to fill the remaining space.
+        if (bars.Count > 0)
+        {
+            var last = bars[^1];
+            bars[^1] = last with { Height = Math.Max(1, ContentBottom - last.Y) };
         }
 
         return bars;
@@ -159,6 +176,12 @@ internal static class IconRenderer
 
     private static void PutPixel(byte[] xor, int x, int y, byte r, byte g, byte b)
     {
+        // Safety clamp — never write outside the XOR mask bounds.
+        if (x < 0 || x >= IconSize || y < 0 || y >= IconSize)
+        {
+            return;
+        }
+
         var index = (y * IconSize + x) * 4;
         xor[index] = b;
         xor[index + 1] = g;
