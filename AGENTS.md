@@ -67,7 +67,8 @@ testable; keep all Win32/WebView2/registry code in App.
 | Build | `dotnet build UsageBar.slnx` |
 | Test | `dotnet test UsageBar.slnx` |
 | Run | `dotnet run --project src/UsageBar.App` |
-| Publish | `dotnet publish src/UsageBar.App/UsageBar.App.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true` |
+| Publish x64 | `dotnet publish src/UsageBar.App/UsageBar.App.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true` |
+| Publish ARM64 | `dotnet publish src/UsageBar.App/UsageBar.App.csproj -c Release -r win-arm64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true` |
 
 `Directory.Build.props` enables nullable, implicit usings, the latest analyzers, code-style
 enforcement, and **`TreatWarningsAsErrors`** for production projects. Keep builds warning-clean.
