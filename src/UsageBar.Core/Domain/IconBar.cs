@@ -12,5 +12,5 @@ public readonly record struct IconBar(double? UsedPercent, double Weight)
 {
     /// <summary>Clamped+guarded init; always prefer this over the auto-generated constructor.</summary>
     public static IconBar Create(double? usedPercent, double weight) =>
-        new(usedPercent.HasValue ? Math.Clamp(usedPercent.Value, 0, 100) : null, Math.Max(0.001, weight));
+        new(usedPercent.HasValue && double.IsFinite(usedPercent.Value) ? Math.Clamp(usedPercent.Value, 0, 100) : null, Math.Max(0.001, weight));
 }

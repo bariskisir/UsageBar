@@ -142,7 +142,8 @@ public sealed class ClaudeAuthReader : IClaudeAuthReader
             return null;
         }
 
-        return DateTimeOffset.FromUnixTimeMilliseconds(Convert.ToInt64(milliseconds.Value));
+        // Truncate toward zero — standard epoch conversion, avoids banker's-rounding skew.
+        return DateTimeOffset.FromUnixTimeMilliseconds((long)milliseconds.Value);
     }
 
     private static IReadOnlyList<string> ReadScopes(JsonElement oauth)

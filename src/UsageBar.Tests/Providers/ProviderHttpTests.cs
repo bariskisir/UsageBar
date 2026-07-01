@@ -40,7 +40,10 @@ public sealed class ProviderHttpTests
         using var httpClient = new HttpClient(handler);
         using var request = new HttpRequestMessage(HttpMethod.Get, "https://test.example/api");
 
-        await Assert.ThrowsAnyAsync<Exception>(
+        // Invalid JSON throws a System.Text.Json parse exception.
+        var ex = await Record.ExceptionAsync(
             () => ProviderHttp.GetJsonAsync(httpClient, request, CancellationToken.None));
+        Assert.NotNull(ex);
+        Assert.Contains("Json", ex.GetType().FullName!);
     }
 }

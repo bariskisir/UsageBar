@@ -309,7 +309,10 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
 
         try
         {
-            await _core.ExecuteScriptAsync($"window.__render && window.__render({json})");
+            // Use JSON.parse wrapping to safely embed the JSON payload in JavaScript
+            // even when it contains U+2028/U+2029 (valid JSON but illegal in JS literals).
+            var safeJson = System.Text.Encodings.Web.JavaScriptEncoder.Default.Encode(json);
+            await _core.ExecuteScriptAsync($"window.__render && window.__render(JSON.parse(\"{safeJson}\"))");
         }
         catch (Exception)
         {
@@ -327,46 +330,59 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
             return;
         }
 
-        using var document = JsonDocument.Parse(body);
-        if (!document.RootElement.TryGetProperty("type", out var typeProperty))
+        JsonDocument document;
+        try
         {
+            document = JsonDocument.Parse(body);
+        }
+        catch (JsonException)
+        {
+            // Malformed JSON from the WebView — ignore and keep running.
             return;
         }
 
-        switch (typeProperty.GetString())
+        using (document)
         {
-            case "ready":
-                _navigated = true;
-                if (_visible)
-                {
-                    if (_hwnd != 0)
-                    {
-                        NativeMethods.PostMessage(_hwnd, NativeMethods.WmTooltipSetData, 0, 0);
-                    }
-                }
-                else
-                {
-                    // Hidden at startup: suspend now so the renderer sits in the low band
-                    // until the first hover wakes it (ResumeCore renders the latest payload),
-                    // then hand the startup churn back to the OS.
-                    _ = SuspendCore();
-                    NativeMethods.TrimWorkingSet();
-                }
+            if (!document.RootElement.TryGetProperty("type", out var typeProperty))
+            {
+                return;
+            }
 
-                break;
-
-            case "height":
-                if (document.RootElement.TryGetProperty("value", out var heightProperty) &&
-                    heightProperty.TryGetInt32(out var height))
-                {
-                    _heightCss = Math.Max(MinHeight, height);
+            switch (typeProperty.GetString())
+            {
+                case "ready":
+                    _navigated = true;
                     if (_visible)
                     {
-                        Reposition();
+                        if (_hwnd != 0)
+                        {
+                            NativeMethods.PostMessage(_hwnd, NativeMethods.WmTooltipSetData, 0, 0);
+                        }
                     }
-                }
+                    else
+                    {
+                        // Hidden at startup: suspend now so the renderer sits in the low band
+                        // until the first hover wakes it (ResumeCore renders the latest payload),
+                        // then hand the startup churn back to the OS.
+                        _ = SuspendCore();
+                        NativeMethods.TrimWorkingSet();
+                    }
 
-                break;
+                    break;
+
+                case "height":
+                    if (document.RootElement.TryGetProperty("value", out var heightProperty) &&
+                        heightProperty.TryGetInt32(out var height))
+                    {
+                        _heightCss = Math.Max(MinHeight, height);
+                        if (_visible)
+                        {
+                            Reposition();
+                        }
+                    }
+
+                    break;
+            }
         }
     }
 
@@ -400,6 +416,10 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
             _controller.Bounds = new System.Drawing.Rectangle(0, 0, placement.Width, placement.Height);
         }
 
+        // Clear the previous region so the system deletes it, then create and set a
+        // new one. This avoids GDI handle accumulation on Windows versions where
+        // SetWindowRgn does not reliably free the old region.
+        NativeMethods.SetWindowRgn(_hwnd, 0, false);
         var region = NativeMethods.CreateRoundRectRgn(
             0,
             0,
@@ -451,6 +471,16 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
         var ok = NativeMethods.SystemParametersInfo(NativeMethods.SPI_GETWORKAREA, 0, ref rect, 0);
         if (!ok || rect.Right <= rect.Left || rect.Bottom <= rect.Top)
         {
+            // Fall back to the primary monitor dimensions when SystemParametersInfo
+            // fails (unlikely, but possible on locked or headless sessions).
+            var width = NativeMethods.GetSystemMetrics(NativeMethods.SM_CXSCREEN);
+            var height = NativeMethods.GetSystemMetrics(NativeMethods.SM_CYSCREEN);
+            if (width > 0 && height > 0)
+            {
+                return new NativeMethods.Rect { Left = 0, Top = 0, Right = width, Bottom = height };
+            }
+
+            // Absolute last resort — a safe 1080p-ish default.
             return new NativeMethods.Rect { Left = 0, Top = 0, Right = 1920, Bottom = 1040 };
         }
 

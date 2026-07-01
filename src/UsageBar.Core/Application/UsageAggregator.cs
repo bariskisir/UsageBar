@@ -30,7 +30,18 @@ internal static class UsageAggregator
         // without credentials are skipped without creating tasks for them.
         foreach (var provider in ordered)
         {
-            provider.RefreshEnabled(context);
+            try
+            {
+                provider.RefreshEnabled(context);
+            }
+            catch (Exception exception)
+            {
+                // A failing credential check (e.g. corrupted auth file, locked registry)
+                // should not prevent other providers from being queried. Log and treat
+                // the provider as disabled for this cycle.
+                logger.LogWarning(exception, "{Provider} credential check failed — provider disabled for this cycle.", provider.Descriptor.Name);
+                provider.Descriptor.IsEnabled = false;
+            }
         }
 
         var tasks = ordered

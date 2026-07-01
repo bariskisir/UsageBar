@@ -46,10 +46,16 @@ internal sealed class ThresholdNotifier
 
             if (currentFraction < previousFraction)
             {
-                notifications.Add(new ThresholdNotification(
-                    NotificationLevel.Reset,
-                    $"{current.ProviderName} {current.Label} reset to {DisplayPercent(currentFraction)}%"));
-                _firedLevel.Remove(key);
+                // Only emit a reset notification when the window was previously in a
+                // warning state (high, critical, or limit). A minor fluctuation
+                // below an already-low level is noise, not a meaningful reset.
+                if (_firedLevel.Remove(key))
+                {
+                    notifications.Add(new ThresholdNotification(
+                        NotificationLevel.Reset,
+                        $"{current.ProviderName} {current.Label} reset to {DisplayPercent(currentFraction)}%"));
+                }
+
                 continue;
             }
 

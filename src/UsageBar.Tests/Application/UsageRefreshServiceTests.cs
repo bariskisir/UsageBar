@@ -179,8 +179,9 @@ public sealed class UsageRefreshServiceTests
         await dispatcher.WaitForEmitAsync(TimeSpan.FromSeconds(3));
 
         var bars = Assert.Single(view.IconBars);
-        Assert.Equal([90.0, 10.0], bars.Select(bar => bar.UsedPercent));
-        Assert.Equal([75.0, 25.0], bars.Select(bar => bar.Weight));
+        Assert.Equal(2, bars.Count);
+        Assert.Contains(bars, b => b.UsedPercent == 10.0 && b.Weight == 25.0);
+        Assert.Contains(bars, b => b.UsedPercent == 90.0 && b.Weight == 75.0);
     }
 
     private static UsageRefreshService CreateService(

@@ -120,7 +120,17 @@ public sealed class ClaudeProvider(HttpClient httpClient, IClaudeAuthReader auth
             ExpiresAt = ReadExpiresAt(root),
         };
 
-        authReader.Save(refreshed);
+        try
+        {
+            authReader.Save(refreshed);
+        }
+        catch
+        {
+            // Persisting the new credentials failed (disk full, permissions, etc.).
+            // The in-memory auth is still valid for this refresh cycle; on the next
+            // cycle the old token will be read from disk and re-refreshed if expired.
+        }
+
         return refreshed;
     }
 

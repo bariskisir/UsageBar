@@ -95,16 +95,16 @@ internal sealed class TrayContextMenu(ISettingsStore settings) : ITrayContextMen
                 ExitRequested?.Invoke();
                 break;
 
-            case >= RefreshEveryBase and < RefreshEveryBase + 4 when commandId - RefreshEveryBase < RefreshEveryValues.Length:
-                ApplySettings(current with { RefreshPeriodMinute = RefreshEveryValues[(int)(commandId - RefreshEveryBase)] });
+            case var cmd when cmd >= RefreshEveryBase && cmd - RefreshEveryBase < RefreshEveryValues.Length:
+                ApplySettings(current with { RefreshPeriodMinute = RefreshEveryValues[(int)(cmd - RefreshEveryBase)] });
                 break;
 
-            case >= HighLevelBase and < HighLevelBase + 8 when commandId - HighLevelBase < LevelValues.Length:
-                ApplySettings(current with { HighPercentage = LevelValues[(int)(commandId - HighLevelBase)] });
+            case var cmd when cmd >= HighLevelBase && cmd - HighLevelBase < LevelValues.Length:
+                ApplySettings(current with { HighPercentage = LevelValues[(int)(cmd - HighLevelBase)] });
                 break;
 
-            case >= CriticalLevelBase and < CriticalLevelBase + 8 when commandId - CriticalLevelBase < LevelValues.Length:
-                ApplySettings(current with { CriticalPercentage = LevelValues[(int)(commandId - CriticalLevelBase)] });
+            case var cmd when cmd >= CriticalLevelBase && cmd - CriticalLevelBase < LevelValues.Length:
+                ApplySettings(current with { CriticalPercentage = LevelValues[(int)(cmd - CriticalLevelBase)] });
                 break;
         }
     }

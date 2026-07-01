@@ -122,7 +122,17 @@ public sealed class CodexProvider(HttpClient httpClient, ICodexAuthReader authRe
             LastRefresh = DateTimeOffset.UtcNow,
         };
 
-        authReader.Save(refreshed);
+        try
+        {
+            authReader.Save(refreshed);
+        }
+        catch
+        {
+            // Persisting the new credentials failed (disk full, permissions, etc.).
+            // The in-memory auth is still valid for this refresh cycle; on the next
+            // cycle the old token will be read from disk and re-refreshed if expired.
+        }
+
         return refreshed;
     }
 
@@ -223,6 +233,7 @@ public sealed class CodexProvider(HttpClient httpClient, ICodexAuthReader authRe
     private static DateTimeOffset FromEpoch(double epoch)
     {
         var seconds = epoch > 10_000_000_000 ? epoch / 1000 : epoch;
-        return DateTimeOffset.FromUnixTimeSeconds(Convert.ToInt64(seconds));
+        // Truncate toward zero (standard epoch conversion) instead of banker's rounding.
+        return DateTimeOffset.FromUnixTimeSeconds((long)seconds);
     }
 }

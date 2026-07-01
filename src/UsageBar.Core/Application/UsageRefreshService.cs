@@ -133,7 +133,8 @@ public sealed class UsageRefreshService : IUsageRefreshService, IDisposable
         }
         finally
         {
-            _refreshGate.Release();
+            try { _refreshGate.Release(); }
+            catch (ObjectDisposedException) { /* Shutdown beat us — the gate is already gone. */ }
         }
 
         ScheduleNext(settings.RefreshPeriodMinute, scheduleAnchor);
@@ -147,7 +148,7 @@ public sealed class UsageRefreshService : IUsageRefreshService, IDisposable
     {
         try
         {
-            var settings = await _settings.ReadAsync().ConfigureAwait(false);
+            var settings = await _settings.ReadAsync(_shutdown.Token).ConfigureAwait(false);
             ScheduleNext(settings.RefreshPeriodMinute, scheduleAnchor);
         }
         catch
@@ -171,7 +172,11 @@ public sealed class UsageRefreshService : IUsageRefreshService, IDisposable
             if (scheduleAnchor is not null)
             {
                 var elapsed = _clock.Now - scheduleAnchor.Value;
-                dueTime = elapsed >= period ? TimeSpan.Zero : period - elapsed;
+                // Guard against clock corrections that move time backward; a negative
+                // elapsed time would otherwise delay the next refresh far into the future.
+                dueTime = elapsed >= period ? TimeSpan.Zero
+                    : elapsed <= TimeSpan.Zero ? period
+                    : period - elapsed;
             }
 
             _timer?.Dispose();

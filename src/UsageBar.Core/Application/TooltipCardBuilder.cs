@@ -37,8 +37,10 @@ internal static class TooltipCardBuilder
 
     /// <summary>
     /// Returns <see langword="true"/> when a balance card should be hidden based on the
-    /// configured threshold. A threshold of -1 or NaN disables hiding. For providers with
-    /// dual currencies (DeepSeek), both values must satisfy the threshold to hide.
+    /// configured threshold. A threshold of -1 or NaN disables hiding. Negative balances
+    /// are never hidden regardless of threshold (an overspent account is noteworthy).
+    /// For providers with dual currencies (DeepSeek), both values must satisfy the
+    /// threshold to hide.
     /// </summary>
     private static bool ShouldHide(BalanceResult balance, double threshold)
     {
@@ -53,12 +55,23 @@ internal static class TooltipCardBuilder
         // For dual-currency providers: hide only when BOTH balances are at or below the threshold.
         if (balance.UsdAmount is { } usd && balance.CnyAmount is { } cny)
         {
+            // Never hide negative balances — an overspent account is noteworthy.
+            if (usd < 0 || cny < 0)
+            {
+                return false;
+            }
+
             return usd <= thresholdDecimal && cny <= thresholdDecimal;
         }
 
         // For single-currency providers: hide when the USD amount is at or below the threshold.
         if (balance.UsdAmount is { } usdOnly)
         {
+            if (usdOnly < 0)
+            {
+                return false;
+            }
+
             return usdOnly <= thresholdDecimal;
         }
 

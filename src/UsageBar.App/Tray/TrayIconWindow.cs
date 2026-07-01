@@ -93,7 +93,12 @@ internal sealed class TrayIconWindow : ITrayIconWindow, IDisposable
             var data = CreateNotifyIconData();
             data.uFlags = NativeMethods.NifIcon;
             data.hIcon = _iconHandle;
-            NativeMethods.ShellNotifyIcon(NativeMethods.NimModify, ref data);
+            if (!NativeMethods.ShellNotifyIcon(NativeMethods.NimModify, ref data))
+            {
+                // Explorer likely restarted — re-add the icon, then retry.
+                ReAddIcon();
+                NativeMethods.ShellNotifyIcon(NativeMethods.NimModify, ref data);
+            }
         }
 
         if (previousIcon != 0)
@@ -119,7 +124,18 @@ internal sealed class TrayIconWindow : ITrayIconWindow, IDisposable
             data.szInfoTitle = "";
             data.szInfo = Truncate(message, 255);
             data.dwInfoFlags = infoFlag;
-            NativeMethods.ShellNotifyIcon(NativeMethods.NimModify, ref data);
+            if (!NativeMethods.ShellNotifyIcon(NativeMethods.NimModify, ref data))
+            {
+                // Explorer likely restarted — re-add and retry with both icon and info flags.
+                ReAddIcon();
+                data = CreateNotifyIconData();
+                data.uFlags = NativeMethods.NifIcon | NativeMethods.NifInfo;
+                data.hIcon = _iconHandle;
+                data.szInfoTitle = "";
+                data.szInfo = Truncate(message, 255);
+                data.dwInfoFlags = infoFlag;
+                NativeMethods.ShellNotifyIcon(NativeMethods.NimModify, ref data);
+            }
         }
     }
 
@@ -221,6 +237,23 @@ internal sealed class TrayIconWindow : ITrayIconWindow, IDisposable
         NativeMethods.ShellNotifyIcon(NativeMethods.NimSetVersion, ref data);
     }
 
+    /// <summary>
+    /// Re-adds the tray icon after an Explorer restart. Unlike <see cref="AddIcon"/>, this
+    /// does not throw on failure — the icon will be retried on the next refresh cycle.
+    /// </summary>
+    private void ReAddIcon()
+    {
+        var data = CreateNotifyIconData();
+        data.uFlags = NativeMethods.NifMessage | NativeMethods.NifIcon;
+        data.uCallbackMessage = NativeMethods.CallbackMessage;
+        data.hIcon = _iconHandle;
+        NativeMethods.ShellNotifyIcon(NativeMethods.NimAdd, ref data);
+
+        data.uFlags = 0;
+        data.uTimeoutOrVersion = NativeMethods.NotifyIconVersion4;
+        NativeMethods.ShellNotifyIcon(NativeMethods.NimSetVersion, ref data);
+    }
+
     private NativeMethods.NotifyIconData CreateNotifyIconData() => new()
     {
         cbSize = (uint)Marshal.SizeOf<NativeMethods.NotifyIconData>(),
@@ -231,8 +264,27 @@ internal sealed class TrayIconWindow : ITrayIconWindow, IDisposable
         szInfoTitle = string.Empty,
     };
 
-    private static string Truncate(string text, int maxLength) =>
-        text.Length <= maxLength ? text : text[..maxLength];
+    /// <summary>Truncates <paramref name="text"/> to <paramref name="maxLength"/> UTF-16
+    /// code units without breaking surrogate pairs, so the result is always a valid .NET
+    /// string that renders correctly.</summary>
+    private static string Truncate(string text, int maxLength)
+    {
+        if (text.Length <= maxLength)
+        {
+            return text;
+        }
+
+        // Walk backwards from the cut point to avoid slicing inside a surrogate pair.
+        // A high surrogate at the cut position means the pair would be broken; back up
+        // one char to keep the pair intact.
+        var cut = maxLength;
+        if (cut > 0 && char.IsHighSurrogate(text[cut - 1]))
+        {
+            cut--;
+        }
+
+        return cut > 0 ? text[..cut] : string.Empty;
+    }
 
     public void Dispose()
     {

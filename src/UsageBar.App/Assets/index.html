@@ -344,7 +344,7 @@ function resetText(detail) {
 }
 
 function metricRow(m, showLabel) {
-  const pct = Math.min(100, Math.max(0, m.percent));
+  const pct = Number.isFinite(m.percent) ? Math.min(100, Math.max(0, m.percent)) : 0;
   const remain = 100 - pct;
   const level = levelOf(remain);
   const wrap = el("div", "metric");

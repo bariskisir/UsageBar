@@ -223,6 +223,12 @@ internal static class NativeMethods
     [DllImport("user32.dll", SetLastError = true)]
     public static extern bool DestroyIcon(nint hIcon);
 
+    [DllImport("user32.dll")]
+    public static extern int GetSystemMetrics(int nIndex);
+
+    public const int SM_CXSCREEN = 0;
+    public const int SM_CYSCREEN = 1;
+
     [DllImport("gdi32.dll")]
     public static extern nint CreateRoundRectRgn(int x1, int y1, int x2, int y2, int w, int h);
 

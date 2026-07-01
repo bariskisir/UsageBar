@@ -30,21 +30,20 @@ public sealed class IconBarTests
     [Fact]
     public void Create_handles_nan_used_percent()
     {
-        // NaN → HasValue is true, Math.Clamp(NaN, 0, 100) returns NaN in older .NET,
-        // but .NET's Math.Clamp returns the min value (0) for NaN. Verify the behavior.
+        // NaN is not a meaningful percentage — Create should treat it as no bar.
         var bar = IconBar.Create(double.NaN, 1.0);
-        Assert.True(bar.UsedPercent.HasValue);
-        Assert.True(double.IsNaN(bar.UsedPercent!.Value) || bar.UsedPercent.Value >= 0);
+        Assert.False(bar.UsedPercent.HasValue);
     }
 
     [Fact]
     public void Create_handles_infinity_used_percent()
     {
+        // Infinity is not a meaningful percentage — Create should treat it as no bar.
         var positive = IconBar.Create(double.PositiveInfinity, 1.0);
-        Assert.Equal(100, positive.UsedPercent);
+        Assert.Null(positive.UsedPercent);
 
         var negative = IconBar.Create(double.NegativeInfinity, 1.0);
-        Assert.Equal(0, negative.UsedPercent);
+        Assert.Null(negative.UsedPercent);
     }
 
     [Fact]

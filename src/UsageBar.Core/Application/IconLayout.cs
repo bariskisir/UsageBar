@@ -85,7 +85,10 @@ public static class IconLayout
         var totalWeight = 0.0;
         foreach (var (key, weight) in settings.Bars ?? [])
         {
-            if (windowsByKey.TryGetValue(key, out var window))
+            // Normalize the user-configured key the same way window keys are built so
+            // manual-mode entries match regardless of whitespace, case, or separator
+            // characters typed in settings.json.
+            if (windowsByKey.TryGetValue(NormalizeKey(key), out var window))
             {
                 bars.Add(new Bar(window.UsedPercent, weight, window.ProviderName));
                 totalWeight += weight;
