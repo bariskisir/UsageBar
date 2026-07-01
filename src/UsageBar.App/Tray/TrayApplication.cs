@@ -1,14 +1,23 @@
+using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using UsageBar.Application;
+using UsageBar.Configuration;
+using UsageBar.Domain;
 using UsageBar.Infrastructure;
 using UsageBar.Tooltip;
 
 namespace UsageBar.Tray;
 
+internal static class UpdateUrls
+{
+    public const string LatestRelease = "https://github.com/bariskisir/usagebar/releases/latest";
+}
+
 /// <summary>
 /// Composition root for the running tray app: registers startup, installs the STA
 /// synchronisation context, starts the WebView2 tooltip and the refresh loop, wires tray
-/// events to the refresh service, and pumps the Win32 message loop until exit.
+/// events to the refresh service, manages update checking, and pumps the Win32 message loop
+/// until exit.
 /// </summary>
 internal sealed class TrayApplication(
     ITrayIconWindow window,
@@ -16,6 +25,8 @@ internal sealed class TrayApplication(
     ITrayContextMenu contextMenu,
     IUsageRefreshService refresh,
     IStartupRegistrationService startupRegistration,
+    IUpdateService updateService,
+    ISettingsStore settingsStore,
     ILogger<TrayApplication> logger)
 {
     public void Run()
@@ -29,6 +40,13 @@ internal sealed class TrayApplication(
 
         _ = InitTooltipAsync();
         refresh.Start();
+
+        var currentSettings = settingsStore.Read();
+        if (currentSettings.CheckUpdatesOnStartup ?? true)
+        {
+            _ = CheckForUpdatesAsync(silent: true);
+        }
+
         window.RunMessageLoop();
     }
 
@@ -39,6 +57,7 @@ internal sealed class TrayApplication(
         contextMenu.RefreshRequested += refresh.TriggerManualRefresh;
         contextMenu.TestNotificationRequested += refresh.SendTestNotification;
         contextMenu.ExitRequested += OnExitRequested;
+        contextMenu.UpdateCheckNowRequested += () => _ = CheckForUpdatesAsync();
     }
 
     private void OnTooltipShowRequested(NativeMethods.Rect? iconRect, int fallbackX, int fallbackY) =>
@@ -64,5 +83,37 @@ internal sealed class TrayApplication(
         {
             logger.LogWarning(exception, "WebView2 tooltip initialisation failed.");
         }
+    }
+
+    private async Task CheckForUpdatesAsync(bool silent = false)
+    {
+        var result = await updateService.CheckAsync().ConfigureAwait(true);
+
+        if (result.HasUpdate)
+        {
+            var message = $"Usage Bar {result.LatestVersion} available — click to download";
+            window.ShowBalloon(NotificationLevel.High, message, OpenUpdateUrl);
+        }
+        else if (!silent)
+        {
+            if (result.ErrorMessage is not null)
+            {
+                logger.LogInformation("Update check: {Error}", result.ErrorMessage);
+                window.ShowBalloon(NotificationLevel.Reset, $"Update check failed: {result.ErrorMessage}");
+            }
+            else
+            {
+                window.ShowBalloon(NotificationLevel.Reset, $"Usage Bar is up to date ({result.LatestVersion}).");
+            }
+        }
+    }
+
+    private static void OpenUpdateUrl()
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(UpdateUrls.LatestRelease) { UseShellExecute = true });
+        }
+        catch { }
     }
 }

@@ -14,4 +14,5 @@ internal interface ITrayIconWindow
     void Quit();
     void UpdateIcon(IReadOnlyList<IconLayout.Bar> bars);
     void ShowBalloon(NotificationLevel level, string message);
+    void ShowBalloon(NotificationLevel level, string message, Action? onClick);
 }

@@ -102,6 +102,7 @@ internal static class ServiceConfiguration
         services.AddSingleton<ITrayIconWindow, TrayIconWindow>();
         services.AddSingleton<IWebViewTooltip, WebViewTooltip>();
         services.AddSingleton<IUsageView, TrayUsageView>();
+        services.AddSingleton<IUpdateService, UpdateService>();
 
         // Orchestration + application root.
         services.AddSingleton<IRemoteNotificationService, TelegramNotificationService>();

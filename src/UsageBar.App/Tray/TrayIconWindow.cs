@@ -22,6 +22,7 @@ internal sealed class TrayIconWindow : ITrayIconWindow, IDisposable
     private readonly Lock _iconGate = new();
     private nint _iconHandle;
     private bool _disposed;
+    private Action? _balloonClickAction;
 
     public TrayIconWindow(ITrayContextMenu contextMenu)
     {
@@ -109,6 +110,13 @@ internal sealed class TrayIconWindow : ITrayIconWindow, IDisposable
 
     public void ShowBalloon(NotificationLevel level, string message)
     {
+        ShowBalloon(level, message, null);
+    }
+
+    public void ShowBalloon(NotificationLevel level, string message, Action? onClick)
+    {
+        _balloonClickAction = onClick;
+
         var infoFlag = level switch
         {
             NotificationLevel.Reset => NativeMethods.NiifInfo,
@@ -181,6 +189,11 @@ internal sealed class TrayIconWindow : ITrayIconWindow, IDisposable
 
             case NativeMethods.NinPopupClose:
                 TooltipHideRequested?.Invoke();
+                break;
+
+            case NativeMethods.NinBalloonUserClick:
+                var action = Interlocked.Exchange(ref _balloonClickAction, null);
+                action?.Invoke();
                 break;
         }
     }

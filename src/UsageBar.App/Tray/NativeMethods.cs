@@ -32,6 +32,7 @@ internal static class NativeMethods
     // ── Tray version 4 + popup events (requires NOTIFYICON_VERSION_4) ─
     public const uint NimSetVersion = 0x00000004;
     public const uint NotifyIconVersion4 = 4;
+    public const uint NinBalloonUserClick = 0x0405;
     public const uint NinPopupOpen = 0x0406;
     public const uint NinPopupClose = 0x0407;
 

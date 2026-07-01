@@ -67,8 +67,10 @@ testable; keep all Win32/WebView2/registry code in App.
 | Build | `dotnet build UsageBar.slnx` |
 | Test | `dotnet test UsageBar.slnx` |
 | Run | `dotnet run --project src/UsageBar.App` |
-| Publish x64 | `dotnet publish src/UsageBar.App/UsageBar.App.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true` |
-| Publish ARM64 | `dotnet publish src/UsageBar.App/UsageBar.App.csproj -c Release -r win-arm64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true` |
+| Publish x64 | `dotnet publish src/UsageBar.App/UsageBar.App.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:Version=APP_VERSION` |
+| Publish ARM64 | `dotnet publish src/UsageBar.App/UsageBar.App.csproj -c Release -r win-arm64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:Version=APP_VERSION` |
+
+> **Version note:** Replace `APP_VERSION` with the **numeric** tag (e.g. `2.11.0`), *not* `v2.11.0`. The MSBuild `Version` property does not accept a `v` prefix. In GitHub Actions use `${{ github.ref_name }}` with `v` stripped, e.g. `-p:Version=${{ github.ref_name != null && (github.ref_name.StartsWith('v') ? github.ref_name.Substring(1) : github.ref_name) || '' }}`. Without `-p:Version` the assembly defaults to `1.0.0.0`.
 
 `Directory.Build.props` enables nullable, implicit usings, the latest analyzers, code-style
 enforcement, and **`TreatWarningsAsErrors`** for production projects. Keep builds warning-clean.

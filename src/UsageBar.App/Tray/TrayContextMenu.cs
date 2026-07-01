@@ -19,6 +19,8 @@ internal sealed class TrayContextMenu(ISettingsStore settings) : ITrayContextMen
     private const uint TelegramChatIdCommandId = 7001;
     private const uint DiscordWebhookCommandId = 8000;
     private const uint DiscordUsernameCommandId = 8001;
+    private const uint UpdateCheckNowCommandId = 9000;
+    private const uint UpdateCheckOnStartupBase = 9001;
 
     private static readonly int[] RefreshEveryValues = [1, 5, 15, 60];
     private static readonly int[] LevelValues = [50, 60, 70, 75, 80, 85, 90, 95];
@@ -54,6 +56,7 @@ internal sealed class TrayContextMenu(ISettingsStore settings) : ITrayContextMen
     public event Action? RefreshRequested;
     public event Action? TestNotificationRequested;
     public event Action? ExitRequested;
+    public event Action? UpdateCheckNowRequested;
 
     public void Show(nint ownerHwnd, NativeMethods.Point point)
     {
@@ -90,6 +93,9 @@ internal sealed class TrayContextMenu(ISettingsStore settings) : ITrayContextMen
             var discordMenu = BuildDiscordMenu(current);
             NativeMethods.AppendMenu(menu, NativeMethods.MfPopup, (nuint)discordMenu, "Discord");
 
+            NativeMethods.AppendMenu(menu, NativeMethods.MfSeparator, 0, string.Empty);
+            var updateMenu = BuildUpdateMenu(current);
+            NativeMethods.AppendMenu(menu, NativeMethods.MfPopup, (nuint)updateMenu, "Update");
             NativeMethods.AppendMenu(menu, NativeMethods.MfSeparator, 0, string.Empty);
             NativeMethods.AppendMenu(menu, NativeMethods.MfString, TestNotificationCommandId, "Test Notification");
             NativeMethods.AppendMenu(menu, NativeMethods.MfSeparator, 0, string.Empty);
@@ -186,6 +192,17 @@ internal sealed class TrayContextMenu(ISettingsStore settings) : ITrayContextMen
         return menu;
     }
 
+    private static nint BuildUpdateMenu(AppSettings current)
+    {
+        var menu = NativeMethods.CreatePopupMenu();
+        if (menu == 0) return 0;
+
+        AddMenuItem(menu, UpdateCheckOnStartupBase, "Check Updates on Startup", current.CheckUpdatesOnStartup ?? true);
+        NativeMethods.AppendMenu(menu, NativeMethods.MfString, UpdateCheckNowCommandId, "Check Updates Now");
+
+        return menu;
+    }
+
     private static void AddMenuItem(nint menu, uint commandId, string label, bool isChecked)
     {
         var flags = NativeMethods.MfString;
@@ -246,6 +263,14 @@ internal sealed class TrayContextMenu(ISettingsStore settings) : ITrayContextMen
 
             case DiscordUsernameCommandId:
                 HandleDiscordUsername(current, ownerHwnd);
+                break;
+
+            case UpdateCheckNowCommandId:
+                UpdateCheckNowRequested?.Invoke();
+                break;
+
+            case UpdateCheckOnStartupBase:
+                ApplySettings(current with { CheckUpdatesOnStartup = !(current.CheckUpdatesOnStartup ?? true) });
                 break;
         }
     }
