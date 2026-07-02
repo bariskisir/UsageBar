@@ -5,7 +5,11 @@ using UsageBar.Providers;
 
 namespace UsageBar.Tray;
 
-internal sealed class TrayContextMenu(ISettingsStore settings) : ITrayContextMenu
+internal sealed class TrayContextMenu(
+    ISettingsStore settings,
+    ICodexAuthReader codexAuth,
+    IClaudeAuthReader claudeAuth,
+    IAntigravityAuthReader antigravityAuth) : ITrayContextMenu
 {
     private const uint TestNotificationCommandId = 1000;
     private const uint RefreshCommandId = 1001;
@@ -15,7 +19,6 @@ internal sealed class TrayContextMenu(ISettingsStore settings) : ITrayContextMen
     private const uint CriticalLevelBase = 4001;
     private const uint ProviderShowBase = 5000;
     private const uint ProviderSetKeyBase = 6000;
-    private const uint BalanceHidingBase = 5500;
     private const uint TelegramTokenCommandId = 7000;
     private const uint TelegramChatIdCommandId = 7001;
     private const uint DiscordWebhookCommandId = 8000;
@@ -28,15 +31,19 @@ internal sealed class TrayContextMenu(ISettingsStore settings) : ITrayContextMen
 
     private sealed record ProviderEntry(
         string Name,
-        string CredentialName,
-        Func<AppSettings, string?> Getter,
-        Func<AppSettings, string?, AppSettings> Setter);
+        string? CredentialName,
+        Func<AppSettings, string?>? Getter,
+        Func<AppSettings, string?, AppSettings>? Setter,
+        bool HasApiKey = true);
 
     private static readonly ProviderEntry[] ProviderEntries =
     [
+        new("Codex", null, null, null, HasApiKey: false),
+        new("Claude", null, null, null, HasApiKey: false),
+        new("Antigravity", null, null, null, HasApiKey: false),
         new("DeepSeek", CredentialNames.DeepSeek, static s => s.DeepSeekApiKey, static (s, v) => s with { DeepSeekApiKey = v }),
         new("OpenRouter", CredentialNames.OpenRouter, static s => s.OpenRouterApiKey, static (s, v) => s with { OpenRouterApiKey = v }),
-        new("Moonshot", CredentialNames.Moonshot, static s => s.MoonshotApiKey, static (s, v) => s with { MoonshotApiKey = v }),
+        new("Moonshot (Kimi)", CredentialNames.Moonshot, static s => s.MoonshotApiKey, static (s, v) => s with { MoonshotApiKey = v }),
         new("Deepgram", CredentialNames.Deepgram, static s => s.DeepgramApiKey, static (s, v) => s with { DeepgramApiKey = v }),
         new("ElevenLabs", CredentialNames.ElevenLabs, static s => s.ElevenLabsApiKey, static (s, v) => s with { ElevenLabsApiKey = v }),
         new("Kilo", CredentialNames.Kilo, static s => s.KiloApiKey, static (s, v) => s with { KiloApiKey = v }),
@@ -53,6 +60,17 @@ internal sealed class TrayContextMenu(ISettingsStore settings) : ITrayContextMen
         new("Poe", CredentialNames.Poe, static s => s.PoeApiKey, static (s, v) => s with { PoeApiKey = v }),
         new("Alibaba", CredentialNames.Alibaba, static s => s.AlibabaApiKey, static (s, v) => s with { AlibabaApiKey = v }),
     ];
+
+    private bool OAuthHasAuth(string providerName)
+    {
+        return providerName switch
+        {
+            "Codex" => !string.IsNullOrEmpty(codexAuth.Read()?.AccessToken),
+            "Claude" => !string.IsNullOrEmpty(claudeAuth.Read()?.AccessToken),
+            "Antigravity" => !string.IsNullOrEmpty(antigravityAuth.Read()?.AccessToken),
+            _ => false,
+        };
+    }
 
     public event Action? RefreshRequested;
     public event Action? TestNotificationRequested;
@@ -83,9 +101,6 @@ internal sealed class TrayContextMenu(ISettingsStore settings) : ITrayContextMen
             NativeMethods.AppendMenu(menu, NativeMethods.MfSeparator, 0, string.Empty);
             var providerMenu = BuildProviderMenu(current);
             NativeMethods.AppendMenu(menu, NativeMethods.MfPopup, (nuint)providerMenu, "Provider");
-
-            var balanceHiding = BuildBalanceHidingMenu(current);
-            NativeMethods.AppendMenu(menu, NativeMethods.MfPopup, (nuint)balanceHiding, "Hide Provider Under X Balance");
 
             NativeMethods.AppendMenu(menu, NativeMethods.MfSeparator, 0, string.Empty);
             var telegramMenu = BuildTelegramMenu(current);
@@ -153,7 +168,7 @@ internal sealed class TrayContextMenu(ISettingsStore settings) : ITrayContextMen
         return menu;
     }
 
-    private static nint BuildSingleProviderMenu(AppSettings current, ProviderEntry entry, int index, HashSet<string> hidden)
+    private nint BuildSingleProviderMenu(AppSettings current, ProviderEntry entry, int index, HashSet<string> hidden)
     {
         var menu = NativeMethods.CreatePopupMenu();
         if (menu == 0) return 0;
@@ -166,39 +181,33 @@ internal sealed class TrayContextMenu(ISettingsStore settings) : ITrayContextMen
         }
         NativeMethods.AppendMenu(menu, showFlags, (nuint)(ProviderShowBase + (uint)index), "Show");
 
-        var hasKey = ProviderHasKey(current, entry);
-        var keyFlags = NativeMethods.MfString;
-        if (hasKey)
+        if (entry.HasApiKey)
         {
-            keyFlags |= NativeMethods.MfChecked;
+            var hasKey = ProviderHasKey(current, entry);
+            var keyFlags = NativeMethods.MfString;
+            if (hasKey)
+            {
+                keyFlags |= NativeMethods.MfChecked;
+            }
+            NativeMethods.AppendMenu(menu, keyFlags, (nuint)(ProviderSetKeyBase + (uint)index), "API Key");
         }
-        NativeMethods.AppendMenu(menu, keyFlags, (nuint)(ProviderSetKeyBase + (uint)index), "API Key");
 
         return menu;
     }
 
-    private static bool ProviderHasKey(AppSettings current, ProviderEntry entry)
+    private bool ProviderHasKey(AppSettings current, ProviderEntry entry)
     {
-        var settingsValue = entry.Getter(current);
-        if (!string.IsNullOrWhiteSpace(settingsValue))
-            return true;
-        var envValue = Environment.GetEnvironmentVariable(entry.CredentialName);
-        return !string.IsNullOrWhiteSpace(envValue);
-    }
+        if (entry.HasApiKey && entry.Getter is not null && entry.CredentialName is not null)
+        {
+            var settingsValue = entry.Getter(current);
+            if (!string.IsNullOrWhiteSpace(settingsValue))
+                return true;
+            var envValue = Environment.GetEnvironmentVariable(entry.CredentialName);
+            if (!string.IsNullOrWhiteSpace(envValue))
+                return true;
+        }
 
-    private static nint BuildBalanceHidingMenu(AppSettings current)
-    {
-        var menu = NativeMethods.CreatePopupMenu();
-        if (menu == 0) return 0;
-
-        var threshold = current.BalanceHidingThreshold;
-        AddMenuItem(menu, BalanceHidingBase, "Show All", threshold == -1);
-        AddMenuItem(menu, BalanceHidingBase + 1, "0 (Hides 0 balances)", threshold == 0);
-        AddMenuItem(menu, BalanceHidingBase + 2, "1", threshold == 1);
-        AddMenuItem(menu, BalanceHidingBase + 3, "5", threshold == 5);
-        AddMenuItem(menu, BalanceHidingBase + 4, "10", threshold == 10);
-
-        return menu;
+        return !entry.HasApiKey && OAuthHasAuth(entry.Name);
     }
 
     private static nint BuildTelegramMenu(AppSettings current)
@@ -282,10 +291,6 @@ internal sealed class TrayContextMenu(ISettingsStore settings) : ITrayContextMen
                 HandleProviderSetKey((int)(cmd - ProviderSetKeyBase), current, ownerHwnd);
                 break;
 
-            case var cmd when cmd >= BalanceHidingBase && cmd - BalanceHidingBase < 5:
-                HandleBalanceHidingCommand((int)(cmd - BalanceHidingBase), current);
-                break;
-
             case TelegramTokenCommandId:
                 HandleTelegramToken(current, ownerHwnd);
                 break;
@@ -340,6 +345,8 @@ internal sealed class TrayContextMenu(ISettingsStore settings) : ITrayContextMen
 
     private static string ResolveProviderKey(AppSettings current, ProviderEntry entry)
     {
+        if (!entry.HasApiKey || entry.Getter is null || entry.CredentialName is null)
+            return string.Empty;
         var settingsValue = entry.Getter(current);
         if (!string.IsNullOrWhiteSpace(settingsValue))
             return settingsValue;
@@ -348,6 +355,8 @@ internal sealed class TrayContextMenu(ISettingsStore settings) : ITrayContextMen
 
     private void SaveProviderKey(AppSettings current, ProviderEntry entry, string newValue)
     {
+        if (!entry.HasApiKey || entry.Getter is null || entry.Setter is null || entry.CredentialName is null)
+            return;
         var settingsValue = entry.Getter(current);
         var envValue = Environment.GetEnvironmentVariable(entry.CredentialName);
         if (string.IsNullOrWhiteSpace(settingsValue) && !string.IsNullOrWhiteSpace(envValue))
@@ -360,12 +369,6 @@ internal sealed class TrayContextMenu(ISettingsStore settings) : ITrayContextMen
         {
             ApplySettings(entry.Setter(current, newValue));
         }
-    }
-
-    private void HandleBalanceHidingCommand(int index, AppSettings current)
-    {
-        var values = new[] { -1.0, 0.0, 1.0, 5.0, 10.0 };
-        ApplySettings(current with { BalanceHidingThreshold = values[index] });
     }
 
     private void HandleTelegramToken(AppSettings current, nint ownerHwnd)

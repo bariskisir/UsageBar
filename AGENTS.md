@@ -29,7 +29,7 @@ testable; keep all Win32/WebView2/registry code in App.
 - `Domain/` — records/enums only: `UsageWindow`, `ProviderResult` (abstract) with `MetricResult` /
   `BalanceResult`, `IconBar`, `UsageSnapshot`, `TooltipCard`, `NotificationLevel`,
   `ThresholdNotification`, `ProviderException`.
-- `Configuration/AppSettings.cs` — settings record + `Default` + `Normalize`.
+- `Configuration/AppSettings.cs` — settings record + `Default` + `Normalize`. Includes `hiddenProviders` (`string[]`), a list of provider names hidden via the context menu. Hidden providers are skipped during refresh.
 - `Providers/Abstractions/` — `IUsageProvider`, `ProviderDescriptor`, `BalanceUsageProvider`,
   `ProviderQueryContext`, `CredentialNames`, `ProviderJson`, `ProviderHttp`, `MetricWindows`,
   `UsageFormatting`, `IResultDisplayOrderProvider`, provider-facing auth-reader interfaces.
@@ -109,6 +109,8 @@ are not copied. JSON uses System.Text.Json **source generation** (`SettingsJsonC
 - `UsageRefreshService` reads settings each refresh, builds a `ProviderQueryContext` (reference
   `Now` + resolved API keys), and calls `UsageAggregator.RefreshAsync` (providers queried in
   display order, concurrently; per-provider failures logged + isolated).
+- Before querying, the aggregator disables any provider whose name appears in the
+  `hiddenProviders` list from settings, so hidden providers are never queried.
 - It updates `IUsageView` (icon + tooltip cards) and emits threshold notifications, then schedules
   the next refresh. Refreshes never overlap (`SemaphoreSlim` gate); manual refresh disables the
   timer and reschedules from the manual-refresh time. Hover never triggers a provider call.

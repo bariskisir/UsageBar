@@ -43,7 +43,6 @@ public sealed class AppSettingsTests
             PoeApiKey: null,
             AlibabaApiKey: null,
             IconLayout: null,
-            BalanceHidingThreshold: -1,
             Telegram: null,
             Discord: null,
             HiddenProviders: null,
@@ -75,7 +74,7 @@ public sealed class AppSettingsTests
         var iconLayout = new TrayIconLayoutSettings(
             TrayIconLayoutSettings.ManualMode,
             new Dictionary<string, double> { ["codex_session"] = 25 });
-        var settings = new AppSettings(15, 60, 85, "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", iconLayout, -1, null, null, null, null);
+        var settings = new AppSettings(15, 60, 85, "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", iconLayout, null, null, null, null);
 
         var normalized = settings.Normalize();
 

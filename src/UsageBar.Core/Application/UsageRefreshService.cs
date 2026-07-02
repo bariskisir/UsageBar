@@ -113,7 +113,7 @@ public sealed class UsageRefreshService : IUsageRefreshService, IDisposable
                 ? TrayIconLayoutSettings.Default
                 : settings.IconLayout;
             _view.ShowIcon(IconLayout.Compute(snapshot.Results, iconLayout));
-            _view.ShowCards(TooltipCardBuilder.Build(snapshot, settings.BalanceHidingThreshold ?? -1));
+            _view.ShowCards(TooltipCardBuilder.Build(snapshot));
 
             await _notifications.EmitAsync(snapshot.Windows, settings, _shutdown.Token).ConfigureAwait(false);
 

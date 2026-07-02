@@ -53,8 +53,10 @@ UsageBar is a minimal Windows notification-area app for showing LLM or API usage
 Right-click the tray icon to open the context menu. Most settings can be configured directly from here without editing files:
 
 - **Refresh every** / **High Level** / **Critical Level** — select preset values
-- **Provider** — hover to see all providers; a check mark means an API key is already configured (from `settings.json` or an environment variable). Click a provider to enter or edit its API key. Codex, Claude, and Antigravity use OAuth and are not listed here.
-- **Hide Provider Under X Balance** — choose a threshold (`Show All`, `0`, `1`, `5`, `10`). Balance providers at or below the threshold are hidden from the tooltip.
+- **Provider** — hover to see all providers (API-key and OAuth). Each provider opens a submenu:
+  - **Show** — toggle tick to show/hide the provider in the tray icon and tooltip. Hidden providers are stored in `hiddenProviders` in `settings.json`.
+  - **API Key** — (API-key providers only) enter or edit the API key. A tick means a key is already configured (from `settings.json` or an environment variable).
+  - A tick on the provider name itself means credentials are configured (API key or OAuth session).
 - **Telegram** — enter a bot token and numeric chat ID for notifications
 - **Discord** — enter a webhook URL and optional custom username
 - **Test Notification** — send a test balloon and remote notification
@@ -71,7 +73,6 @@ All changes are written to `settings.json` automatically. When editing a value t
   "refreshPeriodMinute": 5,
   "highPercentage": 70,
   "criticalPercentage": 95,
-  "balanceHidingThreshold": -1,
   "ELEVENLABS_API_KEY": "",
   "DEEPSEEK_API_KEY": "",
   "OPENROUTER_API_KEY": "",
@@ -90,6 +91,7 @@ All changes are written to `settings.json` automatically. When editing a value t
   "MINIMAX_API_KEY": "",
   "POE_API_KEY": "",
   "ALIBABA_API_KEY": "",
+  "hiddenProviders": [],
   "iconLayout": {
     "mode": "auto",
     "bars": {}
@@ -129,22 +131,11 @@ All changes are written to `settings.json` automatically. When editing a value t
 
 Providers with blank or missing API keys will not be enabled
 
-### Balance hiding threshold
+### Provider hiding
 
-`balanceHidingThreshold` hides balance providers (DeepSeek, OpenRouter, Moonshot, Deepgram, Kilo,
-OpenAI, Venice, Crof, Poe) from the tooltip when their remaining balance in USD is at or below the configured value.
-Defaults to `-1` (disabled — all balance providers are shown).
-
-- Set to `0` to hide providers whose balance is $0.00 or less.
-- Set to `0.01` to hide providers with $0.01 or less.
-- Decimal values are supported (e.g. `0.50`, `1.00`).
-
-```json
-"balanceHidingThreshold": 0
-```
-
-For DeepSeek, which reports both USD and CNY balances, the card is only hidden when **both**
-balances are at or below the threshold.
+Use the right-click menu **Provider** → _provider name_ → **Show** to toggle a provider's visibility.
+Hidden providers are not queried or displayed in the tray icon or tooltip. The list is persisted in
+`hiddenProviders` in `settings.json`.
 
 ### Tray icon layout
 
