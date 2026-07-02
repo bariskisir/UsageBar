@@ -100,8 +100,11 @@ public sealed class UsageRefreshService : IUsageRefreshService, IDisposable
             settings = await _settings.ReadAsync(_shutdown.Token).ConfigureAwait(false);
 
             var context = ProviderQueryContext.FromSettings(settings, _clock.Now);
+            var hidden = settings.HiddenProviders is { Length: > 0 }
+                ? new HashSet<string>(settings.HiddenProviders, StringComparer.Ordinal)
+                : null;
             var snapshot = await UsageAggregator
-                .RefreshAsync(_providers, context, _logger, _shutdown.Token)
+                .RefreshAsync(_providers, context, _logger, _shutdown.Token, hidden)
                 .ConfigureAwait(false);
 
             // Force auto icon layout in test mode so all bar windows are visible regardless

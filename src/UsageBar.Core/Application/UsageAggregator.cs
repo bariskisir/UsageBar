@@ -17,7 +17,8 @@ internal static class UsageAggregator
         IReadOnlyList<IUsageProvider> providers,
         ProviderQueryContext context,
         ILogger logger,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlySet<string>? hiddenProviders = null)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(RefreshTimeout);
@@ -41,6 +42,18 @@ internal static class UsageAggregator
                 // the provider as disabled for this cycle.
                 logger.LogWarning(exception, "{Provider} credential check failed — provider disabled for this cycle.", provider.Descriptor.Name);
                 provider.Descriptor.IsEnabled = false;
+            }
+        }
+
+        // Apply user-hidden providers — disable them from this refresh cycle.
+        if (hiddenProviders is { Count: > 0 })
+        {
+            foreach (var provider in ordered)
+            {
+                if (provider.Descriptor.IsEnabled && hiddenProviders.Contains(provider.Descriptor.Name))
+                {
+                    provider.Descriptor.IsEnabled = false;
+                }
             }
         }
 

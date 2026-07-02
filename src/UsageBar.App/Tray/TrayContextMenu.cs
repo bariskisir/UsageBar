@@ -13,8 +13,9 @@ internal sealed class TrayContextMenu(ISettingsStore settings) : ITrayContextMen
     private const uint RefreshEveryBase = 2001;
     private const uint HighLevelBase = 3001;
     private const uint CriticalLevelBase = 4001;
-    private const uint ProviderBase = 5000;
-    private const uint BalanceHidingBase = 6000;
+    private const uint ProviderShowBase = 5000;
+    private const uint ProviderSetKeyBase = 6000;
+    private const uint BalanceHidingBase = 5500;
     private const uint TelegramTokenCommandId = 7000;
     private const uint TelegramChatIdCommandId = 7001;
     private const uint DiscordWebhookCommandId = 8000;
@@ -125,21 +126,53 @@ internal sealed class TrayContextMenu(ISettingsStore settings) : ITrayContextMen
         }
     }
 
-    private static nint BuildProviderMenu(AppSettings current)
+    private nint BuildProviderMenu(AppSettings current)
     {
         var menu = NativeMethods.CreatePopupMenu();
         if (menu == 0) return 0;
 
+        var hidden = current.HiddenProviders is { Length: > 0 }
+            ? new HashSet<string>(current.HiddenProviders, StringComparer.Ordinal)
+            : [];
+
         for (var i = 0; i < ProviderEntries.Length; i++)
         {
-            var hasKey = ProviderHasKey(current, ProviderEntries[i]);
-            var flags = NativeMethods.MfString;
-            if (hasKey)
+            var entry = ProviderEntries[i];
+            var providerMenu = BuildSingleProviderMenu(current, entry, i, hidden);
+            if (providerMenu != 0)
             {
-                flags |= NativeMethods.MfChecked;
+                var flags = NativeMethods.MfPopup;
+                if (ProviderHasKey(current, entry))
+                {
+                    flags |= NativeMethods.MfChecked;
+                }
+                NativeMethods.AppendMenu(menu, flags, (nuint)providerMenu, entry.Name);
             }
-            NativeMethods.AppendMenu(menu, flags, (nuint)(ProviderBase + (uint)i), ProviderEntries[i].Name);
         }
+
+        return menu;
+    }
+
+    private static nint BuildSingleProviderMenu(AppSettings current, ProviderEntry entry, int index, HashSet<string> hidden)
+    {
+        var menu = NativeMethods.CreatePopupMenu();
+        if (menu == 0) return 0;
+
+        var isHidden = hidden.Contains(entry.Name);
+        var showFlags = NativeMethods.MfString;
+        if (!isHidden)
+        {
+            showFlags |= NativeMethods.MfChecked;
+        }
+        NativeMethods.AppendMenu(menu, showFlags, (nuint)(ProviderShowBase + (uint)index), "Show");
+
+        var hasKey = ProviderHasKey(current, entry);
+        var keyFlags = NativeMethods.MfString;
+        if (hasKey)
+        {
+            keyFlags |= NativeMethods.MfChecked;
+        }
+        NativeMethods.AppendMenu(menu, keyFlags, (nuint)(ProviderSetKeyBase + (uint)index), "API Key");
 
         return menu;
     }
@@ -241,8 +274,12 @@ internal sealed class TrayContextMenu(ISettingsStore settings) : ITrayContextMen
                 ApplySettings(current with { CriticalPercentage = LevelValues[(int)(cmd - CriticalLevelBase)] });
                 break;
 
-            case var cmd when cmd >= ProviderBase && cmd - ProviderBase < ProviderEntries.Length:
-                HandleProviderCommand((int)(cmd - ProviderBase), current, ownerHwnd);
+            case var cmd when cmd >= ProviderShowBase && cmd - ProviderShowBase < ProviderEntries.Length:
+                HandleProviderShowToggle((int)(cmd - ProviderShowBase), current);
+                break;
+
+            case var cmd when cmd >= ProviderSetKeyBase && cmd - ProviderSetKeyBase < ProviderEntries.Length:
+                HandleProviderSetKey((int)(cmd - ProviderSetKeyBase), current, ownerHwnd);
                 break;
 
             case var cmd when cmd >= BalanceHidingBase && cmd - BalanceHidingBase < 5:
@@ -275,7 +312,20 @@ internal sealed class TrayContextMenu(ISettingsStore settings) : ITrayContextMen
         }
     }
 
-    private void HandleProviderCommand(int index, AppSettings current, nint ownerHwnd)
+    private void HandleProviderShowToggle(int index, AppSettings current)
+    {
+        var entry = ProviderEntries[index];
+        var hiddenList = current.HiddenProviders is [..] arr ? arr : [];
+        var isHidden = hiddenList.Contains(entry.Name);
+
+        var updated = isHidden
+            ? current with { HiddenProviders = hiddenList.Where(n => n != entry.Name).ToArray() }
+            : current with { HiddenProviders = [.. hiddenList, entry.Name] };
+
+        ApplySettings(updated);
+    }
+
+    private void HandleProviderSetKey(int index, AppSettings current, nint ownerHwnd)
     {
         var entry = ProviderEntries[index];
         var currentValue = ResolveProviderKey(current, entry);

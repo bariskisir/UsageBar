@@ -34,6 +34,7 @@ public sealed record AppSettings(
     [property: JsonPropertyName("balanceHidingThreshold")] double? BalanceHidingThreshold,
     [property: JsonPropertyName("telegram")] TelegramSettings? Telegram,
     [property: JsonPropertyName("discord")] DiscordSettings? Discord,
+    [property: JsonPropertyName("hiddenProviders")] string[]? HiddenProviders,
     [property: JsonPropertyName("checkUpdatesOnStartup")] bool? CheckUpdatesOnStartup)
 {
     /// <summary>The built-in defaults used when no settings file exists yet.</summary>
@@ -64,6 +65,7 @@ public sealed record AppSettings(
             BalanceHidingThreshold: -1,
             Telegram: null,
             Discord: null,
+            HiddenProviders: [],
             CheckUpdatesOnStartup: true);
 
     /// <summary>Maximum allowed refresh period in minutes (24 hours).</summary>
@@ -103,6 +105,7 @@ public sealed record AppSettings(
             IconLayout = (IconLayout ?? TrayIconLayoutSettings.Default).Normalize(),
             Telegram = Telegram ?? TelegramSettings.Default,
             Discord = Discord ?? DiscordSettings.Default,
+            HiddenProviders = HiddenProviders ?? [],
             CheckUpdatesOnStartup = CheckUpdatesOnStartup ?? true,
         };
 
@@ -132,7 +135,7 @@ public sealed record AppSettings(
     /// include in logs, crash dumps, and debug output.
     /// </summary>
     public override string ToString() =>
-        $"AppSettings {{ RefreshPeriodMinute = {RefreshPeriodMinute}, HighPercentage = {HighPercentage}, CriticalPercentage = {CriticalPercentage}, BalanceHidingThreshold = {BalanceHidingThreshold}, DeepSeekApiKey = ***, OpenRouterApiKey = ***, MoonshotApiKey = ***, DeepgramApiKey = ***, ElevenLabsApiKey = ***, KiloApiKey = ***, OpenAiApiKey = ***, VeniceApiKey = ***, CopilotApiKey = ***, CrofApiKey = ***, CodebuffApiKey = ***, WarpApiKey = ***, ZaiApiKey = ***, SyntheticApiKey = ***, ChutesApiKey = ***, MiniMaxApiKey = ***, PoeApiKey = ***, AlibabaApiKey = ***, Telegram = {(Telegram is not null ? "***" : "null")}, Discord = {(Discord is not null ? "***" : "null")}, CheckUpdatesOnStartup = {CheckUpdatesOnStartup} }}";
+        $"AppSettings {{ RefreshPeriodMinute = {RefreshPeriodMinute}, HighPercentage = {HighPercentage}, CriticalPercentage = {CriticalPercentage}, BalanceHidingThreshold = {BalanceHidingThreshold}, DeepSeekApiKey = ***, OpenRouterApiKey = ***, MoonshotApiKey = ***, DeepgramApiKey = ***, ElevenLabsApiKey = ***, KiloApiKey = ***, OpenAiApiKey = ***, VeniceApiKey = ***, CopilotApiKey = ***, CrofApiKey = ***, CodebuffApiKey = ***, WarpApiKey = ***, ZaiApiKey = ***, SyntheticApiKey = ***, ChutesApiKey = ***, MiniMaxApiKey = ***, PoeApiKey = ***, AlibabaApiKey = ***, Telegram = {(Telegram is not null ? "***" : "null")}, Discord = {(Discord is not null ? "***" : "null")}, HiddenProviders = {HiddenProviders?.Length ?? 0} hidden, CheckUpdatesOnStartup = {CheckUpdatesOnStartup} }}";
 }
 
 /// <summary>
