@@ -16,6 +16,7 @@ internal sealed class SettingsPanel : IDisposable
     private const int DefaultHeight = 540;
     private const int CornerRadius = 10;
 
+    private readonly WebViewEnvironment _webViewEnv;
     private readonly ISettingsStore _settingsStore;
     private readonly IUsageRefreshService _refresh;
     private readonly IUpdateService _updateService;
@@ -27,14 +28,18 @@ internal sealed class SettingsPanel : IDisposable
     private CoreWebView2Controller? _controller;
     private CoreWebView2? _core;
     private bool _navigated;
+    private bool _suspended;
     private bool _disposed;
+    private int _suspendVersion;
 
     public SettingsPanel(
+        WebViewEnvironment webViewEnv,
         ISettingsStore settingsStore,
         IUsageRefreshService refresh,
         IUpdateService updateService,
         ITrayIconWindow trayWindow)
     {
+        _webViewEnv = webViewEnv;
         _settingsStore = settingsStore;
         _refresh = refresh;
         _updateService = updateService;
@@ -58,26 +63,14 @@ internal sealed class SettingsPanel : IDisposable
 
         try
         {
-            var options = new CoreWebView2EnvironmentOptions
-            {
-                AdditionalBrowserArguments =
-                    "--disable-gpu --disable-gpu-compositing " +
-                    "--renderer-process-limit=1 --disable-renderer-backgrounding " +
-                    "--disable-background-timer-throttling " +
-                    "--disable-features=Translate,BackForwardCache,MediaRouter,OptimizationHints,AcceptCHFrame",
-            };
-
-            var userDataFolder = Path.Combine(ApplicationPaths.WebView2DataDirectory, "Settings");
-            _env = await CoreWebView2Environment.CreateAsync(
-                browserExecutableFolder: null,
-                userDataFolder: userDataFolder,
-                options: options).ConfigureAwait(true);
+            _env = await _webViewEnv.GetAsync().ConfigureAwait(true);
 
             _controller = await _env.CreateCoreWebView2ControllerAsync(_hwnd).ConfigureAwait(true);
             _core = _controller.CoreWebView2;
             _controller.Bounds = new System.Drawing.Rectangle(0, 0, initialWidth, initialHeight);
             _controller.DefaultBackgroundColor = System.Drawing.Color.FromArgb(0x1c, 0x1c, 0x1e);
-            _controller.IsVisible = true;
+            _controller.IsVisible = false;
+            _core.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Low;
 
             _core.Settings.AreDevToolsEnabled = false;
             _core.Settings.AreDefaultContextMenusEnabled = false;
@@ -102,6 +95,7 @@ internal sealed class SettingsPanel : IDisposable
     {
         if (_hwnd == 0 || !_navigated) return;
 
+        ResumeCore();
         PushSettingsPayload();
         CenterWindow();
         NativeMethods.SetWindowPos(_hwnd, NativeMethods.HWND_TOPMOST, 0, 0, 0, 0,
@@ -113,6 +107,44 @@ internal sealed class SettingsPanel : IDisposable
     public void Hide()
     {
         if (_hwnd != 0) NativeMethods.ShowWindow(_hwnd, NativeMethods.SW_HIDE);
+        _ = SuspendCore();
+        NativeMethods.TrimWorkingSet();
+    }
+
+    private void ResumeCore()
+    {
+        Interlocked.Increment(ref _suspendVersion);
+
+        if (_disposed || _controller is null || _core is null) return;
+
+        _controller.IsVisible = true;
+        _core.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Normal;
+
+        if (_suspended)
+        {
+            _suspended = false;
+            try { _core.Resume(); }
+            catch { }
+        }
+    }
+
+    private async Task SuspendCore()
+    {
+        if (_disposed || _controller is null || _core is null || !_navigated || _suspended) return;
+
+        _controller.IsVisible = false;
+        _core.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Low;
+
+        var version = _suspendVersion;
+        try
+        {
+            var suspended = await _core.TrySuspendAsync();
+            if (suspended && version == _suspendVersion)
+            {
+                _suspended = true;
+            }
+        }
+        catch { }
     }
 
     public void Dispose()
@@ -154,7 +186,12 @@ internal sealed class SettingsPanel : IDisposable
 
             switch (typeProperty.GetString())
             {
-                case "ready": _navigated = true; PushSettingsPayload(); break;
+                case "ready":
+                    _navigated = true;
+                    PushSettingsPayload();
+                    _ = SuspendCore();
+                    NativeMethods.TrimWorkingSet();
+                    break;
                 case "settings-save": HandleSettingsSave(document.RootElement); break;
                 case "close": Hide(); break;
                 case "test-notification": _refresh.SendTestNotification(); break;

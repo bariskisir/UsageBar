@@ -35,6 +35,7 @@ internal static class ServiceConfiguration
         services.AddSingleton(sp => sp.GetRequiredService<IHttpClientFactory>().CreateClient(UsageHttpClientName));
 
         // Configuration + cross-cutting services.
+        services.AddSingleton<WebViewEnvironment>();
         services.AddSingleton<IClock, SystemClock>();
         services.AddSingleton<ISettingsStore>(sp => new JsonSettingsStore(
             ApplicationPaths.SettingsFilePath,

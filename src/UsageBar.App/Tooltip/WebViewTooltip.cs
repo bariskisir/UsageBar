@@ -24,6 +24,7 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
     private const int CornerRadius = 10;
     private const int MinHeight = 60;
 
+    private readonly WebViewEnvironment _webViewEnv;
     private readonly NativeMethods.WndProc _wndProc;
 
     private volatile nint _hwnd;
@@ -42,7 +43,11 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
     private bool _disposed;
     private int _suspendVersion;
 
-    public WebViewTooltip() => _wndProc = WndProc;
+    public WebViewTooltip(WebViewEnvironment webViewEnv)
+    {
+        _webViewEnv = webViewEnv;
+        _wndProc = WndProc;
+    }
 
     /// <summary>The popup HWND (0 if not yet created or init failed).</summary>
     public nint Hwnd => _hwnd;
@@ -69,22 +74,7 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
 
         try
         {
-            // The tooltip is a tiny static page: no GPU compositing, no background timers,
-            // a single renderer. These flags drop the standalone GPU process and trim the
-            // renderer's resident footprint.
-            var options = new CoreWebView2EnvironmentOptions
-            {
-                AdditionalBrowserArguments =
-                    "--disable-gpu --disable-gpu-compositing " +
-                    "--renderer-process-limit=1 --disable-renderer-backgrounding " +
-                    "--disable-background-timer-throttling " +
-                    "--disable-features=Translate,BackForwardCache,MediaRouter,OptimizationHints,AcceptCHFrame",
-            };
-
-            _env = await CoreWebView2Environment.CreateAsync(
-                browserExecutableFolder: null,
-                userDataFolder: ApplicationPaths.WebView2DataDirectory,
-                options: options).ConfigureAwait(true);
+            _env = await _webViewEnv.GetAsync().ConfigureAwait(true);
 
             _controller = await _env.CreateCoreWebView2ControllerAsync(_hwnd).ConfigureAwait(true);
             _core = _controller.CoreWebView2;
