@@ -18,7 +18,7 @@ internal static class UsageAggregator
         ProviderQueryContext context,
         ILogger logger,
         CancellationToken cancellationToken,
-        IReadOnlySet<string>? hiddenProviders = null)
+        IReadOnlyList<ProviderSettings>? providerSettings = null)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(RefreshTimeout);
@@ -31,29 +31,22 @@ internal static class UsageAggregator
         // without credentials are skipped without creating tasks for them.
         foreach (var provider in ordered)
         {
+            // Apply user-enabled/disabled from settings first.
+            var ps = FindProvider(providerSettings, provider.Descriptor.Name);
+            if (ps is { Enabled: false })
+            {
+                provider.Descriptor.IsEnabled = false;
+                continue;
+            }
+
             try
             {
                 provider.RefreshEnabled(context);
             }
             catch (Exception exception)
             {
-                // A failing credential check (e.g. corrupted auth file, locked registry)
-                // should not prevent other providers from being queried. Log and treat
-                // the provider as disabled for this cycle.
                 logger.LogWarning(exception, "{Provider} credential check failed — provider disabled for this cycle.", provider.Descriptor.Name);
                 provider.Descriptor.IsEnabled = false;
-            }
-        }
-
-        // Apply user-hidden providers — disable them from this refresh cycle.
-        if (hiddenProviders is { Count: > 0 })
-        {
-            foreach (var provider in ordered)
-            {
-                if (provider.Descriptor.IsEnabled && hiddenProviders.Contains(provider.Descriptor.Name))
-                {
-                    provider.Descriptor.IsEnabled = false;
-                }
             }
         }
 
@@ -117,4 +110,15 @@ internal static class UsageAggregator
     }
 
     private readonly record struct ProviderRefresh(IUsageProvider Provider, IReadOnlyList<ProviderResult> Results);
+
+    private static ProviderSettings? FindProvider(IReadOnlyList<ProviderSettings>? list, string name)
+    {
+        if (list is null) return null;
+        foreach (var p in list)
+        {
+            if (string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase))
+                return p;
+        }
+        return null;
+    }
 }

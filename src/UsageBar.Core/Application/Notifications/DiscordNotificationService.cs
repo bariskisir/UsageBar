@@ -20,7 +20,7 @@ public sealed class DiscordNotificationService : IRemoteNotificationService
         string message,
         CancellationToken cancellationToken)
     {
-        var discordSettings = _settings.Read().Discord ?? DiscordSettings.Default;
+        var discordSettings = _settings.Read().Notification?.Discord ?? DiscordSettings.Default;
         if (!discordSettings.IsEnabled)
         {
             return;

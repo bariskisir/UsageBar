@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using UsageBar.Configuration;
+using UsageBar.Domain;
 using UsageBar.Providers;
 
 namespace UsageBar.Application;
@@ -100,18 +101,15 @@ public sealed class UsageRefreshService : IUsageRefreshService, IDisposable
             settings = await _settings.ReadAsync(_shutdown.Token).ConfigureAwait(false);
 
             var context = ProviderQueryContext.FromSettings(settings, _clock.Now);
-            var hidden = settings.HiddenProviders is { Length: > 0 }
-                ? new HashSet<string>(settings.HiddenProviders, StringComparer.Ordinal)
-                : null;
             var snapshot = await UsageAggregator
-                .RefreshAsync(_providers, context, _logger, _shutdown.Token, hidden)
+                .RefreshAsync(_providers, context, _logger, _shutdown.Token, settings.Providers)
                 .ConfigureAwait(false);
 
             // Force auto icon layout in test mode so all bar windows are visible regardless
             // of the user's saved iconLayout settings.
             var iconLayout = Environment.GetEnvironmentVariable("USAGEBAR_TEST") == "1"
                 ? TrayIconLayoutSettings.Default
-                : settings.IconLayout;
+                : settings.Visual?.IconLayout;
             _view.ShowIcon(IconLayout.Compute(snapshot.Results, iconLayout));
             _view.ShowCards(TooltipCardBuilder.Build(snapshot));
 
@@ -140,7 +138,7 @@ public sealed class UsageRefreshService : IUsageRefreshService, IDisposable
             catch (ObjectDisposedException) { /* Shutdown beat us — the gate is already gone. */ }
         }
 
-        ScheduleNext(settings.RefreshPeriodMinute, scheduleAnchor);
+        ScheduleNext(settings.Refresh?.Minute ?? RefreshSettings.Default.Minute, scheduleAnchor);
     }
 
     /// <summary>
@@ -152,11 +150,11 @@ public sealed class UsageRefreshService : IUsageRefreshService, IDisposable
         try
         {
             var settings = await _settings.ReadAsync(_shutdown.Token).ConfigureAwait(false);
-            ScheduleNext(settings.RefreshPeriodMinute, scheduleAnchor);
+        ScheduleNext(settings.Refresh?.Minute ?? RefreshSettings.Default.Minute, scheduleAnchor);
         }
         catch
         {
-            ScheduleNext(AppSettings.Default.RefreshPeriodMinute, scheduleAnchor);
+            ScheduleNext(AppSettings.Default.Refresh?.Minute ?? RefreshSettings.Default.Minute, scheduleAnchor);
         }
     }
 

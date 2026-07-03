@@ -51,6 +51,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Assets\index.html" />
+    <EmbeddedResource Include="Assets\settings.html" />
     <EmbeddedResource Include="Assets\openai.svg" />
     <EmbeddedResource Include="Assets\claude.svg" />
     <EmbeddedResource Include="Assets\elevenlabs.svg" />

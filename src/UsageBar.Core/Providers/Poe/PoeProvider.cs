@@ -1,4 +1,3 @@
-using System.Net.Http.Headers;
 using UsageBar.Domain;
 
 namespace UsageBar.Providers;
@@ -12,10 +11,7 @@ public sealed class PoeProvider(HttpClient httpClient) : BalanceUsageProvider(ht
 
     protected override async Task<BalanceFetchResult> FetchBalanceAsync(HttpClient httpClient, string apiKey, CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, "https://api.poe.com/usage/current_balance");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-
-        using var document = await ProviderHttp.GetJsonAsync(httpClient, request, cancellationToken).ConfigureAwait(false);
+        using var document = await ProviderHttp.GetJsonWithBearerAsync(httpClient, "https://api.poe.com/usage/current_balance", apiKey, cancellationToken).ConfigureAwait(false);
 
         var balance = ProviderJson.GetDecimal(document.RootElement, "current_point_balance");
         if (balance is null)

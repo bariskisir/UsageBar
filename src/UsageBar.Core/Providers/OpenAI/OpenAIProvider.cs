@@ -1,4 +1,3 @@
-using System.Net.Http.Headers;
 using UsageBar.Domain;
 
 namespace UsageBar.Providers;
@@ -12,10 +11,7 @@ public sealed class OpenAIProvider(HttpClient httpClient) : BalanceUsageProvider
 
     protected override async Task<BalanceFetchResult> FetchBalanceAsync(HttpClient httpClient, string apiKey, CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, "https://api.openai.com/v1/dashboard/billing/credit_grants");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-
-        using var document = await ProviderHttp.GetJsonAsync(httpClient, request, cancellationToken).ConfigureAwait(false);
+        using var document = await ProviderHttp.GetJsonWithBearerAsync(httpClient, "https://api.openai.com/v1/dashboard/billing/credit_grants", apiKey, cancellationToken).ConfigureAwait(false);
 
         var totalAvailable = ProviderJson.GetDecimal(document.RootElement, "total_available");
         if (totalAvailable is null)

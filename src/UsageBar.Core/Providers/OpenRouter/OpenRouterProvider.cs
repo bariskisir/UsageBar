@@ -1,4 +1,3 @@
-using System.Net.Http.Headers;
 using UsageBar.Domain;
 
 namespace UsageBar.Providers;
@@ -12,10 +11,7 @@ public sealed class OpenRouterProvider(HttpClient httpClient) : BalanceUsageProv
 
     protected override async Task<BalanceFetchResult> FetchBalanceAsync(HttpClient httpClient, string apiKey, CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, "https://openrouter.ai/api/v1/credits");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-
-        using var document = await ProviderHttp.GetJsonAsync(httpClient, request, cancellationToken).ConfigureAwait(false);
+        using var document = await ProviderHttp.GetJsonWithBearerAsync(httpClient, "https://openrouter.ai/api/v1/credits", apiKey, cancellationToken).ConfigureAwait(false);
 
         if (!ProviderJson.TryGetProperty(document.RootElement, "data", out var data))
         {

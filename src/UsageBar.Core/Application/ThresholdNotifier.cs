@@ -20,8 +20,9 @@ internal sealed class ThresholdNotifier
 
     public IReadOnlyList<ThresholdNotification> Evaluate(IReadOnlyList<UsageWindow> currentWindows, AppSettings settings)
     {
-        var high = settings.HighPercentage / 100.0;
-        var critical = settings.CriticalPercentage / 100.0;
+        var notification = settings.Notification ?? NotificationSettings.Default;
+        var high = notification.High / 100.0;
+        var critical = notification.Critical / 100.0;
         var notifications = new List<ThresholdNotification>();
 
         foreach (var current in currentWindows)

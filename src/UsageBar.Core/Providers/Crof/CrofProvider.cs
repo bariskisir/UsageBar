@@ -1,4 +1,3 @@
-using System.Net.Http.Headers;
 using UsageBar.Domain;
 
 namespace UsageBar.Providers;
@@ -12,10 +11,7 @@ public sealed class CrofProvider(HttpClient httpClient) : BalanceUsageProvider(h
 
     protected override async Task<BalanceFetchResult> FetchBalanceAsync(HttpClient httpClient, string apiKey, CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, "https://crof.ai/usage_api/");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-
-        using var document = await ProviderHttp.GetJsonAsync(httpClient, request, cancellationToken).ConfigureAwait(false);
+        using var document = await ProviderHttp.GetJsonWithBearerAsync(httpClient, "https://crof.ai/usage_api/", apiKey, cancellationToken).ConfigureAwait(false);
 
         var credits = ProviderJson.GetDecimal(document.RootElement, "credits");
         if (credits is null)

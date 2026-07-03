@@ -4,6 +4,7 @@ using Serilog;
 using UsageBar.Application;
 using UsageBar.Infrastructure;
 using UsageBar.Providers;
+using UsageBar.Settings;
 using UsageBar.Tooltip;
 using UsageBar.Tray;
 
@@ -101,6 +102,8 @@ internal static class ServiceConfiguration
         services.AddSingleton<ITrayContextMenu, TrayContextMenu>();
         services.AddSingleton<ITrayIconWindow, TrayIconWindow>();
         services.AddSingleton<IWebViewTooltip, WebViewTooltip>();
+        services.AddSingleton<SettingsPanel>();
+        services.AddSingleton<ProviderInitializer>();
         services.AddSingleton<IUsageView, TrayUsageView>();
         services.AddSingleton<IUpdateService, UpdateService>();
 

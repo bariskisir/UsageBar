@@ -23,7 +23,7 @@ public sealed class UsageRefreshServiceTests
     [Fact]
     public async Task Start_triggers_refresh_and_updates_view()
     {
-        var settings = new StubSettingsStore(AppSettings.Default with { RefreshPeriodMinute = 60 });
+        var settings = new StubSettingsStore(AppSettings.Default with { Refresh = new RefreshSettings(60) });
         var provider = new StubProvider("Codex", () =>
             new MetricResult("Codex", "Pro",
                 [TestData.Window("Codex", "Session", 25)],
@@ -47,7 +47,7 @@ public sealed class UsageRefreshServiceTests
     [Fact]
     public async Task Start_skips_unconfigured_providers()
     {
-        var settings = new StubSettingsStore(AppSettings.Default with { RefreshPeriodMinute = 60 });
+        var settings = new StubSettingsStore(AppSettings.Default with { Refresh = new RefreshSettings(60) });
         var configured = new StubProvider("DeepSeek", () => new BalanceResult("DeepSeek", "$5.00"));
         var skipped = new StubProvider("Skipped", () => null);
         var view = new RecordingUsageView();
@@ -65,7 +65,7 @@ public sealed class UsageRefreshServiceTests
     [Fact]
     public void Stop_disposes_timer()
     {
-        var settings = new StubSettingsStore(AppSettings.Default with { RefreshPeriodMinute = 60 });
+        var settings = new StubSettingsStore(AppSettings.Default with { Refresh = new RefreshSettings(60) });
         var provider = new StubProvider("Codex", () => null);
 
         var service = CreateService(providers: [provider], settings: settings);
@@ -89,7 +89,7 @@ public sealed class UsageRefreshServiceTests
     public async Task TriggerManualRefresh_fires_immediate_refresh()
     {
         var clock = new StubClock(TestData.FixedNow);
-        var settings = new StubSettingsStore(AppSettings.Default with { RefreshPeriodMinute = 60 });
+        var settings = new StubSettingsStore(AppSettings.Default with { Refresh = new RefreshSettings(60) });
         var provider = new StubProvider("Codex", () => new MetricResult("Codex", "Pro", [], []));
         var view = new RecordingUsageView();
         var dispatcher = new GateDispatcher();
@@ -108,7 +108,7 @@ public sealed class UsageRefreshServiceTests
     [Fact]
     public async Task Provider_failure_is_isolated()
     {
-        var settings = new StubSettingsStore(AppSettings.Default with { RefreshPeriodMinute = 60 });
+        var settings = new StubSettingsStore(AppSettings.Default with { Refresh = new RefreshSettings(60) });
         var good = new StubProvider("DeepSeek", () => new BalanceResult("DeepSeek", "$5.00"), 100);
         var broken = new StubProvider("Broken", () => throw new ProviderException("boom"));
         var view = new RecordingUsageView();
@@ -128,7 +128,7 @@ public sealed class UsageRefreshServiceTests
     public async Task Refresh_includes_threshold_notifications()
     {
         var clock = new StubClock(TestData.FixedNow);
-        var settings = new StubSettingsStore(AppSettings.Default with { RefreshPeriodMinute = 60 });
+        var settings = new StubSettingsStore(AppSettings.Default with { Refresh = new RefreshSettings(60) });
         var provider = new StubProvider("Codex", () => new MetricResult("Codex", "Pro",
             [TestData.Window("Codex", "Session", 80)],
             [IconBar.Create(80, 1.0)]));
@@ -154,14 +154,14 @@ public sealed class UsageRefreshServiceTests
     {
         var settings = new StubSettingsStore(AppSettings.Default with
         {
-            RefreshPeriodMinute = 60,
-            IconLayout = new TrayIconLayoutSettings(
+            Refresh = new RefreshSettings(60),
+            Visual = new VisualSettings(new TrayIconLayoutSettings(
                 TrayIconLayoutSettings.ManualMode,
                 new Dictionary<string, double>
                 {
                     ["codex_weekly"] = 75,
                     ["codex_session"] = 25,
-                }),
+                })),
         });
         var provider = new StubProvider("Codex", () => new MetricResult("Codex", "Pro",
             [

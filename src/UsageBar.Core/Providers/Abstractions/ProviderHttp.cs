@@ -25,4 +25,19 @@ internal static class ProviderHttp
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         return await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// Performs a GET request to <paramref name="url"/> with <paramref name="apiKey"/> in the
+    /// Authorization header as a Bearer token, and parses the response body as JSON.
+    /// </summary>
+    public static async Task<JsonDocument> GetJsonWithBearerAsync(
+        HttpClient httpClient,
+        string url,
+        string apiKey,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+        return await GetJsonAsync(httpClient, request, cancellationToken).ConfigureAwait(false);
+    }
 }

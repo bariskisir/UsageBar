@@ -26,10 +26,15 @@ testable; keep all Win32/WebView2/registry code in App.
 
 ### Core layout
 
-- `Domain/` — records/enums only: `UsageWindow`, `ProviderResult` (abstract) with `MetricResult` /
+- `Domain/` — records/enums/interfaces: `UsageWindow`, `ProviderResult` (abstract) with `MetricResult` /
   `BalanceResult`, `IconBar`, `UsageSnapshot`, `TooltipCard`, `NotificationLevel`,
-  `ThresholdNotification`, `ProviderException`.
-- `Configuration/AppSettings.cs` — settings record + `Default` + `Normalize`. Includes `hiddenProviders` (`string[]`), a list of provider names hidden via the context menu. Hidden providers are skipped during refresh.
+  `ThresholdNotification`, `ProviderException`, `ProviderSettings`, `RefreshSettings`,
+  `NotificationSettings`, `VisualSettings`, `UpdateSettings`, `TelegramSettings`,
+  `DiscordSettings`, `IRemoteNotificationSettings`.
+- `Configuration/AppSettings.cs` — settings record with nested objects (`Refresh`, `Notification`,
+  `Visual`, `Update`, `Providers`) + `Default` + `Normalize`. The `providers` array holds
+  per-provider `apiKey`, `type`, `credential`, and `enabled` flag. Providers with `enabled = false`
+  are skipped during refresh.
 - `Providers/Abstractions/` — `IUsageProvider`, `ProviderDescriptor`, `BalanceUsageProvider`,
   `ProviderQueryContext`, `CredentialNames`, `ProviderJson`, `ProviderHttp`, `MetricWindows`,
   `UsageFormatting`, `IResultDisplayOrderProvider`, provider-facing auth-reader interfaces.
@@ -52,12 +57,11 @@ testable; keep all Win32/WebView2/registry code in App.
 - `Tooltip/WebViewTooltip.cs` — WebView2 popup; tooltip interfaces live under
   `Tooltip/Abstractions/`.
 - `Infrastructure/` — `JsonSettingsStore`, `ApplicationPaths`, `StartupRegistrationService`,
-  `SystemClock`; infrastructure interfaces live under `Infrastructure/Abstractions/`.
-- `Assets/` — `AppIcon.*`, `openai.svg`, `claude.svg`, and `index.html` (the whole tooltip page —
-  inline CSS + JS, no separate base/override split, UsageBar-native class names
-  `panel` / `stack` / `card` / `metric`; embedded-resource name `UsageBar.Assets.index.html`,
-  loaded verbatim by the host). The SVGs are embedded as base64 data URIs into the HTML at load
-  time and referenced by the tooltip JS via `providerIcon()`.
+  `SystemClock`, `ProviderInitializer`; infrastructure interfaces live under `Infrastructure/Abstractions/`.
+- `Assets/` — `AppIcon.*`, `openai.svg`, `claude.svg`, `index.html`, and `settings.html` (the
+  settings panel page — inline CSS + JS, same dark theme as the tooltip; embedded-resource name
+  `UsageBar.Assets.settings.html`). The tooltip SVGs are embedded as base64 data URIs into the HTML
+  at load time and referenced by the tooltip JS via `providerIcon()`.
 
 ## Commands
 
@@ -109,8 +113,8 @@ are not copied. JSON uses System.Text.Json **source generation** (`SettingsJsonC
 - `UsageRefreshService` reads settings each refresh, builds a `ProviderQueryContext` (reference
   `Now` + resolved API keys), and calls `UsageAggregator.RefreshAsync` (providers queried in
   display order, concurrently; per-provider failures logged + isolated).
-- Before querying, the aggregator disables any provider whose name appears in the
-  `hiddenProviders` list from settings, so hidden providers are never queried.
+- Before querying, the aggregator disables any provider whose `enabled` flag is `false` in the
+  `providers` array from settings, so disabled providers are never queried.
 - It updates `IUsageView` (icon + tooltip cards) and emits threshold notifications, then schedules
   the next refresh. Refreshes never overlap (`SemaphoreSlim` gate); manual refresh disables the
   timer and reschedules from the manual-refresh time. Hover never triggers a provider call.
@@ -270,7 +274,7 @@ WebView2 init fails the popup is torn down (`Hwnd == 0`) and the app runs withou
 
 `ThresholdNotifier` compares each window against the previous refresh. High, critical, and
 limit-reached (crossing from below 100% to 100%, shown with the critical icon) each fire once per
-window per episode (high/critical defaults 70% / 95%, configurable); a usage drop emits a reset
+window per episode (high/critical defaults 70% / 90%, configurable); a usage drop emits a reset
 and clears that window's state. Per refresh a window emits only its most severe new milestone. The
 service groups messages per severity into one balloon each.
 

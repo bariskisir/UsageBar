@@ -1,4 +1,3 @@
-using System.Net.Http.Headers;
 using System.Text.Json;
 using UsageBar.Domain;
 
@@ -13,10 +12,7 @@ public sealed class DeepSeekProvider(HttpClient httpClient) : BalanceUsageProvid
 
     protected override async Task<BalanceFetchResult> FetchBalanceAsync(HttpClient httpClient, string apiKey, CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, "https://api.deepseek.com/user/balance");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-
-        using var document = await ProviderHttp.GetJsonAsync(httpClient, request, cancellationToken).ConfigureAwait(false);
+        using var document = await ProviderHttp.GetJsonWithBearerAsync(httpClient, "https://api.deepseek.com/user/balance", apiKey, cancellationToken).ConfigureAwait(false);
 
         if (!ProviderJson.TryGetProperty(document.RootElement, "balance_infos", out var balanceInfos) ||
             balanceInfos.ValueKind != JsonValueKind.Array)

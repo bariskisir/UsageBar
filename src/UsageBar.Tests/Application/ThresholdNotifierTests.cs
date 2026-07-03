@@ -7,7 +7,7 @@ namespace UsageBar.Tests;
 
 public sealed class ThresholdNotifierTests
 {
-    private static readonly AppSettings Settings = AppSettings.Default; // high 70, critical 95
+    private static readonly AppSettings Settings = AppSettings.Default; // high 70, critical 90
 
     private static IReadOnlyList<UsageWindow> Codex(double percent) => [TestData.Window("Codex", "Session", percent)];
 

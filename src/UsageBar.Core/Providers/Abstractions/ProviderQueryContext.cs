@@ -1,4 +1,5 @@
 using UsageBar.Configuration;
+using UsageBar.Domain;
 
 namespace UsageBar.Providers;
 
@@ -30,27 +31,20 @@ public sealed class ProviderQueryContext
     /// </summary>
     public static ProviderQueryContext FromSettings(AppSettings settings, DateTimeOffset now)
     {
-        var apiKeys = new Dictionary<string, string>(StringComparer.Ordinal)
+        var apiKeys = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        if (settings.Providers is { Count: > 0 })
         {
-            [CredentialNames.DeepSeek] = Resolve(settings.DeepSeekApiKey, CredentialNames.DeepSeek),
-            [CredentialNames.OpenRouter] = Resolve(settings.OpenRouterApiKey, CredentialNames.OpenRouter),
-            [CredentialNames.Moonshot] = Resolve(settings.MoonshotApiKey, CredentialNames.Moonshot),
-            [CredentialNames.Deepgram] = Resolve(settings.DeepgramApiKey, CredentialNames.Deepgram),
-            [CredentialNames.ElevenLabs] = Resolve(settings.ElevenLabsApiKey, CredentialNames.ElevenLabs),
-            [CredentialNames.Kilo] = Resolve(settings.KiloApiKey, CredentialNames.Kilo),
-            [CredentialNames.OpenAI] = Resolve(settings.OpenAiApiKey, CredentialNames.OpenAI),
-            [CredentialNames.Venice] = Resolve(settings.VeniceApiKey, CredentialNames.Venice),
-            [CredentialNames.Copilot] = Resolve(settings.CopilotApiKey, CredentialNames.Copilot),
-            [CredentialNames.Crof] = Resolve(settings.CrofApiKey, CredentialNames.Crof),
-            [CredentialNames.Codebuff] = Resolve(settings.CodebuffApiKey, CredentialNames.Codebuff),
-            [CredentialNames.Warp] = Resolve(settings.WarpApiKey, CredentialNames.Warp),
-            [CredentialNames.Zai] = Resolve(settings.ZaiApiKey, CredentialNames.Zai),
-            [CredentialNames.Synthetic] = Resolve(settings.SyntheticApiKey, CredentialNames.Synthetic),
-            [CredentialNames.Chutes] = Resolve(settings.ChutesApiKey, CredentialNames.Chutes),
-            [CredentialNames.MiniMax] = Resolve(settings.MiniMaxApiKey, CredentialNames.MiniMax),
-            [CredentialNames.Poe] = Resolve(settings.PoeApiKey, CredentialNames.Poe),
-            [CredentialNames.Alibaba] = Resolve(settings.AlibabaApiKey, CredentialNames.Alibaba),
-        };
+            foreach (var p in settings.Providers)
+            {
+                if (p.Type != ProviderSettings.TypeApiKey || string.IsNullOrEmpty(p.Credential))
+                {
+                    continue;
+                }
+
+                apiKeys[p.Credential] = Resolve(p.ApiKey, p.Credential);
+            }
+        }
 
         return new ProviderQueryContext(now, apiKeys);
     }

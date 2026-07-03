@@ -5,6 +5,7 @@ using UsageBar.Configuration;
 using UsageBar.Domain;
 using UsageBar.Infrastructure;
 using UsageBar.Tooltip;
+using UsageBar.Settings;
 
 namespace UsageBar.Tray;
 
@@ -27,11 +28,14 @@ internal sealed class TrayApplication(
     IStartupRegistrationService startupRegistration,
     IUpdateService updateService,
     ISettingsStore settingsStore,
+    SettingsPanel settingsPanel,
+    ProviderInitializer providerInitializer,
     ILogger<TrayApplication> logger)
 {
     public void Run()
     {
         startupRegistration.EnsureRegistered();
+        providerInitializer.EnsureInitialized();
         WireEvents();
 
         // Install a SynchronizationContext that pumps continuations on this STA message-loop
@@ -39,10 +43,11 @@ internal sealed class TrayApplication(
         SynchronizationContext.SetSynchronizationContext(new TrayUiSyncContext(window.Hwnd));
 
         _ = InitTooltipAsync();
+        _ = InitSettingsPanelAsync();
         refresh.Start();
 
         var currentSettings = settingsStore.Read();
-        if (currentSettings.CheckUpdatesOnStartup ?? true)
+        if (currentSettings.Update?.OnStartup ?? true)
         {
             _ = CheckForUpdatesAsync(silent: true);
         }
@@ -55,9 +60,8 @@ internal sealed class TrayApplication(
         window.TooltipShowRequested += OnTooltipShowRequested;
         window.TooltipHideRequested += tooltip.Hide;
         contextMenu.RefreshRequested += refresh.TriggerManualRefresh;
-        contextMenu.TestNotificationRequested += refresh.SendTestNotification;
         contextMenu.ExitRequested += OnExitRequested;
-        contextMenu.UpdateCheckNowRequested += () => _ = CheckForUpdatesAsync();
+        contextMenu.SettingsRequested += () => settingsPanel.Show();
     }
 
     private void OnTooltipShowRequested(NativeMethods.Rect? iconRect, int fallbackX, int fallbackY) =>
@@ -82,6 +86,22 @@ internal sealed class TrayApplication(
         catch (Exception exception)
         {
             logger.LogWarning(exception, "WebView2 tooltip initialisation failed.");
+        }
+    }
+
+    private async Task InitSettingsPanelAsync()
+    {
+        try
+        {
+            var instance = NativeMethods.GetModuleHandle(null);
+            if (!await settingsPanel.InitAsync(instance).ConfigureAwait(true))
+            {
+                logger.LogWarning("WebView2 settings panel unavailable.");
+            }
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "WebView2 settings panel initialisation failed.");
         }
     }
 

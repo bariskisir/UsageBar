@@ -1,4 +1,3 @@
-using System.Net.Http.Headers;
 using UsageBar.Domain;
 
 namespace UsageBar.Providers;
@@ -21,10 +20,7 @@ public sealed class ZaiProvider(HttpClient httpClient) : IUsageProvider
             return null;
         }
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, QuotaEndpoint);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-
-        using var document = await ProviderHttp.GetJsonAsync(httpClient, request, cancellationToken).ConfigureAwait(false);
+        using var document = await ProviderHttp.GetJsonWithBearerAsync(httpClient, QuotaEndpoint, apiKey, cancellationToken).ConfigureAwait(false);
         var root = document.RootElement;
 
         var windows = new List<UsageWindow>();

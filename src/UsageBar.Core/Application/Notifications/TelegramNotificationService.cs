@@ -20,7 +20,7 @@ public sealed class TelegramNotificationService : IRemoteNotificationService
         string message,
         CancellationToken cancellationToken)
     {
-        var settings = _settings.Read().Telegram ?? TelegramSettings.Default;
+        var settings = _settings.Read().Notification?.Telegram ?? TelegramSettings.Default;
         if (!settings.IsEnabled)
         {
             return;

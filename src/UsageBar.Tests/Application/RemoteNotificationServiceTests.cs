@@ -20,7 +20,6 @@ public sealed class RemoteNotificationServiceTests
             NullLogger<DiscordNotificationService>.Instance);
 
         await service.SendAsync("hello", CancellationToken.None);
-
         Assert.Empty(handler.Requests);
     }
 
@@ -32,12 +31,12 @@ public sealed class RemoteNotificationServiceTests
             new HttpClient(handler),
             new StubSettingsStore(AppSettings.Default with
             {
-                Discord = new DiscordSettings("https://discord.test/webhook", "Usage Bot"),
+                Notification = new NotificationSettings(70, 95, null,
+                    new DiscordSettings("https://discord.test/webhook", "Usage Bot", Enabled: true)),
             }),
             NullLogger<DiscordNotificationService>.Instance);
 
         await service.SendAsync("limit reached", CancellationToken.None);
-
         var request = Assert.Single(handler.Requests);
         Assert.Equal(HttpMethod.Post, request.Method);
         Assert.Equal("https://discord.test/webhook", request.RequestUri!.ToString());
@@ -56,12 +55,12 @@ public sealed class RemoteNotificationServiceTests
             new HttpClient(handler),
             new StubSettingsStore(AppSettings.Default with
             {
-                Telegram = new TelegramSettings("token-123", 42),
+                Notification = new NotificationSettings(70, 95,
+                    new TelegramSettings("token-123", 42, Enabled: true), null),
             }),
             NullLogger<TelegramNotificationService>.Instance);
 
         await service.SendAsync("usage high", CancellationToken.None);
-
         var request = Assert.Single(handler.Requests);
         Assert.Equal(HttpMethod.Post, request.Method);
         Assert.Equal("https://api.telegram.org/bottoken-123/sendMessage", request.RequestUri!.ToString());
@@ -78,17 +77,11 @@ public sealed class RemoteNotificationServiceTests
     private sealed class CapturingHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> responder) : HttpMessageHandler
     {
         public List<HttpRequestMessage> Requests { get; } = [];
-
         public List<string> Bodies { get; } = [];
-
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Requests.Add(request);
-            if (request.Content is not null)
-            {
-                Bodies.Add(await request.Content.ReadAsStringAsync(cancellationToken));
-            }
-
+            if (request.Content is not null) Bodies.Add(await request.Content.ReadAsStringAsync(cancellationToken));
             return responder(request);
         }
     }
