@@ -79,10 +79,22 @@ internal sealed class ProviderInitializer(
 
         return providerName switch
         {
-            "Codex" => !string.IsNullOrEmpty(codexAuth.Read()?.AccessToken),
-            "Claude" => !string.IsNullOrEmpty(claudeAuth.Read()?.AccessToken),
-            "Antigravity" => !string.IsNullOrEmpty(antigravityAuth.Read()?.AccessToken),
+            "Codex" => TryReadAuth(() => codexAuth.Read()?.AccessToken),
+            "Claude" => TryReadAuth(() => claudeAuth.Read()?.AccessToken),
+            "Antigravity" => TryReadAuth(() => antigravityAuth.Read()?.AccessToken),
             _ => false,
         };
+    }
+
+    private static bool TryReadAuth(Func<string?> read)
+    {
+        try
+        {
+            return !string.IsNullOrEmpty(read());
+        }
+        catch
+        {
+            return false;
+        }
     }
 }

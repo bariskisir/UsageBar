@@ -6,6 +6,7 @@ namespace UsageBar.Providers;
 internal static class WindowsCredentialManager
 {
     private const string Advapi32 = "advapi32.dll";
+    private const int ERROR_NOT_FOUND = 1168;
 
     public static string? Read(string target)
     {
@@ -17,6 +18,11 @@ internal static class WindowsCredentialManager
         if (!CredRead(target, CRED_TYPE.GENERIC, 0, out var ptr))
         {
             var error = Marshal.GetLastWin32Error();
+            if (error == ERROR_NOT_FOUND)
+            {
+                return null;
+            }
+
             throw new InvalidOperationException(
                 $"CredRead failed for target '{target}' with error code {error} (0x{error:X8}).");
         }
