@@ -198,7 +198,7 @@ select:focus, input:focus { border-color: var(--input-focus-border); }
   </head>
   <body>
     <div class="settings">
-      <div class="settings__header">
+      <div class="settings__header" id="settingsHeader">
         <span class="settings__title">Settings</span>
         <button class="settings__close" id="closeBtn">&times;</button>
       </div>
@@ -292,10 +292,16 @@ select:focus, input:focus { border-color: var(--input-focus-border); }
           <div class="icon-layout__bars" id="iconLayoutBars" style="display:none"></div>
           <button class="btn btn--secondary btn--sm icon-layout__add" id="iconLayoutAdd" style="display:none">+ Add Bar</button>
         </div>
+
+        <div class="settings__section">
+          <div class="settings__row">
+            <span class="settings__label">Version</span>
+            <span class="settings__value" id="settingsVersion" style="font-size:13px;color:var(--text-secondary);">-</span>
+          </div>
+        </div>
       </div>
       <div class="settings__footer">
         <span class="settings__footer-hint" id="saveHint"></span>
-        <button class="btn btn--secondary" id="closeFooterBtn">Close</button>
         <button class="btn btn--primary" id="saveBtn">Save</button>
       </div>
     </div>
@@ -353,6 +359,35 @@ select:focus, input:focus { border-color: var(--input-focus-border); }
   var _envApiKeys = {};
   var _originalEnvSourced = {};
   var _lastSettings = null;
+
+  var _drag = false;
+  var _dragScreenX = 0;
+  var _dragScreenY = 0;
+
+  (function setupDrag() {
+    var header = document.getElementById("settingsHeader");
+    header.addEventListener("pointerdown", function (e) {
+      if (e.target.tagName === "BUTTON") return;
+      _drag = true;
+      _dragScreenX = e.screenX;
+      _dragScreenY = e.screenY;
+      header.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+    header.addEventListener("pointermove", function (e) {
+      if (!_drag) return;
+      var dx = Math.round(e.screenX - _dragScreenX);
+      var dy = Math.round(e.screenY - _dragScreenY);
+      _dragScreenX = e.screenX;
+      _dragScreenY = e.screenY;
+      if ((dx !== 0 || dy !== 0) && window.ipc) {
+        window.ipc.postMessage(JSON.stringify({ type: "drag", dx: dx, dy: dy }));
+      }
+    });
+    header.addEventListener("pointerup", function () { _drag = false; });
+    header.addEventListener("pointercancel", function () { _drag = false; });
+    header.addEventListener("lostpointercapture", function () { _drag = false; });
+  })();
 
   function markDirty() { if (!_dirty) { _dirty = true; updateSaveHint(); } }
   function clearDirty() { _dirty = false; updateSaveHint(); }
@@ -530,6 +565,11 @@ select:focus, input:focus { border-color: var(--input-focus-border); }
     buildProviderGrid(settings);
     buildIconLayoutBars(settings);
 
+    var ver = data.version;
+    if (ver) {
+      document.getElementById("settingsVersion").textContent = ver;
+    }
+
     clearDirty();
   }
 
@@ -620,6 +660,10 @@ select:focus, input:focus { border-color: var(--input-focus-border); }
   }
 
   function doSave() {
+    var saveBtn = document.getElementById("saveBtn");
+    saveBtn.textContent = "Saving...";
+    saveBtn.disabled = true;
+
     var settings = collectSettings();
 
     // Collect which keys are env-sourced (still have fromEnv=1 on the input)
@@ -648,7 +692,6 @@ select:focus, input:focus { border-color: var(--input-focus-border); }
 
   document.getElementById("saveBtn").addEventListener("click", doSave);
   document.getElementById("closeBtn").addEventListener("click", doClose);
-  document.getElementById("closeFooterBtn").addEventListener("click", doClose);
   document.getElementById("testNotify").addEventListener("click", doTestNotification);
 
   document.getElementById("iconLayoutMode").addEventListener("change", function () {
@@ -678,6 +721,9 @@ select:focus, input:focus { border-color: var(--input-focus-border); }
 
   window.__settingsSaved = function () {
     clearDirty();
+    var saveBtn = document.getElementById("saveBtn");
+    saveBtn.textContent = "Save";
+    saveBtn.disabled = false;
     document.getElementById("saveHint").textContent = "Saved";
     setTimeout(function () { document.getElementById("saveHint").textContent = ""; }, 2000);
   };

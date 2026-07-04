@@ -98,10 +98,9 @@ internal sealed class SettingsPanel : IDisposable
         ResumeCore();
         PushSettingsPayload();
         CenterWindow();
-        NativeMethods.SetWindowPos(_hwnd, NativeMethods.HWND_TOPMOST, 0, 0, 0, 0,
-            0x0001 | 0x0002 | NativeMethods.SWP_NOACTIVATE);
+        NativeMethods.SetWindowPos(_hwnd, 0, 0, 0, 0, 0,
+            NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE);
         NativeMethods.ShowWindow(_hwnd, NativeMethods.SW_SHOWNOACTIVATE);
-        NativeMethods.SetForegroundWindow(_hwnd);
     }
 
     public void Hide()
@@ -194,6 +193,7 @@ internal sealed class SettingsPanel : IDisposable
                     break;
                 case "settings-save": HandleSettingsSave(document.RootElement); break;
                 case "close": Hide(); break;
+                case "drag": HandleDrag(document.RootElement); break;
                 case "test-notification": _refresh.SendTestNotification(); break;
                 case "check-update": _ = HandleCheckUpdate(); break;
             }
@@ -219,6 +219,19 @@ internal sealed class SettingsPanel : IDisposable
             PushToJs("window.__settingsSaved", null);
         }
         catch (JsonException) { }
+    }
+
+    private void HandleDrag(JsonElement root)
+    {
+        if (!root.TryGetProperty("dx", out var dxProp) || !root.TryGetProperty("dy", out var dyProp))
+            return;
+        if (!dxProp.TryGetInt32(out var dx) || !dyProp.TryGetInt32(out var dy))
+            return;
+        if (_hwnd == 0) return;
+
+        NativeMethods.GetWindowRect(_hwnd, out var rect);
+        NativeMethods.SetWindowPos(_hwnd, 0, rect.Left + dx, rect.Top + dy, 0, 0,
+            NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOZORDER | NativeMethods.SWP_NOACTIVATE);
     }
 
     private static AppSettings ApplyEnvSourcedKeys(AppSettings settings, JsonElement root)
@@ -311,7 +324,11 @@ internal sealed class SettingsPanel : IDisposable
 
         var settingsJson = JsonSerializer.Serialize(settings, SettingsJsonContext.Default.AppSettings);
         var envJson = JsonSerializer.Serialize(envApiKeys);
-        var payload = $"{{\"settings\":{settingsJson},\"envApiKeys\":{envJson}}}";
+        var assemblyVersion = Assembly.GetEntryAssembly()?.GetName().Version;
+        var versionStr = assemblyVersion is not null && assemblyVersion.Major > 0
+            ? $"{assemblyVersion.Major}.{assemblyVersion.Minor}.{assemblyVersion.Build}"
+            : "1.0.0";
+        var payload = $"{{\"settings\":{settingsJson},\"envApiKeys\":{envJson},\"version\":\"{versionStr}\"}}";
         PushToJs("window.__loadSettings", payload);
     }
 
@@ -362,7 +379,7 @@ internal sealed class SettingsPanel : IDisposable
         if (className is null) return 0;
 
         return NativeMethods.CreateWindowEx(
-            NativeMethods.WS_EX_TOOLWINDOW | NativeMethods.WS_EX_TOPMOST | NativeMethods.WS_EX_NOACTIVATE,
+            NativeMethods.WS_EX_TOOLWINDOW | NativeMethods.WS_EX_NOACTIVATE,
             className, "UsageBarSettings", NativeMethods.WS_POPUP,
             0, 0, DefaultWidth, DefaultHeight, 0, 0, instance, 0);
     }
