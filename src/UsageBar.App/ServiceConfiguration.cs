@@ -57,6 +57,7 @@ internal static class ServiceConfiguration
             services.AddSingleton<IUsageProvider, TestKiloProvider>();
             services.AddSingleton<IUsageProvider, TestDeepSeekProvider>();
             services.AddSingleton<IUsageProvider, TestOpenRouterProvider>();
+            services.AddSingleton<IUsageProvider, TestZenMuxProvider>();
             services.AddSingleton<IUsageProvider, TestMoonshotProvider>();
             services.AddSingleton<IUsageProvider, TestDeepgramProvider>();
             services.AddSingleton<IUsageProvider, TestOpenAIProvider>();
@@ -81,6 +82,7 @@ internal static class ServiceConfiguration
             services.AddSingleton<IUsageProvider, KiloProvider>();
             services.AddSingleton<IUsageProvider, DeepSeekProvider>();
             services.AddSingleton<IUsageProvider, OpenRouterProvider>();
+            services.AddSingleton<IUsageProvider, ZenMuxProvider>();
             services.AddSingleton<IUsageProvider, MoonshotProvider>();
             services.AddSingleton<IUsageProvider, DeepgramProvider>();
             services.AddSingleton<IUsageProvider, OpenAIProvider>();

@@ -100,6 +100,35 @@ public sealed class BalanceProviderTests
     }
 
     [Fact]
+    public async Task ZenMux_reports_total_credits()
+    {
+        var json = """
+        {
+          "success": true,
+          "data": {
+            "currency": "usd",
+            "total_credits": 482.74,
+            "top_up_credits": 35.0,
+            "bonus_credits": 447.74
+          }
+        }
+        """;
+        var handler = FakeHttpMessageHandler.Json(json);
+        var provider = new ZenMuxProvider(new HttpClient(handler));
+
+        var result = await provider.GetUsageAsync(TestData.Context((CredentialNames.ZenMux, "zenmux-key")), CancellationToken.None);
+
+        var balance = Assert.IsType<BalanceResult>(result);
+        Assert.Equal("ZenMux", balance.ProviderName);
+        Assert.Equal("$482.74", balance.BalanceText);
+        Assert.Equal(482.74m, balance.UsdAmount);
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal("https://zenmux.ai/api/v1/management/payg/balance", request.RequestUri!.AbsoluteUri);
+        Assert.Equal("Bearer", request.Headers.Authorization!.Scheme);
+        Assert.Equal("zenmux-key", request.Headers.Authorization.Parameter);
+    }
+
+    [Fact]
     public async Task Deepgram_sums_usd_balances_for_first_project()
     {
         var handler = new FakeHttpMessageHandler(request =>

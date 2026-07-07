@@ -24,4 +24,5 @@ public static class CredentialNames
     public const string MiniMax = "MINIMAX_API_KEY";
     public const string Poe = "POE_API_KEY";
     public const string Alibaba = "ALIBABA_API_KEY";
+    public const string ZenMux = "ZENMUX_MANAGEMENT_API_KEY";
 }

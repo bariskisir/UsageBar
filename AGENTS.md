@@ -38,7 +38,7 @@ testable; keep all Win32/WebView2/registry code in App.
 - `Providers/Abstractions/` — `IUsageProvider`, `ProviderDescriptor`, `BalanceUsageProvider`,
   `ProviderQueryContext`, `CredentialNames`, `ProviderJson`, `ProviderHttp`, `MetricWindows`,
   `UsageFormatting`, `IResultDisplayOrderProvider`, provider-facing auth-reader interfaces.
-- `Providers/<Name>/` — one folder per provider (Codex, Claude, Antigravity, ElevenLabs, Kilo, DeepSeek, OpenRouter, Moonshot, Deepgram, OpenAI, Venice, Copilot, Crof, Codebuff, Warp, Zai, Synthetic, Chutes, MiniMax, Poe, Alibaba).
+- `Providers/<Name>/` — one folder per provider (Codex, Claude, Antigravity, ElevenLabs, Kilo, DeepSeek, OpenRouter, Moonshot, Deepgram, OpenAI, Venice, Copilot, Crof, Codebuff, Warp, Zai, Synthetic, Chutes, MiniMax, Poe, Alibaba, ZenMux).
 - `Application/` — `UsageRefreshService`, `UsageAggregator`, `ThresholdNotifier`,
   `TooltipCardBuilder`, `IconLayout`, and the `Abstractions/` the shell implements
   (`IUsageView`, `ISettingsStore`, `IClock`) plus internal orchestration seams.
@@ -131,7 +131,7 @@ provider can synchronously check whether credentials exist and set `Descriptor.I
 accordingly. Disabled providers are skipped — no task is created for them. The check is:
 
 - **API-key providers** (Kilo, ElevenLabs, DeepSeek, OpenRouter, Moonshot, Deepgram,
-  OpenAI, Venice, Copilot, Crof, Codebuff, Warp, Zai, Synthetic, Chutes, MiniMax, Poe, Alibaba):
+  OpenAI, Venice, Copilot, Crof, Codebuff, Warp, Zai, Synthetic, Chutes, MiniMax, Poe, Alibaba, ZenMux):
   `!string.IsNullOrEmpty(context.GetApiKey(CredentialName))`
 - **OAuth providers** (Codex, Claude, Antigravity):
   `!string.IsNullOrEmpty(authReader.Read()?.AccessToken)`
@@ -238,6 +238,10 @@ body `{"queryCodingPlanInstanceInfoRequest":{"commodityCode":"sfm_codingplan_pub
 and multiple auth headers (`Authorization: Bearer`, `x-api-key`, `X-DashScope-API-Key`)
 from `ALIBABA_API_KEY`. Reports 5h, Weekly, and Monthly quota windows.
 
+ZenMux calls `GET https://zenmux.ai/api/v1/management/payg/balance` with
+`Authorization: Bearer KEY` from `ZENMUX_MANAGEMENT_API_KEY` and shows
+`data.total_credits` as a USD balance.
+
 To add a provider: new folder under `Providers/`, implement the right base/interface (declare a
 `Descriptor`; for metric providers, return stable `UsageWindow` labels used for icon-layout keys),
 and add one registration in
@@ -291,7 +295,7 @@ service groups messages per severity into one balloon each.
 
 - Providers are registered explicitly (no assembly scanning) for clarity.
 - New providers (OpenAI, Venice, Copilot, Crof, Codebuff, Warp, Zai, Synthetic, Chutes, MiniMax,
-  Poe, Alibaba) are implemented but not yet tested with real API keys — endpoint URLs, response
+  Poe, Alibaba, ZenMux) are implemented but not yet tested with real API keys — endpoint URLs, response
   shapes, and auth mechanisms are documented but unverified against live APIs.
 - Tray/WebView2 interop is validated manually (not unit-tested); Core logic is covered by tests.
 - Publish is **not trimmed**: the WebView2 SDK emits trim warnings (errors here under

@@ -35,7 +35,7 @@ internal sealed class TrayApplication(
     public void Run()
     {
         startupRegistration.EnsureRegistered();
-        providerInitializer.EnsureInitialized();
+        providerInitializer.EnsureProviders();
         WireEvents();
 
         // Install a SynchronizationContext that pumps continuations on this STA message-loop

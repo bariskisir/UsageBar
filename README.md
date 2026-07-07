@@ -21,6 +21,7 @@ UsageBar is a minimal Windows notification-area app for showing LLM or API usage
 - ElevenLabs API
 - DeepSeek API
 - OpenRouter API
+- ZenMux API
 - Moonshot (Kimi) API
 - Deepgram API
 - Kilo AI API

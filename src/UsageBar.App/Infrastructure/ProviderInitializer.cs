@@ -18,6 +18,7 @@ internal sealed class ProviderInitializer(
         ("Antigravity", null, ProviderSettings.TypeOAuth),
         ("DeepSeek", CredentialNames.DeepSeek, ProviderSettings.TypeApiKey),
         ("OpenRouter", CredentialNames.OpenRouter, ProviderSettings.TypeApiKey),
+        ("ZenMux", CredentialNames.ZenMux, ProviderSettings.TypeApiKey),
         ("Moonshot (Kimi)", CredentialNames.Moonshot, ProviderSettings.TypeApiKey),
         ("Deepgram", CredentialNames.Deepgram, ProviderSettings.TypeApiKey),
         ("ElevenLabs", CredentialNames.ElevenLabs, ProviderSettings.TypeApiKey),
@@ -33,37 +34,56 @@ internal sealed class ProviderInitializer(
         ("Chutes", CredentialNames.Chutes, ProviderSettings.TypeApiKey),
         ("MiniMax", CredentialNames.MiniMax, ProviderSettings.TypeApiKey),
         ("Poe", CredentialNames.Poe, ProviderSettings.TypeApiKey),
-        ("Alibaba", CredentialNames.Alibaba, ProviderSettings.TypeApiKey),
+        ("Alibaba", CredentialNames.Alibaba, ProviderSettings.TypeApiKey)
     ];
 
-    public void EnsureInitialized()
+    public void EnsureProviders()
     {
         var settings = settingsStore.Read();
-        if (settings.Initialized == true)
+
+        if (settings.Initialized != true)
         {
+            var providers = new List<ProviderSettings>();
+            foreach (var (name, credential, type) in Providers)
+            {
+                providers.Add(new ProviderSettings(
+                    Name: name,
+                    Type: type,
+                    Credential: credential,
+                    ApiKey: null,
+                    Enabled: HasCredential(name, credential)));
+            }
+
+            settingsStore.Write(settings with { Providers = providers, Initialized = true });
             return;
         }
 
-        var providers = new List<ProviderSettings>();
+        var existingProviders = settings.Providers ?? [];
+        var byName = new Dictionary<string, ProviderSettings>(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in existingProviders)
+            byName[p.Name] = p;
+
+        var merged = new List<ProviderSettings>(existingProviders);
+        var changed = false;
 
         foreach (var (name, credential, type) in Providers)
         {
-            var hasCredential = HasCredential(name, credential);
-            providers.Add(new ProviderSettings(
+            if (byName.ContainsKey(name))
+                continue;
+
+            merged.Add(new ProviderSettings(
                 Name: name,
                 Type: type,
                 Credential: credential,
                 ApiKey: null,
-                Enabled: hasCredential));
+                Enabled: HasCredential(name, credential)));
+            changed = true;
         }
 
-        var updated = settings with
+        if (changed)
         {
-            Providers = providers,
-            Initialized = true,
-        };
-
-        settingsStore.Write(updated);
+            settingsStore.Write(settings with { Providers = merged, Initialized = true });
+        }
     }
 
     private bool HasCredential(string providerName, string? credentialName)

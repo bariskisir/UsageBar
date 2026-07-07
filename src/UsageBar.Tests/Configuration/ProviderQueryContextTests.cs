@@ -18,6 +18,7 @@ public sealed class ProviderQueryContextTests
             "Deepgram" => CredentialNames.Deepgram,
             "ElevenLabs" => CredentialNames.ElevenLabs,
             "Kilo" => CredentialNames.Kilo,
+            "ZenMux" => CredentialNames.ZenMux,
             _ => null,
         };
         return [new ProviderSettings(name, type, credential, apiKey, Enabled: false)];
@@ -101,6 +102,22 @@ public sealed class ProviderQueryContextTests
         finally
         {
             Environment.SetEnvironmentVariable(CredentialNames.Kilo, null);
+        }
+    }
+
+    [Fact]
+    public void ZenMux_falls_back_to_environment_variable_when_blank()
+    {
+        var settings = AppSettings.Default with { Providers = Provider("ZenMux", "") };
+        Environment.SetEnvironmentVariable(CredentialNames.ZenMux, "zenmux-env");
+        try
+        {
+            var context = ProviderQueryContext.FromSettings(settings, TestData.FixedNow);
+            Assert.Equal("zenmux-env", context.GetApiKey(CredentialNames.ZenMux));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(CredentialNames.ZenMux, null);
         }
     }
 }
