@@ -118,7 +118,7 @@ body {
 .stack--multi .metric { gap: 3px; }
 .stack--multi .metric__bar { height: 4px; }
 .stack--multi .metric__title { font-size: 11px; }
-.stack--multi .metric__sub { font-size: 9px; }
+.stack--multi .metric__sub { font-size: 10px; }
 .stack--multi .metric__pct,
 .stack--multi .metric__reset { font-size: 9px; }
 
@@ -219,7 +219,7 @@ body {
   max-width: 55%;
   overflow: hidden;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 400;
   text-align: right;
   text-overflow: ellipsis;
@@ -283,7 +283,7 @@ body {
 
 .metric__title {
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 11.5px;
   font-weight: 500;
 }
 
@@ -398,12 +398,16 @@ function metricRow(m, showLabel) {
   const level = levelOf(remain);
   const wrap = el("div", "metric");
   const label = (m.label || "").trim();
-  if (showLabel && label) {
-    var titleGroup = el("div", "metric__title-group");
-    titleGroup.appendChild(el("span", "metric__title", label));
-    var sub = (m.sub || "").trim();
-    if (sub) titleGroup.appendChild(el("span", "metric__sub", sub));
-    wrap.appendChild(titleGroup);
+  var sub = (m.sub || "").trim();
+  if (sub || (showLabel && label)) {
+    if (showLabel && label) {
+      var titleGroup = el("div", "metric__title-group");
+      titleGroup.appendChild(el("span", "metric__title", label));
+      if (sub) titleGroup.appendChild(el("span", "metric__sub", sub));
+      wrap.appendChild(titleGroup);
+    } else if (sub) {
+      wrap.appendChild(el("span", "metric__sub", sub));
+    }
   }
   const bar = el("div", "metric__bar");
   const fill = el("div", "metric__bar-fill");
@@ -450,8 +454,12 @@ function renderCard(card) {
     art.appendChild(el("div", "card__divider"));
     const content = el("div", "card__content");
     const group = el("section", "card__metrics");
-    const showMetricLabels = card.metrics.length > 1;
-    card.metrics.forEach((m) => group.appendChild(metricRow(m, showMetricLabels)));
+    var subCounts = {};
+    card.metrics.forEach(function (m) { var s = (m.sub || "").trim() || "__none__"; subCounts[s] = (subCounts[s] || 0) + 1; });
+    card.metrics.forEach(function (m) {
+      var s = (m.sub || "").trim() || "__none__";
+      group.appendChild(metricRow(m, subCounts[s] > 1));
+    });
     content.appendChild(group);
     art.appendChild(content);
   }

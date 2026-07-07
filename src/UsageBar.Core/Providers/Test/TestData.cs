@@ -15,10 +15,10 @@ internal static class TestData
         return (session, weekly);
     }
 
-    public static UsageWindow RandomWindow(string providerName, string label)
+    public static UsageWindow RandomWindow(string providerName, string label, string? subLabel = null)
     {
         var percent = Math.Round(25.0 + Random.Shared.NextDouble() * 75.0, 1);
-        return new UsageWindow(providerName, label, percent, RandomResetText());
+        return new UsageWindow(providerName, label, percent, RandomResetText(), subLabel);
     }
 
     public static IReadOnlyList<IconBar> Bars(UsageWindow w1, UsageWindow? w2 = null)
