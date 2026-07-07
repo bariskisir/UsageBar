@@ -20,7 +20,7 @@ internal static class TooltipCardBuilder
             {
                 case MetricResult metric when metric.Windows.Count > 0:
                     var metrics = metric.Windows
-                        .Select(window => new TooltipMetric(window.Label, window.UsedPercent, window.ResetText ?? string.Empty))
+                        .Select(window => new TooltipMetric(window.Label, window.UsedPercent, window.ResetText ?? string.Empty, window.SubLabel))
                         .ToList();
                     cards.Add(new TooltipCard(metric.ProviderName, metric.Plan, metrics, []));
                     break;

@@ -118,6 +118,7 @@ body {
 .stack--multi .metric { gap: 3px; }
 .stack--multi .metric__bar { height: 4px; }
 .stack--multi .metric__title { font-size: 11px; }
+.stack--multi .metric__sub { font-size: 9px; }
 .stack--multi .metric__pct,
 .stack--multi .metric__reset { font-size: 9px; }
 
@@ -272,10 +273,24 @@ body {
   gap: 6px;
 }
 
+.metric__title-group {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: space-between;
+  width: 100%;
+}
+
 .metric__title {
   color: var(--text-primary);
   font-size: 13px;
   font-weight: 500;
+}
+
+.metric__sub {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-secondary);
 }
 
 .metric__bar {
@@ -383,7 +398,13 @@ function metricRow(m, showLabel) {
   const level = levelOf(remain);
   const wrap = el("div", "metric");
   const label = (m.label || "").trim();
-  if (showLabel && label) wrap.appendChild(el("span", "metric__title", label));
+  if (showLabel && label) {
+    var titleGroup = el("div", "metric__title-group");
+    titleGroup.appendChild(el("span", "metric__title", label));
+    var sub = (m.sub || "").trim();
+    if (sub) titleGroup.appendChild(el("span", "metric__sub", sub));
+    wrap.appendChild(titleGroup);
+  }
   const bar = el("div", "metric__bar");
   const fill = el("div", "metric__bar-fill");
   fill.dataset.level = level;

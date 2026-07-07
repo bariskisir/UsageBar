@@ -9,7 +9,8 @@ namespace UsageBar.Domain;
 public sealed record TooltipMetric(
     [property: JsonPropertyName("label")] string Label,
     [property: JsonPropertyName("percent")] double Percent,
-    [property: JsonPropertyName("detail")] string Detail);
+    [property: JsonPropertyName("detail")] string Detail,
+    [property: JsonPropertyName("sub"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? SubLabel = null);
 
 /// <summary>
 /// A provider card pushed to the WebView2 tooltip. Serialised as part of
