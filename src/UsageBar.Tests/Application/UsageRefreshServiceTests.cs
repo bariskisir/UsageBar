@@ -155,7 +155,7 @@ public sealed class UsageRefreshServiceTests
         var settings = new StubSettingsStore(AppSettings.Default with
         {
             Refresh = new RefreshSettings(60),
-            Visual = new VisualSettings(new TrayIconLayoutSettings(
+            Visual = new VisualSettings(Scale: 100, IconLayout: new TrayIconLayoutSettings(
                 TrayIconLayoutSettings.ManualMode,
                 new Dictionary<string, double>
                 {

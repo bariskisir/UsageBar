@@ -295,6 +295,13 @@ select:focus, input:focus { border-color: var(--input-focus-border); }
 
         <div class="settings__section">
           <div class="settings__row">
+            <span class="settings__label">Tooltip Scale</span>
+            <select id="uiScale">
+              <option value="100">Medium</option>
+              <option value="125">Large</option>
+            </select>
+          </div>
+          <div class="settings__row">
             <span class="settings__label">Version</span>
             <span class="settings__value" id="settingsVersion" style="font-size:13px;color:var(--text-secondary);">-</span>
           </div>
@@ -543,6 +550,9 @@ select:focus, input:focus { border-color: var(--input-focus-border); }
     _envApiKeys = data.envApiKeys || {};
     _lastSettings = settings;
 
+    var visual = settings.visual || {};
+    document.getElementById("uiScale").value = String(visual.scale || 100);
+
     var refresh = settings.refresh || {};
     document.getElementById("refreshPeriod").value = String(refresh.minute || 5);
 
@@ -608,6 +618,7 @@ select:focus, input:focus { border-color: var(--input-focus-border); }
     };
 
     settings.visual = {
+      scale: parseInt(document.getElementById("uiScale").value) || 100,
       iconLayout: { mode: mode, bars: makeBars() }
     };
 

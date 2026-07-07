@@ -52,8 +52,11 @@ public sealed record AppSettings(
             Discord = notification.Discord ?? DiscordSettings.Default,
         };
 
+        var scale = Math.Clamp(((visual.Scale ?? 100) + 12) / 25 * 25, 100, 125);
+
         visual = visual with
         {
+            Scale = scale,
             IconLayout = (visual.IconLayout ?? TrayIconLayoutSettings.Default).Normalize(),
         };
 

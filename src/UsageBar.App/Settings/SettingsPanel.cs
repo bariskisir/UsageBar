@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Reflection;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using Microsoft.Web.WebView2.Core;
 using UsageBar.Application;
 using UsageBar.Configuration;
@@ -21,6 +22,7 @@ internal sealed class SettingsPanel : IDisposable
     private readonly IUsageRefreshService _refresh;
     private readonly IUpdateService _updateService;
     private readonly ITrayIconWindow _trayWindow;
+    private readonly ILogger<SettingsPanel> _logger;
     private readonly NativeMethods.WndProc _wndProc;
 
     private nint _hwnd;
@@ -37,11 +39,13 @@ internal sealed class SettingsPanel : IDisposable
         ISettingsStore settingsStore,
         IUsageRefreshService refresh,
         IUpdateService updateService,
-        ITrayIconWindow trayWindow)
+        ITrayIconWindow trayWindow,
+        ILogger<SettingsPanel> logger)
     {
         _webViewEnv = webViewEnv;
         _settingsStore = settingsStore;
         _refresh = refresh;
+        _logger = logger;
         _updateService = updateService;
         _trayWindow = trayWindow;
         _wndProc = WndProc;
@@ -123,7 +127,7 @@ internal sealed class SettingsPanel : IDisposable
         {
             _suspended = false;
             try { _core.Resume(); }
-            catch { }
+            catch (Exception ex) { _logger.LogWarning(ex, "Settings: resumeCore failed"); }
         }
     }
 
@@ -143,7 +147,7 @@ internal sealed class SettingsPanel : IDisposable
                 _suspended = true;
             }
         }
-        catch { }
+        catch (Exception ex) { _logger.LogWarning(ex, "Settings: suspendCore failed"); }
     }
 
     public void Dispose()
@@ -177,7 +181,7 @@ internal sealed class SettingsPanel : IDisposable
 
         JsonDocument document;
         try { document = JsonDocument.Parse(body); }
-        catch (JsonException) { return; }
+        catch (JsonException ex) { _logger.LogError(ex, "Save: jsonParseFailed"); return; }
 
         using (document)
         {
@@ -218,7 +222,8 @@ internal sealed class SettingsPanel : IDisposable
             _refresh.TriggerManualRefresh();
             PushToJs("window.__settingsSaved", null);
         }
-        catch (JsonException) { }
+        catch (JsonException ex) { _logger.LogError(ex, "Save: jsonException"); }
+        catch (Exception ex) { _logger.LogError(ex, "Save: unexpectedException"); }
     }
 
     private void HandleDrag(JsonElement root)
@@ -257,7 +262,9 @@ internal sealed class SettingsPanel : IDisposable
             if (p.Credential is not null && envSourcedSet.Contains(p.Credential))
             {
                 var value = p.ApiKey ?? string.Empty;
-                Environment.SetEnvironmentVariable(p.Credential, value, EnvironmentVariableTarget.User);
+                var currentUserValue = Environment.GetEnvironmentVariable(p.Credential, EnvironmentVariableTarget.User);
+                if (!string.Equals(currentUserValue, value, StringComparison.Ordinal))
+                    Environment.SetEnvironmentVariable(p.Credential, value, EnvironmentVariableTarget.User);
                 Environment.SetEnvironmentVariable(p.Credential, value);
                 updated.Add(p with { ApiKey = null });
             }
@@ -292,16 +299,16 @@ internal sealed class SettingsPanel : IDisposable
                 PushToJs("window.__updateResult", json);
             }
         }
-        catch { }
+        catch (Exception ex) { _logger.LogWarning(ex, "Settings: checkUpdate failed"); }
     }
 
-    private static void OpenUpdateUrl()
+    private void OpenUpdateUrl()
     {
         try
         {
             Process.Start(new ProcessStartInfo(UpdateUrls.LatestRelease) { UseShellExecute = true });
         }
-        catch { }
+        catch (Exception ex) { _logger.LogWarning(ex, "Settings: openUpdateUrl failed"); }
     }
 
     private void PushSettingsPayload()
@@ -347,7 +354,7 @@ internal sealed class SettingsPanel : IDisposable
                 await _core.ExecuteScriptAsync($"{function} && {function}()");
             }
         }
-        catch { }
+        catch (Exception ex) { _logger.LogWarning(ex, "Settings: pushToJs failed"); }
     }
 
     private void CenterWindow()

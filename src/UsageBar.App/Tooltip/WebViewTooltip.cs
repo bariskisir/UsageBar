@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Web.WebView2.Core;
+using UsageBar.Application;
 using UsageBar.Domain;
 using UsageBar.Infrastructure;
 using UsageBar.Tray;
@@ -25,6 +26,7 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
     private const int MinHeight = 60;
 
     private readonly WebViewEnvironment _webViewEnv;
+    private readonly ISettingsStore _settingsStore;
     private readonly NativeMethods.WndProc _wndProc;
 
     private volatile nint _hwnd;
@@ -43,9 +45,10 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
     private bool _disposed;
     private int _suspendVersion;
 
-    public WebViewTooltip(WebViewEnvironment webViewEnv)
+    public WebViewTooltip(WebViewEnvironment webViewEnv, ISettingsStore settingsStore)
     {
         _webViewEnv = webViewEnv;
+        _settingsStore = settingsStore;
         _wndProc = WndProc;
     }
 
@@ -116,7 +119,8 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
     /// </summary>
     public void SetContent(IReadOnlyList<TooltipCard> cards)
     {
-        var json = JsonSerializer.Serialize(new TooltipPayload(cards), TooltipJsonContext.Default.TooltipPayload);
+        var scale = ReadUserScale();
+        var json = JsonSerializer.Serialize(new TooltipPayload(cards, scale), TooltipJsonContext.Default.TooltipPayload);
         lock (_gate)
         {
             _pendingJson = json;
@@ -447,6 +451,19 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
             0);
 
         return hwnd;
+    }
+
+    private int ReadUserScale()
+    {
+        try
+        {
+            var settings = _settingsStore.Read();
+            return settings.Visual?.Scale ?? 100;
+        }
+        catch
+        {
+            return 100;
+        }
     }
 
     private double WindowScale()

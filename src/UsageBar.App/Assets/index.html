@@ -467,24 +467,25 @@ function renderCard(card) {
 }
 
 function reportSize(desiredWidth) {
-  const app = document.getElementById("app");
+  var app = document.getElementById("app");
   if (!app) return;
-  const h = Math.ceil(app.getBoundingClientRect().height);
+  var rect = app.getBoundingClientRect();
+  var w = Math.ceil(rect.width);
+  var h = Math.ceil(rect.height);
   if (h > 0 && window.ipc) {
-    window.ipc.postMessage(JSON.stringify({ type: "size", width: desiredWidth, height: h }));
+    window.ipc.postMessage(JSON.stringify({ type: "size", width: w, height: h }));
   }
 }
 
 window.__render = function (data) {
   var app = document.getElementById("app");
   app.innerHTML = "";
+  var userScale = data.scale && data.scale > 0 ? data.scale / 100 : 1;
   var panel = el("div", "panel panel--tray");
   var body = el("div", "panel__body");
   var stack = el("div", "stack");
   var visible = (data.cards || []).filter(function (card) { return !card.hide; });
   var total = visible.length;
-  // Grow vertically as much as the screen allows; only switch to multi-column
-  // when there is no more vertical room. Estimate ~70 px per card.
   var maxPerCol = Math.max(6, Math.floor(window.screen.availHeight / 70));
   var cols = total <= maxPerCol ? 1 : Math.ceil(total / maxPerCol);
   var colWidth = 150;
@@ -502,6 +503,12 @@ window.__render = function (data) {
   body.appendChild(stack);
   panel.appendChild(body);
   app.appendChild(panel);
+
+  if (userScale !== 1) {
+    app.style.width = desiredWidth + "px";
+    app.style.zoom = userScale;
+  }
+
   requestAnimationFrame(function () { return requestAnimationFrame(function () { return reportSize(desiredWidth); }); });
 };
 

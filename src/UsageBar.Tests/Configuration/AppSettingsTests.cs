@@ -14,6 +14,7 @@ public sealed class AppSettingsTests
         Assert.Equal(5, defaults.Refresh!.Minute);
         Assert.Equal(70, defaults.Notification!.High);
         Assert.Equal(90, defaults.Notification!.Critical);
+        Assert.Equal(100, defaults.Visual!.Scale);
         Assert.Equal(TrayIconLayoutSettings.AutoMode, defaults.Visual!.IconLayout!.Mode);
         Assert.Null(defaults.Providers);
         Assert.False(defaults.Initialized);
@@ -52,7 +53,7 @@ public sealed class AppSettingsTests
         {
             Refresh = new RefreshSettings(15),
             Notification = new NotificationSettings(60, 85, null, null),
-            Visual = new VisualSettings(iconLayout),
+            Visual = new VisualSettings(Scale: 100, IconLayout: iconLayout),
         };
 
         var normalized = settings.Normalize();
@@ -61,6 +62,43 @@ public sealed class AppSettingsTests
         Assert.Equal(85, normalized.Notification!.Critical);
         Assert.True(normalized.Visual!.IconLayout!.IsManual);
         Assert.Equal(25, normalized.Visual!.IconLayout!.Bars!["codex_session"]);
+    }
+
+    [Fact]
+    public void Normalize_clamps_scale_to_valid_range()
+    {
+        var defaultVisual = AppSettings.Default.Visual!;
+        Assert.Equal(100, defaultVisual.Scale);
+
+        var clamped = (AppSettings.Default with
+        {
+            Visual = defaultVisual with { Scale = 60 }
+        }).Normalize();
+        Assert.Equal(100, clamped.Visual!.Scale);
+
+        clamped = (AppSettings.Default with
+        {
+            Visual = defaultVisual with { Scale = 137 }
+        }).Normalize();
+        Assert.Equal(125, clamped.Visual!.Scale);
+
+        clamped = (AppSettings.Default with
+        {
+            Visual = defaultVisual with { Scale = 30 }
+        }).Normalize();
+        Assert.Equal(100, clamped.Visual!.Scale);
+
+        clamped = (AppSettings.Default with
+        {
+            Visual = defaultVisual with { Scale = 200 }
+        }).Normalize();
+        Assert.Equal(125, clamped.Visual!.Scale);
+
+        clamped = (AppSettings.Default with
+        {
+            Visual = defaultVisual with { Scale = 87 }
+        }).Normalize();
+        Assert.Equal(100, clamped.Visual!.Scale);
     }
 
     [Fact]

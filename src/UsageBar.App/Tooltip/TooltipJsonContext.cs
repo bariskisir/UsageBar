@@ -3,9 +3,10 @@ using UsageBar.Domain;
 
 namespace UsageBar.Tooltip;
 
-/// <summary>The payload pushed to the WebView tooltip, serialised as <c>{"cards":[...]}</c>.</summary>
+/// <summary>The payload pushed to the WebView tooltip, serialised as <c>{"cards":[...],"scale":100}</c>.</summary>
 internal sealed record TooltipPayload(
-    [property: JsonPropertyName("cards")] IReadOnlyList<TooltipCard> Cards);
+    [property: JsonPropertyName("cards")] IReadOnlyList<TooltipCard> Cards,
+    [property: JsonPropertyName("scale")] int Scale);
 
 /// <summary>
 /// System.Text.Json source-generation context for the tooltip payload. Card/metric property names
