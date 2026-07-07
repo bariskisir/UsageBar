@@ -80,7 +80,7 @@ public sealed class AppSettingsTests
         {
             Visual = defaultVisual with { Scale = 137 }
         }).Normalize();
-        Assert.Equal(125, clamped.Visual!.Scale);
+        Assert.Equal(137, clamped.Visual!.Scale);
 
         clamped = (AppSettings.Default with
         {
@@ -92,7 +92,7 @@ public sealed class AppSettingsTests
         {
             Visual = defaultVisual with { Scale = 200 }
         }).Normalize();
-        Assert.Equal(125, clamped.Visual!.Scale);
+        Assert.Equal(150, clamped.Visual!.Scale);
 
         clamped = (AppSettings.Default with
         {

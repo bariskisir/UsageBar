@@ -368,7 +368,7 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
                     if (document.RootElement.TryGetProperty("width", out var widthProperty) &&
                         widthProperty.TryGetInt32(out var width) && width > 0)
                     {
-                        _widthCss = Math.Max(DefaultWidth, width);
+                        _widthCss = width;
                     }
 
                     if (document.RootElement.TryGetProperty("height", out var heightProperty) &&
