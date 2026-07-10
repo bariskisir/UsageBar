@@ -33,24 +33,33 @@ public sealed class ClaudeProvider(HttpClient httpClient, IClaudeAuthReader auth
             return null;
         }
 
-        // Serialize auth refresh so two concurrent calls don't race on the same token.
-        await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        JsonDocument document;
+
+        if (context.CanRefreshToken(Descriptor.Name))
         {
-            auth = await ProviderAuthFlow
-                .RefreshIfNeededAsync(auth, context.Now, ShouldRefresh, RefreshAuthAsync, cancellationToken)
+            // Serialize auth refresh so two concurrent calls don't race on the same token.
+            await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                auth = await ProviderAuthFlow
+                    .RefreshIfNeededAsync(auth, context.Now, ShouldRefresh, RefreshAuthAsync, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            finally
+            {
+                _refreshGate.Release();
+            }
+
+            document = await ProviderAuthFlow
+                .ExecuteWithRefreshRetryAsync(auth, GetUsageDocumentAsync, IsAuthFailure, HasRefreshToken, RefreshAuthAsync, cancellationToken)
                 .ConfigureAwait(false);
         }
-        finally
+        else
         {
-            _refreshGate.Release();
+            document = await GetUsageDocumentAsync(auth, cancellationToken).ConfigureAwait(false);
         }
 
         var plan = PlanLabel(auth.SubscriptionType ?? auth.RateLimitTier);
-
-        using var document = await ProviderAuthFlow
-            .ExecuteWithRefreshRetryAsync(auth, GetUsageDocumentAsync, IsAuthFailure, HasRefreshToken, RefreshAuthAsync, cancellationToken)
-            .ConfigureAwait(false);
 
         var session = ReadWindow(document.RootElement, "five_hour", "Session", Descriptor.Name, context.Now);
         var weekly = ReadWindow(document.RootElement, "seven_day", "Weekly", Descriptor.Name, context.Now);

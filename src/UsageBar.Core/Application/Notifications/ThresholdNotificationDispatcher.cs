@@ -32,6 +32,11 @@ internal sealed class ThresholdNotificationDispatcher : IThresholdNotificationDi
 
     public async Task EmitAsync(IReadOnlyList<UsageWindow> windows, AppSettings settings, CancellationToken cancellationToken = default)
     {
+        if (settings.Notification is { Enabled: false })
+        {
+            return;
+        }
+
         var notifications = _thresholds.Evaluate(windows, settings);
         if (notifications.Count == 0)
         {

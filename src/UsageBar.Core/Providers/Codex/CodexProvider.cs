@@ -32,22 +32,31 @@ public sealed class CodexProvider(HttpClient httpClient, ICodexAuthReader authRe
             return null;
         }
 
-        // Serialize auth refresh so two concurrent calls don't race on the same token.
-        await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        JsonDocument document;
+
+        if (context.CanRefreshToken(Descriptor.Name))
         {
-            auth = await ProviderAuthFlow
-                .RefreshIfNeededAsync(auth, context.Now, ShouldRefresh, RefreshAuthAsync, cancellationToken)
+            // Serialize auth refresh so two concurrent calls don't race on the same token.
+            await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                auth = await ProviderAuthFlow
+                    .RefreshIfNeededAsync(auth, context.Now, ShouldRefresh, RefreshAuthAsync, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            finally
+            {
+                _refreshGate.Release();
+            }
+
+            document = await ProviderAuthFlow
+                .ExecuteWithRefreshRetryAsync(auth, GetUsageDocumentAsync, IsAuthFailure, HasRefreshToken, RefreshAuthAsync, cancellationToken)
                 .ConfigureAwait(false);
         }
-        finally
+        else
         {
-            _refreshGate.Release();
+            document = await GetUsageDocumentAsync(auth, cancellationToken).ConfigureAwait(false);
         }
-
-        using var document = await ProviderAuthFlow
-            .ExecuteWithRefreshRetryAsync(auth, GetUsageDocumentAsync, IsAuthFailure, HasRefreshToken, RefreshAuthAsync, cancellationToken)
-            .ConfigureAwait(false);
 
         var plan = PlanLabel(ProviderJson.GetString(document.RootElement, "plan_type"));
         var rateLimit = GetRateLimit(document.RootElement);

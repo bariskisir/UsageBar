@@ -169,6 +169,16 @@ select:focus, input:focus { border-color: var(--input-focus-border); }
 
 .provider-row input[type="text"] { width: 130px; font-size: 11px; padding: 4px 8px; }
 
+.provider-row__toggle-group { display: flex; align-items: center; gap: 4px; }
+
+.provider-row__divider {
+  width: 1px; height: 18px;
+  background: rgba(255,255,255,0.1);
+  flex-shrink: 0; margin: 0 6px;
+}
+
+.toggle-inline-label { font-size: 11px; color: var(--text-secondary); white-space: nowrap; }
+
 .provider-row__env-tag {
   font-size: 9px; color: var(--text-secondary);
   background: rgba(255,255,255,0.06);
@@ -235,6 +245,12 @@ select:focus, input:focus { border-color: var(--input-focus-border); }
             <div class="settings__value">
               <label class="toggle"><input type="checkbox" id="checkUpdates" /><span class="toggle__slider"></span></label>
               <button class="btn btn--sm btn--secondary" id="checkNow">Check Now</button>
+            </div>
+          </div>
+          <div class="settings__row">
+            <span class="settings__label">Notifications</span>
+            <div class="settings__value">
+              <label class="toggle"><input type="checkbox" id="notificationsEnabled" /><span class="toggle__slider"></span></label>
             </div>
           </div>
           <div class="settings__row">
@@ -421,20 +437,72 @@ select:focus, input:focus { border-color: var(--input-focus-border); }
       nameEl.title = pr.name;
       row.appendChild(nameEl);
 
-      // Enabled toggle
-      var toggleLabel = document.createElement("label");
-      toggleLabel.className = "toggle";
-      var cb = document.createElement("input");
-      cb.type = "checkbox";
-      cb.className = "provider-toggle";
-      cb.dataset.providerName = pr.name;
-      cb.checked = pr.enabled === true;
-      cb.addEventListener("change", function () { markDirty(); });
-      toggleLabel.appendChild(cb);
-      var slider = document.createElement("span");
-      slider.className = "toggle__slider";
-      toggleLabel.appendChild(slider);
-      row.appendChild(toggleLabel);
+      if (isOAuth) {
+        // Enabled toggle
+        var toggleGroup = document.createElement("span");
+        toggleGroup.className = "provider-row__toggle-group";
+        var toggleLabel = document.createElement("label");
+        toggleLabel.className = "toggle";
+        var cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.className = "provider-toggle";
+        cb.dataset.providerName = pr.name;
+        cb.checked = pr.enabled === true;
+        cb.addEventListener("change", function () { markDirty(); });
+        toggleLabel.appendChild(cb);
+        var slider = document.createElement("span");
+        slider.className = "toggle__slider";
+        toggleLabel.appendChild(slider);
+        var toggleText = document.createElement("span");
+        toggleText.className = "toggle-inline-label";
+        toggleText.textContent = "Enabled";
+        toggleGroup.appendChild(toggleText);
+        toggleGroup.appendChild(toggleLabel);
+        row.appendChild(toggleGroup);
+
+        // Divider between toggle groups
+        var divider = document.createElement("span");
+        divider.className = "provider-row__divider";
+        row.appendChild(divider);
+
+        // Refresh-token toggle
+        var refreshGroup = document.createElement("span");
+        refreshGroup.className = "provider-row__toggle-group";
+        var refreshLabel = document.createElement("label");
+        refreshLabel.className = "toggle";
+        refreshLabel.title = "Auto-refresh token when expired";
+        var refreshCb = document.createElement("input");
+        refreshCb.type = "checkbox";
+        refreshCb.className = "provider-refresh-toggle";
+        refreshCb.dataset.providerName = pr.name;
+        refreshCb.checked = pr.refreshToken !== false;
+        refreshCb.addEventListener("change", function () { markDirty(); });
+        refreshLabel.appendChild(refreshCb);
+        var refreshSlider = document.createElement("span");
+        refreshSlider.className = "toggle__slider";
+        refreshLabel.appendChild(refreshSlider);
+        var refreshText = document.createElement("span");
+        refreshText.className = "toggle-inline-label";
+        refreshText.textContent = "Refresh Token";
+        refreshGroup.appendChild(refreshText);
+        refreshGroup.appendChild(refreshLabel);
+        row.appendChild(refreshGroup);
+      } else {
+        // Enabled toggle for non-OAuth providers
+        var toggleLabel = document.createElement("label");
+        toggleLabel.className = "toggle";
+        var cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.className = "provider-toggle";
+        cb.dataset.providerName = pr.name;
+        cb.checked = pr.enabled === true;
+        cb.addEventListener("change", function () { markDirty(); });
+        toggleLabel.appendChild(cb);
+        var slider = document.createElement("span");
+        slider.className = "toggle__slider";
+        toggleLabel.appendChild(slider);
+        row.appendChild(toggleLabel);
+      }
 
       if (!isOAuth && pr.credential) {
         var envVal = _envApiKeys[pr.credential] || "";
@@ -561,6 +629,7 @@ select:focus, input:focus { border-color: var(--input-focus-border); }
     var notif = settings.notification || {};
     document.getElementById("highPct").value = String(notif.high || 70);
     document.getElementById("criticalPct").value = String(notif.critical || 95);
+    document.getElementById("notificationsEnabled").checked = notif.enabled !== false;
 
     var update = settings.update || {};
     document.getElementById("checkUpdates").checked = update.onStartup !== false;
@@ -603,6 +672,7 @@ select:focus, input:focus { border-color: var(--input-focus-border); }
     settings.notification = {
       high: parseFloat(document.getElementById("highPct").value) || 70,
       critical: parseFloat(document.getElementById("criticalPct").value) || 95,
+      enabled: document.getElementById("notificationsEnabled").checked,
       telegram: {
         token: tgToken || null,
         chatId: isNaN(tgChatId) ? 0 : tgChatId,
@@ -645,13 +715,12 @@ select:focus, input:focus { border-color: var(--input-focus-border); }
       }
       if (orig && !credential) credential = orig.credential || null;
 
-      providers.push({
-        name: name,
-        type: isOAuth ? "oauth" : "apiKey",
-        credential: credential,
-        apiKey: apiKey,
-        enabled: enabled
-      });
+      var refreshCb = row.querySelector(".provider-refresh-toggle");
+      var refreshToken = refreshCb ? refreshCb.checked : true;
+
+      providers.push(refreshCb
+        ? { name: name, type: isOAuth ? "oauth" : "apiKey", credential: credential, apiKey: apiKey, enabled: enabled, refreshToken: refreshToken }
+        : { name: name, type: isOAuth ? "oauth" : "apiKey", credential: credential, apiKey: apiKey, enabled: enabled });
     });
     settings.providers = providers;
 

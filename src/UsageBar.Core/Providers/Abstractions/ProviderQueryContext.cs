@@ -11,11 +11,16 @@ namespace UsageBar.Providers;
 public sealed class ProviderQueryContext
 {
     private readonly IReadOnlyDictionary<string, string> _apiKeys;
+    private readonly IReadOnlyDictionary<string, bool> _refreshTokenMap;
 
-    public ProviderQueryContext(DateTimeOffset now, IReadOnlyDictionary<string, string> apiKeys)
+    public ProviderQueryContext(
+        DateTimeOffset now,
+        IReadOnlyDictionary<string, string> apiKeys,
+        IReadOnlyDictionary<string, bool>? refreshTokenMap = null)
     {
         Now = now;
         _apiKeys = apiKeys;
+        _refreshTokenMap = refreshTokenMap ?? new Dictionary<string, bool>();
     }
 
     /// <summary>Reference time for the current refresh (used for reset countdowns).</summary>
@@ -25,6 +30,10 @@ public sealed class ProviderQueryContext
     public string? GetApiKey(string name) =>
         _apiKeys.TryGetValue(name, out var value) && !string.IsNullOrWhiteSpace(value) ? value : null;
 
+    /// <summary>Returns whether the named provider is allowed to refresh its OAuth token.</summary>
+    public bool CanRefreshToken(string providerName) =>
+        _refreshTokenMap.TryGetValue(providerName, out var canRefresh) ? canRefresh : true;
+
     /// <summary>
     /// Builds a context from settings, falling back to the same-named environment
     /// variable when a settings value is blank.
@@ -32,11 +41,14 @@ public sealed class ProviderQueryContext
     public static ProviderQueryContext FromSettings(AppSettings settings, DateTimeOffset now)
     {
         var apiKeys = new Dictionary<string, string>(StringComparer.Ordinal);
+        var refreshTokenMap = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
 
         if (settings.Providers is { Count: > 0 })
         {
             foreach (var p in settings.Providers)
             {
+                refreshTokenMap[p.Name] = p.RefreshToken;
+
                 if (p.Type != ProviderSettings.TypeApiKey || string.IsNullOrEmpty(p.Credential))
                 {
                     continue;
@@ -46,7 +58,7 @@ public sealed class ProviderQueryContext
             }
         }
 
-        return new ProviderQueryContext(now, apiKeys);
+        return new ProviderQueryContext(now, apiKeys, refreshTokenMap);
     }
 
     private static string Resolve(string? settingsValue, string environmentVariableName)
