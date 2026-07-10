@@ -1,6 +1,6 @@
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>Test provider for Alibaba — returns mock 5h, Weekly, and Monthly windows.</summary>
 public sealed class TestAlibabaProvider : IUsageProvider
@@ -13,6 +13,6 @@ public sealed class TestAlibabaProvider : IUsageProvider
         var weekly = TestData.RandomWindow("Alibaba", "Weekly");
         var monthly = TestData.RandomWindow("Alibaba", "Monthly");
         return Task.FromResult<ProviderResult?>(
-            new MetricResult("Alibaba", "Coding Plan", [hourly, weekly, monthly], TestData.Bars(hourly, weekly)));
+            new MetricResult("Alibaba", "Coding Plan", [hourly, weekly, monthly]));
     }
 }

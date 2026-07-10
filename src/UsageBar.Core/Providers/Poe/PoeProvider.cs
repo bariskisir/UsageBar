@@ -1,11 +1,12 @@
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>Reports the Poe point balance.</summary>
 public sealed class PoeProvider(HttpClient httpClient) : BalanceUsageProvider(httpClient)
 {
-    public override ProviderDescriptor Descriptor { get; } = new("Poe", DisplayOrder: 118);
+    public override ProviderDescriptor Descriptor { get; } = new(
+        "Poe", 118, ProviderAuthenticationKind.ApiKey, CredentialNames.Poe, SettingsOrder: 20);
 
     protected override string CredentialName => CredentialNames.Poe;
 

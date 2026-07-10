@@ -1,4 +1,4 @@
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>Claude OAuth material required to query usage.</summary>
 public sealed record ClaudeAuth(

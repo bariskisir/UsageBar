@@ -1,26 +1,26 @@
 using Microsoft.Extensions.Logging;
-using UsageBar.Domain;
+using UsageBar.Core.Configuration;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Application;
+namespace UsageBar.Core.Application;
 
 public sealed class DiscordNotificationService : IRemoteNotificationService
 {
     private readonly HttpClient _httpClient;
-    private readonly ISettingsStore _settings;
     private readonly ILogger<DiscordNotificationService> _logger;
 
-    public DiscordNotificationService(HttpClient httpClient, ISettingsStore settings, ILogger<DiscordNotificationService> logger)
+    public DiscordNotificationService(HttpClient httpClient, ILogger<DiscordNotificationService> logger)
     {
         _httpClient = httpClient;
-        _settings = settings;
         _logger = logger;
     }
 
     public async Task SendAsync(
         string message,
+        AppSettings appSettings,
         CancellationToken cancellationToken)
     {
-        var discordSettings = _settings.Read().Notification?.Discord ?? DiscordSettings.Default;
+        var discordSettings = appSettings.Notification?.Discord ?? DiscordSettings.Default;
         if (!discordSettings.IsEnabled)
         {
             return;
@@ -36,7 +36,7 @@ public sealed class DiscordNotificationService : IRemoteNotificationService
                 new DiscordWebhookPayload(
                     message,
                     discordSettings.Username ?? "Usage Bar",
-                    "https://raw.githubusercontent.com/bariskisir/UsageBar/refs/heads/master/src/UsageBar.App/Assets/AppIcon.png"),
+                    "https://raw.githubusercontent.com/bariskisir/UsageBar/refs/heads/master/src/UsageBar.Core/Assets/AppIcon.png"),
                 RemoteNotificationJsonContext.Default.DiscordWebhookPayload,
                 "Discord webhook",
                 "Discord",

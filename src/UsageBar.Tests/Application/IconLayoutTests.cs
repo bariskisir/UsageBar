@@ -1,6 +1,6 @@
-using UsageBar.Application;
-using UsageBar.Configuration;
-using UsageBar.Domain;
+using UsageBar.Core.Application;
+using UsageBar.Core.Configuration;
+using UsageBar.Core.Domain;
 using Xunit;
 
 namespace UsageBar.Tests;
@@ -8,7 +8,7 @@ namespace UsageBar.Tests;
 public sealed class IconLayoutTests
 {
     private static ProviderResult Metric(string name, params UsageWindow[] windows) =>
-        new MetricResult(name, Plan: null, Windows: windows, IconBars: []);
+        new MetricResult(name, Plan: null, Windows: windows);
 
     [Fact]
     public void Auto_layout_shows_all_metric_windows_equally_in_result_order()

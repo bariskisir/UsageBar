@@ -1,18 +1,20 @@
 using System.Net.Http.Headers;
 using System.Text;
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>Reports Codebuff usage/quota percentage and remaining balance.</summary>
 public sealed class CodebuffProvider(HttpClient httpClient) : IUsageProvider
 {
     private const string DefaultBaseUrl = "https://www.codebuff.com";
 
-    public ProviderDescriptor Descriptor { get; } = new("Codebuff", DisplayOrder: 27);
+    public ProviderDescriptor Descriptor { get; } = new(
+        "Codebuff", 27, ProviderAuthenticationKind.ApiKey, CredentialNames.Codebuff, 14, "codebuff",
+        ["codebuff_quota"]);
 
-    public void RefreshEnabled(ProviderQueryContext context) =>
-        Descriptor.IsEnabled = !string.IsNullOrEmpty(context.GetApiKey(CredentialNames.Codebuff));
+    public bool IsConfigured(ProviderQueryContext context) =>
+        !string.IsNullOrEmpty(context.GetApiKey(CredentialNames.Codebuff));
 
     public async Task<ProviderResult?> GetUsageAsync(ProviderQueryContext context, CancellationToken cancellationToken)
     {
@@ -61,6 +63,6 @@ public sealed class CodebuffProvider(HttpClient httpClient) : IUsageProvider
         var plan = planParts.Count > 0 ? string.Join(" - ", planParts) : null;
         var window = new UsageWindow(Descriptor.Name, "Quota", usedPercent, resetText);
 
-        return new MetricResult(Descriptor.Name, plan, [window], [IconBar.Create(usedPercent, 1.0)]);
+        return new MetricResult(Descriptor.Name, plan, [window]);
     }
 }

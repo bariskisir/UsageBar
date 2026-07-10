@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace UsageBar.Configuration;
+namespace UsageBar.Core.Configuration;
 
 public sealed record TrayIconLayoutSettings(
     [property: JsonPropertyName("mode")] string? Mode,

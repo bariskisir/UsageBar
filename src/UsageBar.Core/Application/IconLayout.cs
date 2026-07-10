@@ -1,7 +1,7 @@
-using UsageBar.Configuration;
-using UsageBar.Domain;
+using UsageBar.Core.Configuration;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Application;
+namespace UsageBar.Core.Application;
 
 /// <summary>
 /// Builds the final ordered tray-icon bars from metric windows. Default mode shows all metric

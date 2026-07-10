@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
-using UsageBar.Application;
-using UsageBar.Domain;
-using UsageBar.Providers;
+using UsageBar.Core.Application;
+using UsageBar.Core.Domain;
+using UsageBar.Core.Providers;
 using Xunit;
 
 namespace UsageBar.Tests;
@@ -11,7 +11,7 @@ public sealed class UsageAggregatorTests
     [Fact]
     public async Task Merges_windows_and_skips_nulls()
     {
-        ProviderResult metric = new MetricResult("Codex", "Pro", [TestData.Window("Codex", "Session", 10)], []);
+        ProviderResult metric = new MetricResult("Codex", "Pro", [TestData.Window("Codex", "Session", 10)]);
         ProviderResult balance = new BalanceResult("DeepSeek", "$5.00");
 
         IReadOnlyList<IUsageProvider> providers =
@@ -30,8 +30,8 @@ public sealed class UsageAggregatorTests
     [Fact]
     public async Task Orders_results_by_display_order()
     {
-        ProviderResult codex = new MetricResult("Codex", "Pro", [], []);
-        ProviderResult claude = new MetricResult("Claude", "Max", [], []);
+        ProviderResult codex = new MetricResult("Codex", "Pro", []);
+        ProviderResult claude = new MetricResult("Claude", "Max", []);
         ProviderResult deepseek = new BalanceResult("DeepSeek", "$5.00");
 
         // Registered out of order; the aggregator must sort by display order.
@@ -50,10 +50,10 @@ public sealed class UsageAggregatorTests
     [Fact]
     public async Task Allows_provider_to_order_by_result_kind()
     {
-        ProviderResult claude = new MetricResult("Claude", "Max", [TestData.Window("Claude", "Session", 10)], []);
-        ProviderResult elevenLabs = new MetricResult("ElevenLabs", "Pro", [TestData.Window("ElevenLabs", "Session", 20)], []);
+        ProviderResult claude = new MetricResult("Claude", "Max", [TestData.Window("Claude", "Session", 10)]);
+        ProviderResult elevenLabs = new MetricResult("ElevenLabs", "Pro", [TestData.Window("ElevenLabs", "Session", 20)]);
         ProviderResult kimi = new BalanceResult("Moonshot (Kimi)", "$5.00");
-        ProviderResult kiloMetric = new MetricResult("Kilo", "Pro", [TestData.Window("Kilo", "Pass", 30)], []);
+        ProviderResult kiloMetric = new MetricResult("Kilo", "Pro", [TestData.Window("Kilo", "Pass", 30)]);
         ProviderResult kiloBalance = new BalanceResult("Kilo", "$12.50");
 
         var metricSnapshot = await UsageAggregator.RefreshAsync(

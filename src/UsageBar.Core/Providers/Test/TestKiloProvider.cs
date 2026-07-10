@@ -1,6 +1,6 @@
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>
 /// Test provider for Kilo — randomly returns a metric card (plan mode), a balance card,
@@ -26,7 +26,7 @@ public sealed class TestKiloProvider : IUsageProvider, IResultDisplayOrderProvid
         var pass = TestData.RandomWindow("Kilo", "Pass");
         var plan = Plans[Random.Shared.Next(Plans.Length)];
         return Task.FromResult<ProviderResult?>(
-            new MetricResult("Kilo", plan, [pass], TestData.Bars(pass)));
+            new MetricResult("Kilo", plan, [pass]));
     }
 
     public Task<IReadOnlyList<ProviderResult>> GetUsageResultsAsync(ProviderQueryContext context, CancellationToken cancellationToken)
@@ -41,7 +41,7 @@ public sealed class TestKiloProvider : IUsageProvider, IResultDisplayOrderProvid
             {
                 var pass = TestData.RandomWindow("Kilo", "Pass");
                 var plan = Plans[Random.Shared.Next(Plans.Length)];
-                results.Add(new MetricResult("Kilo", plan, [pass], TestData.Bars(pass)));
+                results.Add(new MetricResult("Kilo", plan, [pass]));
                 break;
             }
             // 2 — balance mode (BalanceResult only)
@@ -57,7 +57,7 @@ public sealed class TestKiloProvider : IUsageProvider, IResultDisplayOrderProvid
                 var plan = Plans[Random.Shared.Next(Plans.Length)];
                 var balance = TestData.RandomBalance("Kilo");
                 var planLine = $"{plan} - {balance.BalanceText}";
-                results.Add(new MetricResult("Kilo", planLine, [pass], TestData.Bars(pass)));
+                results.Add(new MetricResult("Kilo", planLine, [pass]));
                 break;
             }
         }

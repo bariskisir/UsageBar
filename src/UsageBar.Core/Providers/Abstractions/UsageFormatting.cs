@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>
 /// Shared display formatting used across providers. Centralised here so balance and

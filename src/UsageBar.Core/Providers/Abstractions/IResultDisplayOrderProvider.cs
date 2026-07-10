@@ -1,6 +1,6 @@
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>
 /// Optional provider hook for providers whose placement depends on the concrete result kind.

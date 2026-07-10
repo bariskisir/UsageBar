@@ -1,6 +1,6 @@
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Application;
+namespace UsageBar.Core.Application;
 
 internal static class NotificationMessageFormatter
 {

@@ -1,6 +1,6 @@
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>Test provider for Copilot — returns mock Premium and Chat windows with random usage.</summary>
 public sealed class TestCopilotProvider : IUsageProvider
@@ -15,6 +15,6 @@ public sealed class TestCopilotProvider : IUsageProvider
         var chat = TestData.RandomWindow("Copilot", "Chat");
         var plan = Plans[Random.Shared.Next(Plans.Length)];
         return Task.FromResult<ProviderResult?>(
-            new MetricResult("Copilot", plan, [premium, chat], TestData.Bars(premium, chat)));
+            new MetricResult("Copilot", plan, [premium, chat]));
     }
 }

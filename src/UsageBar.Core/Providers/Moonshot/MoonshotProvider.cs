@@ -1,11 +1,12 @@
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>Reports the Moonshot account available USD balance.</summary>
 public sealed class MoonshotProvider(HttpClient httpClient) : BalanceUsageProvider(httpClient)
 {
-    public override ProviderDescriptor Descriptor { get; } = new(@"Moonshot (Kimi)", DisplayOrder: 115);
+    public override ProviderDescriptor Descriptor { get; } = new(
+        "Moonshot (Kimi)", 115, ProviderAuthenticationKind.ApiKey, CredentialNames.Moonshot, SettingsOrder: 6);
 
     protected override string CredentialName => CredentialNames.Moonshot;
 

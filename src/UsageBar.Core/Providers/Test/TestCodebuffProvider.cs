@@ -1,6 +1,6 @@
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>Test provider for Codebuff — returns a mock Quota window with random 25–100% usage and a balance plan line.</summary>
 public sealed class TestCodebuffProvider : IUsageProvider
@@ -12,6 +12,6 @@ public sealed class TestCodebuffProvider : IUsageProvider
         var window = TestData.RandomWindow("Codebuff", "Quota");
         var balance = UsageFormatting.Currency(Math.Round(10m + (decimal)Random.Shared.NextDouble() * 10m, 2));
         return Task.FromResult<ProviderResult?>(
-            new MetricResult("Codebuff", balance, [window], TestData.Bars(window)));
+            new MetricResult("Codebuff", balance, [window]));
     }
 }

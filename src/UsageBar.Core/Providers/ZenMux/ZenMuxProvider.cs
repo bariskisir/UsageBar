@@ -1,11 +1,12 @@
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>Reports the ZenMux PAYG USD balance.</summary>
 public sealed class ZenMuxProvider(HttpClient httpClient) : BalanceUsageProvider(httpClient)
 {
-    public override ProviderDescriptor Descriptor { get; } = new("ZenMux", DisplayOrder: 111);
+    public override ProviderDescriptor Descriptor { get; } = new(
+        "ZenMux", 111, ProviderAuthenticationKind.ApiKey, CredentialNames.ZenMux, SettingsOrder: 5);
 
     protected override string CredentialName => CredentialNames.ZenMux;
 

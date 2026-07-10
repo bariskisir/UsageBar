@@ -1,6 +1,6 @@
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>Test provider for Synthetic — returns mock rolling-5h, weekly, and search-hourly windows.</summary>
 public sealed class TestSyntheticProvider : IUsageProvider
@@ -13,6 +13,6 @@ public sealed class TestSyntheticProvider : IUsageProvider
         var weekly = TestData.RandomWindow("Synthetic", "Weekly");
         var search = TestData.RandomWindow("Synthetic", "Search");
         return Task.FromResult<ProviderResult?>(
-            new MetricResult("Synthetic", null, [rolling, weekly, search], TestData.Bars(rolling, weekly)));
+            new MetricResult("Synthetic", null, [rolling, weekly, search]));
     }
 }

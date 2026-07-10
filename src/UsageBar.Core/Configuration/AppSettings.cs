@@ -1,7 +1,7 @@
 using System.Text.Json.Serialization;
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Configuration;
+namespace UsageBar.Core.Configuration;
 
 public sealed record AppSettings(
     [property: JsonPropertyName("refresh")] RefreshSettings? Refresh,
@@ -9,7 +9,8 @@ public sealed record AppSettings(
     [property: JsonPropertyName("visual")] VisualSettings? Visual,
     [property: JsonPropertyName("update")] UpdateSettings? Update,
     [property: JsonPropertyName("providers")] List<ProviderSettings>? Providers,
-    [property: JsonPropertyName("initialized")] bool? Initialized)
+    [property: JsonPropertyName("initialized")] bool? Initialized,
+    [property: JsonPropertyName("startWithSystem")] bool? StartWithSystem)
 {
     public static AppSettings Default { get; } =
         new(
@@ -18,7 +19,8 @@ public sealed record AppSettings(
             Visual: VisualSettings.Default,
             Update: UpdateSettings.Default,
             Providers: null,
-            Initialized: false);
+            Initialized: false,
+            StartWithSystem: true);
 
     public AppSettings Normalize()
     {
@@ -72,6 +74,7 @@ public sealed record AppSettings(
             Visual = visual,
             Update = update,
             Initialized = Initialized ?? (Providers is { Count: > 0 } ? true : false),
+            StartWithSystem = StartWithSystem ?? true,
         };
     }
 }

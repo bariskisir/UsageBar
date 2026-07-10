@@ -1,5 +1,5 @@
-using UsageBar.Application;
-using UsageBar.Domain;
+using UsageBar.Core.Application;
+using UsageBar.Core.Domain;
 using Xunit;
 
 namespace UsageBar.Tests;
@@ -11,14 +11,23 @@ public sealed class TooltipCardBuilderTests
     {
         IReadOnlyList<ProviderResult> results =
         [
-            new MetricResult("Codex", "Pro", [TestData.Window("Codex", "Session", 10, "1h 0m")], []),
-            new MetricResult("Claude", "Max", [TestData.Window("Claude", "Session", 50, "2h 0m")], []),
+            new MetricResult("Codex", "Pro", [TestData.Window("Codex", "Session", 10, "1h 0m")]),
+            new MetricResult("Claude", "Max", [TestData.Window("Claude", "Session", 50, "2h 0m")]),
             new BalanceResult("OpenRouter", "$1.00"),
         ];
 
-        var cards = TooltipCardBuilder.Build(new UsageSnapshot(results, []));
+        var cards = TooltipCardBuilder.Build(
+            new UsageSnapshot(results, []),
+            new Dictionary<string, string?>
+            {
+                ["Codex"] = "openai",
+                ["Claude"] = "claude",
+            });
 
         Assert.Equal(["Codex", "Claude", "OpenRouter"], cards.Select(c => c.Title));
+        Assert.Equal("openai", cards[0].IconKey);
+        Assert.Equal("claude", cards[1].IconKey);
+        Assert.Null(cards[2].IconKey);
     }
 
     [Fact]
@@ -26,7 +35,7 @@ public sealed class TooltipCardBuilderTests
     {
         IReadOnlyList<ProviderResult> results =
         [
-            new MetricResult("Codex", "Pro", [TestData.Window("Codex", "Session", 10, "1h 0m")], []),
+            new MetricResult("Codex", "Pro", [TestData.Window("Codex", "Session", 10, "1h 0m")]),
         ];
 
         var card = Assert.Single(TooltipCardBuilder.Build(new UsageSnapshot(results, [])));
@@ -56,7 +65,7 @@ public sealed class TooltipCardBuilderTests
     {
         IReadOnlyList<ProviderResult> results =
         [
-            new MetricResult("Codex", "Pro", [], []),
+            new MetricResult("Codex", "Pro", []),
             new BalanceResult("DeepSeek", "$9.99"),
         ];
 

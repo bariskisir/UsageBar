@@ -1,14 +1,11 @@
+using System.Diagnostics;
 using Microsoft.Extensions.Logging;
-using UsageBar.Domain;
-using UsageBar.Providers;
+using UsageBar.Core.Domain;
+using UsageBar.Core.Providers;
 
-namespace UsageBar.Application;
+namespace UsageBar.Core.Application;
 
-/// <summary>
-/// Queries all providers concurrently (in display order) and merges their results into a single
-/// <see cref="UsageSnapshot"/>. Provider failures are logged and isolated so one bad provider
-/// never breaks the refresh.
-/// </summary>
+/// <summary>Queries configured providers concurrently and isolates provider-local failures.</summary>
 internal static class UsageAggregator
 {
     private static readonly TimeSpan RefreshTimeout = TimeSpan.FromSeconds(45);
@@ -23,42 +20,47 @@ internal static class UsageAggregator
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(RefreshTimeout);
 
-        // Query in display order so the resulting tray bars and tooltip cards come out ordered.
         var ordered = providers.OrderBy(provider => provider.Descriptor.DisplayOrder).ToArray();
+        var settingsByName = (providerSettings ?? [])
+            .GroupBy(settings => settings.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.Last(), StringComparer.OrdinalIgnoreCase);
+        var configured = new List<IUsageProvider>(ordered.Length);
 
-        // Check credentials for every provider before each refresh so providers that
-        // gain credentials mid-session are automatically picked up, and providers
-        // without credentials are skipped without creating tasks for them.
         foreach (var provider in ordered)
         {
-            // Apply user-enabled/disabled from settings first.
-            var ps = FindProvider(providerSettings, provider.Descriptor.Name);
-            if (ps is { Enabled: false })
+            if (settingsByName.TryGetValue(provider.Descriptor.Name, out var settings) && !settings.Enabled)
             {
-                provider.Descriptor.IsEnabled = false;
+                logger.LogDebug("{Provider} skipped because it is disabled in settings.", provider.Descriptor.Name);
                 continue;
             }
 
             try
             {
-                provider.RefreshEnabled(context);
+                if (provider.IsConfigured(context))
+                {
+                    configured.Add(provider);
+                }
+                else
+                {
+                    logger.LogDebug("{Provider} skipped because no usable credential was found.", provider.Descriptor.Name);
+                }
             }
             catch (Exception exception)
             {
-                logger.LogWarning(exception, "{Provider} credential check failed — provider disabled for this cycle.", provider.Descriptor.Name);
-                provider.Descriptor.IsEnabled = false;
+                logger.LogWarning(exception, "{Provider} credential check failed; provider skipped for this refresh.", provider.Descriptor.Name);
             }
         }
 
-        var tasks = ordered
-            .Where(provider => provider.Descriptor.IsEnabled)
-            .Select(provider => RefreshProviderAsync(provider, context, logger, timeout.Token))
-            .ToArray();
+        logger.LogInformation(
+            "Provider selection completed: registered={RegisteredCount}; configured={ConfiguredCount}.",
+            ordered.Length,
+            configured.Count);
 
-        var refreshes = await Task.WhenAll(tasks).ConfigureAwait(false);
+        var refreshes = await Task.WhenAll(configured.Select(provider =>
+                RefreshProviderAsync(provider, context, logger, timeout.Token, cancellationToken)))
+            .ConfigureAwait(false);
 
-        var succeeded = new List<(ProviderResult Result, int DisplayOrder)>(refreshes.Length);
-
+        var succeeded = new List<(ProviderResult Result, int DisplayOrder)>();
         foreach (var refresh in refreshes)
         {
             foreach (var result in refresh.Results)
@@ -66,7 +68,6 @@ internal static class UsageAggregator
                 var displayOrder = refresh.Provider is IResultDisplayOrderProvider dynamicOrder
                     ? dynamicOrder.GetDisplayOrder(result)
                     : refresh.Provider.Descriptor.DisplayOrder;
-
                 succeeded.Add((result, displayOrder));
             }
         }
@@ -80,45 +81,54 @@ internal static class UsageAggregator
             .SelectMany(metric => metric.Windows)
             .ToList();
 
-        return new UsageSnapshot(
-            orderedResults,
-            windows);
+        return new UsageSnapshot(orderedResults, windows);
     }
 
     private static async Task<ProviderRefresh> RefreshProviderAsync(
         IUsageProvider provider,
         ProviderQueryContext context,
         ILogger logger,
-        CancellationToken cancellationToken)
+        CancellationToken refreshCancellationToken,
+        CancellationToken shutdownCancellationToken)
     {
+        var started = Stopwatch.GetTimestamp();
+        using var scope = logger.BeginScope(new Dictionary<string, object?>
+        {
+            ["Provider"] = provider.Descriptor.Name,
+        });
+
+        logger.LogInformation("Provider query started.");
+
         try
         {
-            var results = await provider.GetUsageResultsAsync(context, cancellationToken).ConfigureAwait(false);
+            var results = await provider.QueryAsync(context, refreshCancellationToken).ConfigureAwait(false);
+            logger.LogInformation(
+                "Provider query completed: resultCount={ResultCount}; windowCount={WindowCount}; durationMs={DurationMs:F1}.",
+                results.Count,
+                results.OfType<MetricResult>().Sum(result => result.Windows.Count),
+                Stopwatch.GetElapsedTime(started).TotalMilliseconds);
             return new ProviderRefresh(provider, results);
+        }
+        catch (OperationCanceledException) when (shutdownCancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (OperationCanceledException)
         {
-            // Cancellation is not a provider failure — propagate so the refresh can abort
-            // promptly on shutdown instead of logging a warning per provider.
-            throw;
+            logger.LogWarning(
+                "Provider query timed out after {DurationMs:F1} ms.",
+                Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+            return new ProviderRefresh(provider, []);
         }
         catch (Exception exception)
         {
-            logger.LogWarning(exception, "{Provider} refresh failed.", provider.Descriptor.Name);
-            return new ProviderRefresh(provider, Results: Array.Empty<ProviderResult>());
+            logger.LogWarning(
+                exception,
+                "Provider query failed after {DurationMs:F1} ms.",
+                Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+            return new ProviderRefresh(provider, []);
         }
     }
 
     private readonly record struct ProviderRefresh(IUsageProvider Provider, IReadOnlyList<ProviderResult> Results);
-
-    private static ProviderSettings? FindProvider(IReadOnlyList<ProviderSettings>? list, string name)
-    {
-        if (list is null) return null;
-        foreach (var p in list)
-        {
-            if (string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase))
-                return p;
-        }
-        return null;
-    }
 }

@@ -1,6 +1,6 @@
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>Test provider for ZenMux - returns a mock USD balance.</summary>
 public sealed class TestZenMuxProvider : IUsageProvider

@@ -2,16 +2,46 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <RootNamespace>UsageBar</RootNamespace>
+    <RootNamespace>UsageBar.Core</RootNamespace>
     <AssemblyName>UsageBar.Core</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
+    <PackageReference Include="Serilog" Version="4.3.0" />
+    <PackageReference Include="Serilog.Extensions.Logging" Version="9.0.2" />
+    <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
   </ItemGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="UsageBar.Tests" />
+    <InternalsVisibleTo Include="UsageBar" />
+    <InternalsVisibleTo Include="UsageBar.MacOS" />
+    <InternalsVisibleTo Include="UsageBar.Linux" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Frontend\index.html" />
+    <EmbeddedResource Include="Frontend\settings.html" />
+    <EmbeddedResource Include="Frontend\tooltip.css" />
+    <EmbeddedResource Include="Frontend\tooltip.js" />
+    <EmbeddedResource Include="Frontend\settings.css" />
+    <EmbeddedResource Include="Frontend\settings.js" />
+    <EmbeddedResource Include="Providers\OpenAI\openai.svg" />
+    <EmbeddedResource Include="Providers\Claude\claude.svg" />
+    <EmbeddedResource Include="Providers\ElevenLabs\elevenlabs.svg" />
+    <EmbeddedResource Include="Providers\Kilo\kilo.svg" />
+    <EmbeddedResource Include="Providers\Copilot\copilot.svg" />
+    <EmbeddedResource Include="Providers\Warp\warp.svg" />
+    <EmbeddedResource Include="Providers\Synthetic\synthetic.svg" />
+    <EmbeddedResource Include="Providers\Chutes\chutes.svg" />
+    <EmbeddedResource Include="Providers\Zai\zai.svg" />
+    <EmbeddedResource Include="Providers\Alibaba\alibaba.svg" />
+    <EmbeddedResource Include="Providers\MiniMax\minimax.svg" />
+    <EmbeddedResource Include="Providers\Codebuff\codebuff.svg" />
+    <EmbeddedResource Include="Providers\Antigravity\antigravity.svg" />
   </ItemGroup>
 
 </Project>

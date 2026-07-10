@@ -1,6 +1,6 @@
 using System.Net;
-using UsageBar.Domain;
-using UsageBar.Providers;
+using UsageBar.Core.Domain;
+using UsageBar.Core.Providers;
 using Xunit;
 
 namespace UsageBar.Tests;
@@ -59,9 +59,9 @@ public sealed class ClaudeProviderTests
 
         var metric = Assert.IsType<MetricResult>(result);
         Assert.Collection(
-            metric.IconBars,
-            session => { Assert.Equal(88.0, session.UsedPercent); Assert.Equal(1.0, session.Weight); },
-            weekly => { Assert.Equal(40.0, weekly.UsedPercent); Assert.Equal(1.0, weekly.Weight); });
+            metric.Windows,
+            session => Assert.Equal(88.0, session.UsedPercent),
+            weekly => Assert.Equal(40.0, weekly.UsedPercent));
     }
 
     [Fact]

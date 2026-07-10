@@ -1,6 +1,6 @@
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>Test provider for Warp — returns a mock Requests window with random usage.</summary>
 public sealed class TestWarpProvider : IUsageProvider
@@ -11,6 +11,6 @@ public sealed class TestWarpProvider : IUsageProvider
     {
         var window = TestData.RandomWindow("Warp", "Requests");
         return Task.FromResult<ProviderResult?>(
-            new MetricResult("Warp", null, [window], TestData.Bars(window)));
+            new MetricResult("Warp", null, [window]));
     }
 }

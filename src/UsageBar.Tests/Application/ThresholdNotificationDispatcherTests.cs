@@ -1,6 +1,6 @@
-using UsageBar.Application;
-using UsageBar.Configuration;
-using UsageBar.Domain;
+using UsageBar.Core.Application;
+using UsageBar.Core.Configuration;
+using UsageBar.Core.Domain;
 using Xunit;
 
 namespace UsageBar.Tests;
@@ -29,13 +29,13 @@ public sealed class ThresholdNotificationDispatcherTests
     }
 
     [Fact]
-    public void SendTestNotification_notifies_view_and_remote_services()
+    public async Task SendTestNotification_notifies_view_and_remote_services()
     {
         var view = new RecordingUsageView();
         var remote = new RecordingRemoteNotificationService();
         var dispatcher = new ThresholdNotificationDispatcher(view, [remote]);
 
-        dispatcher.SendTestNotification();
+        await dispatcher.SendTestNotificationAsync(AppSettings.Default);
 
         var notification = Assert.Single(view.Notifications);
         Assert.Equal(NotificationLevel.Critical, notification.Level);
@@ -62,7 +62,7 @@ public sealed class ThresholdNotificationDispatcherTests
     {
         public List<string> Messages { get; } = [];
 
-        public Task SendAsync(string message, CancellationToken cancellationToken)
+        public Task SendAsync(string message, AppSettings settings, CancellationToken cancellationToken)
         {
             Messages.Add(message);
             return Task.CompletedTask;

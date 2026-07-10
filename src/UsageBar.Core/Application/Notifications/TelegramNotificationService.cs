@@ -1,26 +1,26 @@
 using Microsoft.Extensions.Logging;
-using UsageBar.Domain;
+using UsageBar.Core.Configuration;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Application;
+namespace UsageBar.Core.Application;
 
 public sealed class TelegramNotificationService : IRemoteNotificationService
 {
     private readonly HttpClient _httpClient;
-    private readonly ISettingsStore _settings;
     private readonly ILogger<TelegramNotificationService> _logger;
 
-    public TelegramNotificationService(HttpClient httpClient, ISettingsStore settings, ILogger<TelegramNotificationService> logger)
+    public TelegramNotificationService(HttpClient httpClient, ILogger<TelegramNotificationService> logger)
     {
         _httpClient = httpClient;
-        _settings = settings;
         _logger = logger;
     }
 
     public async Task SendAsync(
         string message,
+        AppSettings appSettings,
         CancellationToken cancellationToken)
     {
-        var settings = _settings.Read().Notification?.Telegram ?? TelegramSettings.Default;
+        var settings = appSettings.Notification?.Telegram ?? TelegramSettings.Default;
         if (!settings.IsEnabled)
         {
             return;

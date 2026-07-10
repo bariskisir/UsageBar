@@ -1,5 +1,5 @@
-using UsageBar.Domain;
-using UsageBar.Providers;
+using UsageBar.Core.Domain;
+using UsageBar.Core.Providers;
 using Xunit;
 
 namespace UsageBar.Tests;
@@ -40,8 +40,6 @@ public sealed class ElevenLabsProviderTests
         Assert.Equal("Session", window.Label);
         Assert.Equal(7.38, window.UsedPercent, precision: 2);
         Assert.Equal("12d", window.ResetText);
-        var bar = Assert.Single(metric.IconBars);
-        Assert.Equal(7.38, bar.UsedPercent!.Value, precision: 2);
         Assert.Contains("eleven-key", handler.Requests[0].Headers.GetValues("xi-api-key"));
         Assert.Equal("https://api.elevenlabs.io/v1/user/subscription", handler.Requests[0].RequestUri!.AbsoluteUri);
     }

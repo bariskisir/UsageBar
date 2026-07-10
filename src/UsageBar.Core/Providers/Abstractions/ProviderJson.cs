@@ -1,13 +1,13 @@
 using System.Globalization;
 using System.Text.Json;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>
 /// Tolerant helpers for reading values out of provider JSON responses, accepting
 /// numbers encoded as either JSON numbers or strings.
 /// </summary>
-internal static class ProviderJson
+public static class ProviderJson
 {
     public static decimal? GetDecimal(JsonElement element, string propertyName)
     {

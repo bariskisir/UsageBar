@@ -1,6 +1,6 @@
 using System.Net;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>
 /// Shared auth lifecycle helper for providers that can refresh credentials before a request
@@ -8,34 +8,61 @@ namespace UsageBar.Providers;
 /// </summary>
 internal static class ProviderAuthFlow
 {
-    public static async Task<TAuth> RefreshIfNeededAsync<TAuth>(
+    public static async Task<AuthFlowResult<TAuth, TResult>> ExecuteAsync<TAuth, TResult>(
         TAuth auth,
+        bool allowRefresh,
         DateTimeOffset now,
+        SemaphoreSlim refreshGate,
+        Func<TAuth?> readLatestAuth,
         Func<TAuth, DateTimeOffset, bool> shouldRefresh,
-        Func<TAuth, CancellationToken, Task<TAuth>> refreshAsync,
-        CancellationToken cancellationToken)
-    {
-        return shouldRefresh(auth, now)
-            ? await refreshAsync(auth, cancellationToken).ConfigureAwait(false)
-            : auth;
-    }
-
-    public static async Task<TResult> ExecuteWithRefreshRetryAsync<TAuth, TResult>(
-        TAuth auth,
+        Func<TAuth, string?> getRefreshToken,
+        Func<TAuth, DateTimeOffset, CancellationToken, Task<TAuth>> refreshAsync,
         Func<TAuth, CancellationToken, Task<TResult>> executeAsync,
-        Func<HttpStatusCode?, bool> isAuthFailure,
-        Func<TAuth, bool> canRefresh,
-        Func<TAuth, CancellationToken, Task<TAuth>> refreshAsync,
         CancellationToken cancellationToken)
+        where TAuth : class
     {
+        if (!allowRefresh)
+        {
+            var result = await executeAsync(auth, cancellationToken).ConfigureAwait(false);
+            return new AuthFlowResult<TAuth, TResult>(auth, result);
+        }
+
+        await refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            return await executeAsync(auth, cancellationToken).ConfigureAwait(false);
+            // Another caller may have refreshed and persisted the token while this caller
+            // was waiting for the gate. Prefer that credential over the stale snapshot.
+            auth = readLatestAuth() ?? auth;
+
+            if (shouldRefresh(auth, now))
+            {
+                auth = await refreshAsync(auth, now, cancellationToken).ConfigureAwait(false);
+            }
+
+            try
+            {
+                var result = await executeAsync(auth, cancellationToken).ConfigureAwait(false);
+                return new AuthFlowResult<TAuth, TResult>(auth, result);
+            }
+            catch (HttpRequestException exception) when (
+                IsAuthenticationFailure(exception.StatusCode) && HasRefreshToken(auth, getRefreshToken))
+            {
+                auth = await refreshAsync(auth, now, cancellationToken).ConfigureAwait(false);
+                var result = await executeAsync(auth, cancellationToken).ConfigureAwait(false);
+                return new AuthFlowResult<TAuth, TResult>(auth, result);
+            }
         }
-        catch (HttpRequestException exception) when (isAuthFailure(exception.StatusCode) && canRefresh(auth))
+        finally
         {
-            var refreshed = await refreshAsync(auth, cancellationToken).ConfigureAwait(false);
-            return await executeAsync(refreshed, cancellationToken).ConfigureAwait(false);
+            refreshGate.Release();
         }
     }
+
+    private static bool HasRefreshToken<TAuth>(TAuth auth, Func<TAuth, string?> getRefreshToken) =>
+        !string.IsNullOrWhiteSpace(getRefreshToken(auth));
+
+    private static bool IsAuthenticationFailure(HttpStatusCode? statusCode) =>
+        statusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden;
 }
+
+internal readonly record struct AuthFlowResult<TAuth, TResult>(TAuth Auth, TResult Result);

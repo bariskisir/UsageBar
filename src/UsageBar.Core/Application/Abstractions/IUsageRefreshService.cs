@@ -1,9 +1,10 @@
-namespace UsageBar.Application;
+namespace UsageBar.Core.Application;
 
 public interface IUsageRefreshService
 {
-    void Start();
-    void Stop();
-    void TriggerManualRefresh();
-    void SendTestNotification();
+    Task RunAsync(CancellationToken cancellationToken);
+
+    void RequestManualRefresh();
+
+    Task SendTestNotificationAsync(CancellationToken cancellationToken = default);
 }

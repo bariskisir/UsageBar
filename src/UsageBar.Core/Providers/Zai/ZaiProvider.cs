@@ -1,16 +1,17 @@
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>Reports Zai (z.ai) usage across token and time limit windows.</summary>
 public sealed class ZaiProvider(HttpClient httpClient) : IUsageProvider
 {
     private const string QuotaEndpoint = "https://api.z.ai/api/monitor/usage/quota/limit";
 
-    public ProviderDescriptor Descriptor { get; } = new("Zai", DisplayOrder: 19);
+    public ProviderDescriptor Descriptor { get; } = new(
+        "Zai", 19, ProviderAuthenticationKind.ApiKey, CredentialNames.Zai, 16, "zai", ["zai_*"]);
 
-    public void RefreshEnabled(ProviderQueryContext context) =>
-        Descriptor.IsEnabled = !string.IsNullOrEmpty(context.GetApiKey(CredentialNames.Zai));
+    public bool IsConfigured(ProviderQueryContext context) =>
+        !string.IsNullOrEmpty(context.GetApiKey(CredentialNames.Zai));
 
     public async Task<ProviderResult?> GetUsageAsync(ProviderQueryContext context, CancellationToken cancellationToken)
     {
@@ -63,7 +64,7 @@ public sealed class ZaiProvider(HttpClient httpClient) : IUsageProvider
             throw new ProviderException("Zai response did not contain usable limit entries.");
         }
 
-        return new MetricResult(Descriptor.Name, null, windows, MetricWindows.EqualWeightBars(windows.ToArray()));
+        return new MetricResult(Descriptor.Name, null, windows);
     }
 
     private static UsageWindow? ReadLimitEntry(System.Text.Json.JsonElement entry, string providerName, DateTimeOffset now)

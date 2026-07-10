@@ -1,7 +1,7 @@
-using UsageBar.Configuration;
-using UsageBar.Domain;
+using UsageBar.Core.Configuration;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Application;
+namespace UsageBar.Core.Application;
 
 internal sealed class ThresholdNotificationDispatcher : IThresholdNotificationDispatcher
 {
@@ -20,14 +20,12 @@ internal sealed class ThresholdNotificationDispatcher : IThresholdNotificationDi
         _remoteServices = remoteServices.ToArray();
     }
 
-    public void SendTestNotification()
+    public async Task SendTestNotificationAsync(AppSettings settings, CancellationToken cancellationToken = default)
     {
         var message = NotificationMessageFormatter.Format(NotificationLevel.Critical, "Test: Limit reached 100%");
         _view.Notify(NotificationLevel.Critical, message);
-        foreach (var service in _remoteServices)
-        {
-            _ = service.SendAsync(message, CancellationToken.None);
-        }
+        await Task.WhenAll(_remoteServices.Select(service => service.SendAsync(message, settings, cancellationToken)))
+            .ConfigureAwait(false);
     }
 
     public async Task EmitAsync(IReadOnlyList<UsageWindow> windows, AppSettings settings, CancellationToken cancellationToken = default)
@@ -59,12 +57,8 @@ internal sealed class ThresholdNotificationDispatcher : IThresholdNotificationDi
             var message = NotificationMessageFormatter.Format(level, string.Join(Environment.NewLine, lines));
             _view.Notify(level, message);
 
-            foreach (var service in _remoteServices)
-            {
-                await service
-                    .SendAsync(message, cancellationToken)
-                    .ConfigureAwait(false);
-            }
+            await Task.WhenAll(_remoteServices.Select(service => service.SendAsync(message, settings, cancellationToken)))
+                .ConfigureAwait(false);
         }
     }
 }

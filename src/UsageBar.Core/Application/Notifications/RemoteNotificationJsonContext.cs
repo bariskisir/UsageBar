@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace UsageBar.Application;
+namespace UsageBar.Core.Application;
 
 [JsonSerializable(typeof(DiscordWebhookPayload))]
 [JsonSerializable(typeof(TelegramMessagePayload))]

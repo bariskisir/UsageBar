@@ -1,17 +1,19 @@
 using System.Net.Http.Headers;
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>Reports GitHub Copilot usage: premium interactions and chat quota windows.</summary>
 public sealed class CopilotProvider(HttpClient httpClient) : IUsageProvider
 {
     private const string CopilotEndpoint = "https://api.github.com/copilot_internal/user";
 
-    public ProviderDescriptor Descriptor { get; } = new("Copilot", DisplayOrder: 5);
+    public ProviderDescriptor Descriptor { get; } = new(
+        "Copilot", 5, ProviderAuthenticationKind.ApiKey, CredentialNames.Copilot, 12, "copilot",
+        ["copilot_premium", "copilot_chat"]);
 
-    public void RefreshEnabled(ProviderQueryContext context) =>
-        Descriptor.IsEnabled = !string.IsNullOrEmpty(context.GetApiKey(CredentialNames.Copilot));
+    public bool IsConfigured(ProviderQueryContext context) =>
+        !string.IsNullOrEmpty(context.GetApiKey(CredentialNames.Copilot));
 
     public async Task<ProviderResult?> GetUsageAsync(ProviderQueryContext context, CancellationToken cancellationToken)
     {
@@ -56,7 +58,7 @@ public sealed class CopilotProvider(HttpClient httpClient) : IUsageProvider
             throw new ProviderException("Copilot response did not contain usable quota windows.");
         }
 
-        return new MetricResult(Descriptor.Name, plan, windows, MetricWindows.EqualWeightBars(windows.ToArray()));
+        return new MetricResult(Descriptor.Name, plan, windows);
     }
 
     private static UsageWindow? ReadQuotaWindow(

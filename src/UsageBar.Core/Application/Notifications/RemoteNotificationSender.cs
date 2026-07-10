@@ -3,7 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using Microsoft.Extensions.Logging;
 
-namespace UsageBar.Application;
+namespace UsageBar.Core.Application;
 
 internal static class RemoteNotificationSender
 {
@@ -27,13 +27,20 @@ internal static class RemoteNotificationSender
 
             if (!response.IsSuccessStatusCode)
             {
-                var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-                logger.LogWarning("{Service} returned {StatusCode}: {Body}", serviceName, (int)response.StatusCode, body);
+                logger.LogWarning("{Service} returned HTTP {StatusCode}.", serviceName, (int)response.StatusCode);
             }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception exception)
         {
-            logger.LogWarning(exception, "Failed to send {Service} notification.", notificationName);
+            logger.LogWarning(
+                "Failed to send {Service} notification: exceptionType={ExceptionType}; hresult={HResult}.",
+                notificationName,
+                exception.GetType().Name,
+                exception.HResult);
         }
     }
 }

@@ -1,4 +1,4 @@
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>
 /// Canonical credential names for API-key providers. Each value is also the

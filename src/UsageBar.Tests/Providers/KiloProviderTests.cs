@@ -1,5 +1,5 @@
-using UsageBar.Domain;
-using UsageBar.Providers;
+using UsageBar.Core.Domain;
+using UsageBar.Core.Providers;
 using Xunit;
 
 namespace UsageBar.Tests;
@@ -78,7 +78,7 @@ public sealed class KiloProviderTests
         Assert.Equal("Pro - Balance $12.50", metric.Plan);
         var window = Assert.Single(metric.Windows);
         Assert.Equal("Pass", window.Label);
-        Assert.Equal("kilo_pass", UsageBar.Application.IconLayout.WindowKey(metric.ProviderName, window.Label));
+        Assert.Equal("kilo_pass", UsageBar.Core.Application.IconLayout.WindowKey(metric.ProviderName, window.Label));
         Assert.Equal(50, window.UsedPercent);
         Assert.Equal("6h 0m", window.ResetText);
         Assert.Equal(15, provider.GetDisplayOrder(metric));
@@ -117,7 +117,7 @@ public sealed class KiloProviderTests
     {
         var provider = new KiloProvider(new HttpClient(FakeHttpMessageHandler.Json("{}")));
 
-        Assert.Equal(15, provider.GetDisplayOrder(new MetricResult("Kilo", null, [], [])));
+        Assert.Equal(15, provider.GetDisplayOrder(new MetricResult("Kilo", null, [])));
         Assert.Equal(116, provider.GetDisplayOrder(new BalanceResult("Kilo", "$12.50")));
     }
 }

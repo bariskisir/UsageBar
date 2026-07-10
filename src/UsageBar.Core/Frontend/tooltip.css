@@ -1,0 +1,348 @@
+:root {
+  color-scheme: dark;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro",
+    "Segoe UI Variable", Inter, "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  background: var(--app-bg);
+  color: var(--text-primary);
+  --app-bg: #1c1c1e;
+  --text-primary: #f5f5f7;
+  --text-secondary: #8e8e93;
+  --panel-bg: var(--app-bg);
+  --usage-bar-track: rgba(255, 255, 255, 0.15);
+  --usage-bar-low: #4CAF50;
+  --usage-bar-medium: #FFC107;
+  --usage-bar-high: #FF9800;
+  --usage-bar-critical: #F44336;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: var(--app-bg);
+}
+
+#app {
+  width: 100%;
+}
+
+.panel {
+  --panel-radius: 9px;
+  --panel-stroke: 1px;
+  --panel-stroke-inset: 1px;
+  --panel-stroke-color: rgba(255, 255, 255, 0.12);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  min-width: 260px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--panel-radius);
+  overflow: hidden;
+  background: var(--panel-bg);
+  box-shadow: none;
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.3;
+  -webkit-font-smoothing: antialiased;
+}
+
+.panel::after {
+  content: "";
+  position: absolute;
+  inset: var(--panel-stroke-inset);
+  border-radius: calc(var(--panel-radius) - var(--panel-stroke-inset));
+  box-shadow: inset 0 0 0 var(--panel-stroke) var(--panel-stroke-color);
+  pointer-events: none;
+}
+
+.panel--tray {
+  --panel-stroke-color: rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  height: auto;
+  min-height: 0;
+  padding: 4px 0;
+  overflow: hidden;
+}
+
+.panel__body {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.panel__body::-webkit-scrollbar {
+  display: none;
+}
+
+.stack {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  min-height: 0;
+  max-height: none;
+  overflow: visible;
+}
+
+.stack--multi {
+  display: grid;
+  gap: 2px 6px;
+  align-items: start;
+}
+
+.stack--multi .stack__item {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.stack--multi .stack__sep {
+  display: none;
+}
+
+.stack--multi .card { padding-left: 8px; padding-right: 8px; }
+.stack--multi .card__name { font-size: 11px; }
+.stack--multi .card__value { font-size: 10px; }
+.stack--multi .card__plan { font-size: 9px; }
+.stack--multi .metric { gap: 3px; }
+.stack--multi .metric__bar { height: 4px; }
+.stack--multi .metric__title { font-size: 11px; }
+.stack--multi .metric__sub { font-size: 10px; }
+.stack--multi .metric__pct,
+.stack--multi .metric__reset { font-size: 9px; }
+
+.stack__item {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  padding: 2px 0;
+  border: none;
+  border-radius: 0;
+  overflow: visible;
+  background: transparent;
+}
+
+.stack__item:has(.card--balance) {
+  padding: 1px 0;
+}
+
+.stack__sep {
+  height: 0.5px;
+  margin: 2px 16px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.card {
+  --card-x: 20px;
+  --card-header-only-y: 7px;
+  --card-section-y: 6px;
+  --card-header-line-gap: 4px;
+  --card-header-column-gap: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  padding: var(--card-header-only-y) var(--card-x);
+  overflow: visible;
+  text-align: left;
+}
+
+.card--with-details {
+  padding-top: var(--card-section-y);
+  padding-bottom: var(--card-section-y);
+}
+
+.card--balance {
+  padding-top: 3px;
+  padding-bottom: 3px;
+  gap: 0;
+}
+
+.card__header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--card-header-line-gap);
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.card__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--card-header-column-gap);
+}
+
+.card__name-group {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: flex-start;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
+
+.card__name {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card--balance .card__name {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.card__value {
+  flex: 0 1 auto;
+  margin-left: auto;
+  max-width: 55%;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 400;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card--balance .card__value {
+  font-size: 12px;
+}
+
+.card__plan {
+  flex: 0 1 auto;
+  max-width: 45%;
+  overflow: hidden;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card__provider-icon {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  color: var(--text-secondary);
+  opacity: 0.9;
+  object-fit: contain;
+}
+
+.card__divider {
+  margin: 3px 0;
+}
+
+.card__content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 6px;
+}
+
+.card__metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.metric__title-group {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.metric__title {
+  color: var(--text-primary);
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+.metric__sub {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.metric__bar {
+  width: 100%;
+  max-width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--usage-bar-track);
+}
+
+.metric__bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--usage-bar-low);
+  transition: width 0.3s ease;
+}
+
+.metric__bar-fill[data-level="medium"] {
+  background: var(--usage-bar-medium);
+}
+
+.metric__bar-fill[data-level="high"] {
+  background: var(--usage-bar-high);
+}
+
+.metric__bar-fill[data-level="critical"] {
+  background: var(--usage-bar-critical);
+}
+
+.metric__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.metric__pct {
+  color: var(--text-primary);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.metric__reset {
+  color: var(--text-secondary);
+  font-size: 10px;
+  white-space: nowrap;
+}

@@ -1,7 +1,7 @@
 using System.Net.Http.Headers;
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>Reports MiniMax model-based usage percentages and points balance.</summary>
 public sealed class MiniMaxProvider(HttpClient httpClient) : IUsageProvider, IResultDisplayOrderProvider
@@ -9,7 +9,8 @@ public sealed class MiniMaxProvider(HttpClient httpClient) : IUsageProvider, IRe
     private const string InternationalEndpoint = "https://api.minimax.io/v1/token_plan/remains";
     private const string ChinaEndpoint = "https://api.minimaxi.com/v1/token_plan/remains";
 
-    public ProviderDescriptor Descriptor { get; } = new("MiniMax", DisplayOrder: 25);
+    public ProviderDescriptor Descriptor { get; } = new(
+        "MiniMax", 25, ProviderAuthenticationKind.ApiKey, CredentialNames.MiniMax, 19, "minimax", ["minimax_*"]);
 
     public int GetDisplayOrder(ProviderResult result) => result switch
     {
@@ -18,8 +19,8 @@ public sealed class MiniMaxProvider(HttpClient httpClient) : IUsageProvider, IRe
         _ => Descriptor.DisplayOrder,
     };
 
-    public void RefreshEnabled(ProviderQueryContext context) =>
-        Descriptor.IsEnabled = !string.IsNullOrEmpty(context.GetApiKey(CredentialNames.MiniMax));
+    public bool IsConfigured(ProviderQueryContext context) =>
+        !string.IsNullOrEmpty(context.GetApiKey(CredentialNames.MiniMax));
 
     public async Task<ProviderResult?> GetUsageAsync(ProviderQueryContext context, CancellationToken cancellationToken)
     {
@@ -86,7 +87,7 @@ public sealed class MiniMaxProvider(HttpClient httpClient) : IUsageProvider, IRe
             throw new ProviderException("MiniMax response did not contain usable model usage windows.");
         }
 
-        return new MetricResult(Descriptor.Name, pointsText, windows, MetricWindows.EqualWeightBars(windows.ToArray()));
+        return new MetricResult(Descriptor.Name, pointsText, windows);
     }
 
     private static UsageWindow? ReadModelRemain(System.Text.Json.JsonElement model, string providerName, DateTimeOffset now)

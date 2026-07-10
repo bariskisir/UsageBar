@@ -1,6 +1,6 @@
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>
 /// A source of usage or balance information. Implement this directly for metric
@@ -11,6 +11,19 @@ public interface IUsageProvider
 {
     /// <summary>Static identity and presentation metadata (name, category, display order).</summary>
     ProviderDescriptor Descriptor { get; }
+
+    /// <summary>Returns whether this provider has usable credentials for this refresh.</summary>
+    bool IsConfigured(ProviderQueryContext context) => true;
+
+    /// <summary>
+    /// Primary refresh contract. Implementations return an empty collection when no result can be
+    /// produced; the compatibility methods below keep existing provider implementations small
+    /// while they migrate independently.
+    /// </summary>
+    Task<IReadOnlyList<ProviderResult>> QueryAsync(
+        ProviderQueryContext context,
+        CancellationToken cancellationToken) =>
+        GetUsageResultsAsync(context, cancellationToken);
 
     /// <summary>
     /// Queries the provider for the current refresh.
@@ -33,13 +46,4 @@ public interface IUsageProvider
         return result is null ? Array.Empty<ProviderResult>() : new ProviderResult[] { result };
     }
 
-    /// <summary>
-    /// Called by the aggregator before each refresh to let the provider check whether
-    /// credentials exist (API key, auth file, etc.) and update
-    /// <see cref="ProviderDescriptor.IsEnabled"/> accordingly. The default enables the
-    /// provider (test/mock providers have no credentials to check). Real providers
-    /// override this to set <c>IsEnabled = false</c> when their API key or auth file
-    /// is missing.
-    /// </summary>
-    void RefreshEnabled(ProviderQueryContext context) => Descriptor.IsEnabled = true;
 }

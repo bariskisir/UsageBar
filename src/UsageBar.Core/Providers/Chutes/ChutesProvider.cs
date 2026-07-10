@@ -1,17 +1,19 @@
 using System.Net.Http.Headers;
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>Reports Chutes quota usage across 4-hour rolling and monthly windows.</summary>
 public sealed class ChutesProvider(HttpClient httpClient) : IUsageProvider
 {
     private const string SubscriptionUsageEndpoint = "https://api.chutes.ai/users/me/subscription_usage";
 
-    public ProviderDescriptor Descriptor { get; } = new("Chutes", DisplayOrder: 17);
+    public ProviderDescriptor Descriptor { get; } = new(
+        "Chutes", 17, ProviderAuthenticationKind.ApiKey, CredentialNames.Chutes, 18, "chutes",
+        ["chutes_4hrolling", "chutes_monthly"]);
 
-    public void RefreshEnabled(ProviderQueryContext context) =>
-        Descriptor.IsEnabled = !string.IsNullOrEmpty(context.GetApiKey(CredentialNames.Chutes));
+    public bool IsConfigured(ProviderQueryContext context) =>
+        !string.IsNullOrEmpty(context.GetApiKey(CredentialNames.Chutes));
 
     public async Task<ProviderResult?> GetUsageAsync(ProviderQueryContext context, CancellationToken cancellationToken)
     {
@@ -52,6 +54,6 @@ public sealed class ChutesProvider(HttpClient httpClient) : IUsageProvider
             throw new ProviderException("Chutes response did not contain usable quota windows.");
         }
 
-        return new MetricResult(Descriptor.Name, null, windows, MetricWindows.EqualWeightBars(windows.ToArray()));
+        return new MetricResult(Descriptor.Name, null, windows);
     }
 }

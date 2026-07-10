@@ -1,4 +1,4 @@
-namespace UsageBar.Domain;
+namespace UsageBar.Core.Domain;
 
 /// <summary>
 /// A single rolling usage window reported by a metric provider.

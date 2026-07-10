@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>
 /// Shared HTTP plumbing for providers: send a request, ensure success, and parse the JSON body.

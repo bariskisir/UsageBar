@@ -1,6 +1,6 @@
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>Test provider for ElevenLabs — returns a mock Session window with random 25–100% usage.</summary>
 public sealed class TestElevenLabsProvider : IUsageProvider
@@ -14,6 +14,6 @@ public sealed class TestElevenLabsProvider : IUsageProvider
         var session = TestData.RandomWindow("ElevenLabs", "Session");
         var plan = Plans[Random.Shared.Next(Plans.Length)];
         return Task.FromResult<ProviderResult?>(
-            new MetricResult("ElevenLabs", plan, [session], TestData.Bars(session)));
+            new MetricResult("ElevenLabs", plan, [session]));
     }
 }

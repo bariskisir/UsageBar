@@ -1,8 +1,8 @@
 using Microsoft.Extensions.Logging.Abstractions;
-using UsageBar.Application;
-using UsageBar.Configuration;
-using UsageBar.Domain;
-using UsageBar.Providers;
+using UsageBar.Core.Application;
+using UsageBar.Core.Configuration;
+using UsageBar.Core.Domain;
+using UsageBar.Core.Providers;
 using Xunit;
 
 namespace UsageBar.Tests;
@@ -10,12 +10,12 @@ namespace UsageBar.Tests;
 public sealed class UsageRefreshServiceTests
 {
     [Fact]
-    public void SendTestNotification_delegates_to_dispatcher()
+    public async Task SendTestNotification_delegates_to_dispatcher()
     {
         var dispatcher = new GateDispatcher();
         var service = CreateService(dispatcher: dispatcher);
 
-        service.SendTestNotification();
+        await service.SendTestNotificationAsync();
 
         Assert.True(dispatcher.TestNotificationSent);
     }
@@ -26,15 +26,15 @@ public sealed class UsageRefreshServiceTests
         var settings = new StubSettingsStore(AppSettings.Default with { Refresh = new RefreshSettings(60) });
         var provider = new StubProvider("Codex", () =>
             new MetricResult("Codex", "Pro",
-                [TestData.Window("Codex", "Session", 25)],
-                [IconBar.Create(25, 1.0)]));
+                [TestData.Window("Codex", "Session", 25)]));
         var view = new RecordingUsageView();
         var dispatcher = new GateDispatcher();
 
         var service = CreateService(
             providers: [provider], settings: settings, view: view, dispatcher: dispatcher);
 
-        service.Start();
+        using var cancellation = new CancellationTokenSource();
+        var runTask = service.RunAsync(cancellation.Token);
 
         // Wait for the refresh to reach the dispatcher (last async step).
         await dispatcher.WaitForEmitAsync(TimeSpan.FromSeconds(3));
@@ -42,6 +42,7 @@ public sealed class UsageRefreshServiceTests
         Assert.NotEmpty(view.IconBars);
         Assert.NotEmpty(view.Cards);
         Assert.NotEmpty(dispatcher.EmitCalls);
+        await StopAsync(cancellation, runTask);
     }
 
     [Fact]
@@ -56,23 +57,25 @@ public sealed class UsageRefreshServiceTests
         var service = CreateService(
             providers: [configured, skipped], settings: settings, view: view, dispatcher: dispatcher);
 
-        service.Start();
+        using var cancellation = new CancellationTokenSource();
+        var runTask = service.RunAsync(cancellation.Token);
         await dispatcher.WaitForEmitAsync(TimeSpan.FromSeconds(3));
 
         Assert.NotEmpty(view.Cards);
+        await StopAsync(cancellation, runTask);
     }
 
     [Fact]
-    public void Stop_disposes_timer()
+    public async Task Cancellation_stops_refresh_loop()
     {
         var settings = new StubSettingsStore(AppSettings.Default with { Refresh = new RefreshSettings(60) });
         var provider = new StubProvider("Codex", () => null);
 
         var service = CreateService(providers: [provider], settings: settings);
-        service.Start();
-        service.Stop();
-
-        // Not throwing is sufficient; timer is disposed.
+        using var cancellation = new CancellationTokenSource();
+        var runTask = service.RunAsync(cancellation.Token);
+        cancellation.Cancel();
+        await runTask;
     }
 
     [Fact]
@@ -82,7 +85,7 @@ public sealed class UsageRefreshServiceTests
         var service = CreateService(settings: settings);
 
         // Should not throw.
-        service.TriggerManualRefresh();
+        service.RequestManualRefresh();
     }
 
     [Fact]
@@ -90,19 +93,23 @@ public sealed class UsageRefreshServiceTests
     {
         var clock = new StubClock(TestData.FixedNow);
         var settings = new StubSettingsStore(AppSettings.Default with { Refresh = new RefreshSettings(60) });
-        var provider = new StubProvider("Codex", () => new MetricResult("Codex", "Pro", [], []));
+        var provider = new StubProvider("Codex", () => new MetricResult("Codex", "Pro", []));
         var view = new RecordingUsageView();
         var dispatcher = new GateDispatcher();
 
         var service = CreateService(
             providers: [provider], settings: settings, clock: clock, view: view, dispatcher: dispatcher);
 
-        service.TriggerManualRefresh();
-        await dispatcher.WaitForEmitAsync(TimeSpan.FromSeconds(3));
+        using var cancellation = new CancellationTokenSource();
+        var runTask = service.RunAsync(cancellation.Token);
+        await dispatcher.WaitForEmitCountAsync(1, TimeSpan.FromSeconds(3));
+        service.RequestManualRefresh();
+        await dispatcher.WaitForEmitCountAsync(2, TimeSpan.FromSeconds(3));
 
         // After manual refresh, manual trigger time is recorded.
         // Verify the latest manual refresh time is close to FixedNow.
         Assert.Equal(TestData.FixedNow, clock.LastSetNow);
+        await StopAsync(cancellation, runTask);
     }
 
     [Fact]
@@ -117,11 +124,13 @@ public sealed class UsageRefreshServiceTests
         var service = CreateService(
             providers: [good, broken], settings: settings, view: view, dispatcher: dispatcher);
 
-        service.Start();
+        using var cancellation = new CancellationTokenSource();
+        var runTask = service.RunAsync(cancellation.Token);
         await dispatcher.WaitForEmitAsync(TimeSpan.FromSeconds(3));
 
         // The good provider should still produce results.
         Assert.Contains(view.Cards, card => card.Title == "DeepSeek");
+        await StopAsync(cancellation, runTask);
     }
 
     [Fact]
@@ -130,15 +139,15 @@ public sealed class UsageRefreshServiceTests
         var clock = new StubClock(TestData.FixedNow);
         var settings = new StubSettingsStore(AppSettings.Default with { Refresh = new RefreshSettings(60) });
         var provider = new StubProvider("Codex", () => new MetricResult("Codex", "Pro",
-            [TestData.Window("Codex", "Session", 80)],
-            [IconBar.Create(80, 1.0)]));
+            [TestData.Window("Codex", "Session", 80)]));
         var view = new RecordingUsageView();
         var dispatcher = new GateDispatcher();
 
         var service = CreateService(
             providers: [provider], settings: settings, clock: clock, view: view, dispatcher: dispatcher);
 
-        service.Start();
+        using var cancellation = new CancellationTokenSource();
+        var runTask = service.RunAsync(cancellation.Token);
         await dispatcher.WaitForEmitAsync(TimeSpan.FromSeconds(3));
 
         // Windows are forwarded to the dispatcher for threshold evaluation.
@@ -147,6 +156,7 @@ public sealed class UsageRefreshServiceTests
         Assert.Equal("Codex", window.ProviderName);
         Assert.Equal("Session", window.Label);
         Assert.Equal(80, window.UsedPercent);
+        await StopAsync(cancellation, runTask);
     }
 
     [Fact]
@@ -167,21 +177,28 @@ public sealed class UsageRefreshServiceTests
             [
                 TestData.Window("Codex", "Session", 10),
                 TestData.Window("Codex", "Weekly", 90),
-            ],
-            []));
+            ]));
         var view = new RecordingUsageView();
         var dispatcher = new GateDispatcher();
 
         var service = CreateService(
             providers: [provider], settings: settings, view: view, dispatcher: dispatcher);
 
-        service.Start();
+        using var cancellation = new CancellationTokenSource();
+        var runTask = service.RunAsync(cancellation.Token);
         await dispatcher.WaitForEmitAsync(TimeSpan.FromSeconds(3));
 
         var bars = Assert.Single(view.IconBars);
         Assert.Equal(2, bars.Count);
         Assert.Contains(bars, b => b.UsedPercent == 10.0 && b.Weight == 25.0);
         Assert.Contains(bars, b => b.UsedPercent == 90.0 && b.Weight == 75.0);
+        await StopAsync(cancellation, runTask);
+    }
+
+    private static async Task StopAsync(CancellationTokenSource cancellation, Task runTask)
+    {
+        cancellation.Cancel();
+        await runTask;
     }
 
     private static UsageRefreshService CreateService(
@@ -196,6 +213,8 @@ public sealed class UsageRefreshServiceTests
             settings ?? new StubSettingsStore(AppSettings.Default),
             view ?? new RecordingUsageView(),
             clock ?? new StubClock(TestData.FixedNow),
+            new StubProviderQueryContextFactory(),
+            UsageRefreshOptions.Default,
             dispatcher ?? new GateDispatcher(),
             NullLogger<UsageRefreshService>.Instance);
     }
@@ -231,6 +250,12 @@ public sealed class UsageRefreshServiceTests
             Notifications.Add((level, message));
     }
 
+    private sealed class StubProviderQueryContextFactory : IProviderQueryContextFactory
+    {
+        public ProviderQueryContext Create(AppSettings settings, DateTimeOffset now) =>
+            ProviderQueryContext.FromSettings(settings, now, _ => null);
+    }
+
     private sealed class GateDispatcher : IThresholdNotificationDispatcher
     {
         private readonly TaskCompletionSource _tcs = new();
@@ -238,7 +263,11 @@ public sealed class UsageRefreshServiceTests
         public List<(IReadOnlyList<UsageWindow> Windows, AppSettings Settings)> EmitCalls { get; } = [];
         public bool TestNotificationSent { get; private set; }
 
-        public void SendTestNotification() => TestNotificationSent = true;
+        public Task SendTestNotificationAsync(AppSettings settings, CancellationToken cancellationToken = default)
+        {
+            TestNotificationSent = true;
+            return Task.CompletedTask;
+        }
 
         public Task EmitAsync(IReadOnlyList<UsageWindow> windows, AppSettings settings, CancellationToken cancellationToken = default)
         {
@@ -253,6 +282,20 @@ public sealed class UsageRefreshServiceTests
             if (completed != _tcs.Task)
             {
                 throw new TimeoutException("Refresh did not complete within the timeout.");
+            }
+        }
+
+        public async Task WaitForEmitCountAsync(int count, TimeSpan timeout)
+        {
+            var deadline = DateTime.UtcNow + timeout;
+            while (EmitCalls.Count < count && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(10);
+            }
+
+            if (EmitCalls.Count < count)
+            {
+                throw new TimeoutException($"Refresh did not emit {count} times within the timeout.");
             }
         }
     }

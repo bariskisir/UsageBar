@@ -1,7 +1,7 @@
 using System.Text.Json;
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>
 /// Reports the Deepgram USD balance. Deepgram exposes balances per project, so this
@@ -9,7 +9,8 @@ namespace UsageBar.Providers;
 /// </summary>
 public sealed class DeepgramProvider(HttpClient httpClient) : BalanceUsageProvider(httpClient)
 {
-    public override ProviderDescriptor Descriptor { get; } = new("Deepgram", DisplayOrder: 120);
+    public override ProviderDescriptor Descriptor { get; } = new(
+        "Deepgram", 120, ProviderAuthenticationKind.ApiKey, CredentialNames.Deepgram, SettingsOrder: 7);
 
     protected override string CredentialName => CredentialNames.Deepgram;
 

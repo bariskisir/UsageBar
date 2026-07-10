@@ -1,4 +1,4 @@
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>Reads Claude OAuth credentials from the local Claude credentials file.</summary>
 public interface IClaudeAuthReader

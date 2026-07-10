@@ -1,6 +1,6 @@
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>Test provider for Chutes — returns mock 4h Rolling and Monthly windows.</summary>
 public sealed class TestChutesProvider : IUsageProvider
@@ -12,6 +12,6 @@ public sealed class TestChutesProvider : IUsageProvider
         var fourHour = TestData.RandomWindow("Chutes", "4h Rolling");
         var monthly = TestData.RandomWindow("Chutes", "Monthly");
         return Task.FromResult<ProviderResult?>(
-            new MetricResult("Chutes", null, [fourHour, monthly], TestData.Bars(fourHour, monthly)));
+            new MetricResult("Chutes", null, [fourHour, monthly]));
     }
 }

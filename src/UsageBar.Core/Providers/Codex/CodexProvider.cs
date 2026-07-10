@@ -1,10 +1,9 @@
-using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>
 /// Reports Codex (ChatGPT) rate-limit usage as Session (5h) and Weekly (7d) windows,
@@ -19,10 +18,12 @@ public sealed class CodexProvider(HttpClient httpClient, ICodexAuthReader authRe
 
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
 
-    public ProviderDescriptor Descriptor { get; } = new("Codex", DisplayOrder: 0);
+    public ProviderDescriptor Descriptor { get; } = new(
+        "Codex", 0, ProviderAuthenticationKind.OAuth, SettingsOrder: 0, IconKey: "openai",
+        IconLayoutKeys: ["codex_session", "codex_weekly"]);
 
-    public void RefreshEnabled(ProviderQueryContext context) =>
-        Descriptor.IsEnabled = !string.IsNullOrEmpty(authReader.Read()?.AccessToken);
+    public bool IsConfigured(ProviderQueryContext context) =>
+        !string.IsNullOrEmpty(authReader.Read()?.AccessToken);
 
     public async Task<ProviderResult?> GetUsageAsync(ProviderQueryContext context, CancellationToken cancellationToken)
     {
@@ -32,31 +33,19 @@ public sealed class CodexProvider(HttpClient httpClient, ICodexAuthReader authRe
             return null;
         }
 
-        JsonDocument document;
-
-        if (context.CanRefreshToken(Descriptor.Name))
-        {
-            // Serialize auth refresh so two concurrent calls don't race on the same token.
-            await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
-            try
-            {
-                auth = await ProviderAuthFlow
-                    .RefreshIfNeededAsync(auth, context.Now, ShouldRefresh, RefreshAuthAsync, cancellationToken)
-                    .ConfigureAwait(false);
-            }
-            finally
-            {
-                _refreshGate.Release();
-            }
-
-            document = await ProviderAuthFlow
-                .ExecuteWithRefreshRetryAsync(auth, GetUsageDocumentAsync, IsAuthFailure, HasRefreshToken, RefreshAuthAsync, cancellationToken)
-                .ConfigureAwait(false);
-        }
-        else
-        {
-            document = await GetUsageDocumentAsync(auth, cancellationToken).ConfigureAwait(false);
-        }
+        var execution = await ProviderAuthFlow.ExecuteAsync(
+                auth,
+                context.CanRefreshToken(Descriptor.Name),
+                context.Now,
+                _refreshGate,
+                authReader.Read,
+                ShouldRefresh,
+                static value => value.RefreshToken,
+                RefreshAuthAsync,
+                GetUsageDocumentAsync,
+                cancellationToken)
+            .ConfigureAwait(false);
+        using var document = execution.Result;
 
         var plan = PlanLabel(ProviderJson.GetString(document.RootElement, "plan_type"));
         var rateLimit = GetRateLimit(document.RootElement);
@@ -65,7 +54,7 @@ public sealed class CodexProvider(HttpClient httpClient, ICodexAuthReader authRe
         var weekly = ReadWindow(rateLimit, "secondary_window", "Weekly", Descriptor.Name, context.Now);
 
         var windows = MetricWindows.Require(Descriptor.Name, session, weekly);
-        return new MetricResult(Descriptor.Name, plan, windows, BuildIconBars(plan, session, weekly));
+        return new MetricResult(Descriptor.Name, plan, windows);
     }
 
     private async Task<JsonDocument> GetUsageDocumentAsync(CodexAuth auth, CancellationToken cancellationToken)
@@ -94,7 +83,10 @@ public sealed class CodexProvider(HttpClient httpClient, ICodexAuthReader authRe
         return await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<CodexAuth> RefreshAuthAsync(CodexAuth auth, CancellationToken cancellationToken)
+    private async Task<CodexAuth> RefreshAuthAsync(
+        CodexAuth auth,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(auth.RefreshToken))
         {
@@ -128,7 +120,7 @@ public sealed class CodexProvider(HttpClient httpClient, ICodexAuthReader authRe
             AccessToken = ProviderJson.GetString(root, "access_token") ?? auth.AccessToken,
             RefreshToken = ProviderJson.GetString(root, "refresh_token") ?? auth.RefreshToken,
             IdToken = ProviderJson.GetString(root, "id_token") ?? auth.IdToken,
-            LastRefresh = DateTimeOffset.UtcNow,
+            LastRefresh = now,
         };
 
         try
@@ -147,31 +139,8 @@ public sealed class CodexProvider(HttpClient httpClient, ICodexAuthReader authRe
 
     private static bool ShouldRefresh(CodexAuth auth, DateTimeOffset now)
     {
-        return HasRefreshToken(auth) && (auth.LastRefresh is null || now - auth.LastRefresh > RefreshInterval);
-    }
-
-    private static bool HasRefreshToken(CodexAuth auth) => !string.IsNullOrWhiteSpace(auth.RefreshToken);
-
-    private static bool IsAuthFailure(HttpStatusCode? statusCode)
-    {
-        return statusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden;
-    }
-
-    /// <summary>
-    /// Maps Codex windows to tray bars. Free (or session-less) accounts show a single bar from the
-    /// Weekly window at double weight, so it reads as one full band beside other providers' weight-1
-    /// bars; paid accounts show Session + Weekly at equal weight.
-    /// </summary>
-    private static IReadOnlyList<IconBar> BuildIconBars(string? plan, UsageWindow? session, UsageWindow? weekly)
-    {
-        var freeLike = string.Equals(plan, "Free", StringComparison.OrdinalIgnoreCase) || session is null;
-        if (!freeLike)
-        {
-            return MetricWindows.EqualWeightBars(session, weekly);
-        }
-
-        var single = weekly ?? session;
-        return single is null ? [] : [IconBar.Create(single.UsedPercent, 2.0)];
+        return !string.IsNullOrWhiteSpace(auth.RefreshToken) &&
+            (auth.LastRefresh is null || now - auth.LastRefresh > RefreshInterval);
     }
 
     /// <summary>Maps a Codex <c>plan_type</c> to a short plan/tier label.</summary>

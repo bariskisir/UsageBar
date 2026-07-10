@@ -1,11 +1,12 @@
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>Reports the OpenAI account credit grant balance (total_available USD).</summary>
 public sealed class OpenAIProvider(HttpClient httpClient) : BalanceUsageProvider(httpClient)
 {
-    public override ProviderDescriptor Descriptor { get; } = new("OpenAI", DisplayOrder: 105);
+    public override ProviderDescriptor Descriptor { get; } = new(
+        "OpenAI", 105, ProviderAuthenticationKind.ApiKey, CredentialNames.OpenAI, SettingsOrder: 10, IconKey: "openai");
 
     protected override string CredentialName => CredentialNames.OpenAI;
 

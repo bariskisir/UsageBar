@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 internal sealed record CodexRefreshTokenRequest(
     [property: JsonPropertyName("client_id")] string ClientId,

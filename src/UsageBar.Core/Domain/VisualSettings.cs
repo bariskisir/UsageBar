@@ -1,7 +1,7 @@
 using System.Text.Json.Serialization;
-using UsageBar.Configuration;
+using UsageBar.Core.Configuration;
 
-namespace UsageBar.Domain;
+namespace UsageBar.Core.Domain;
 
 public sealed record VisualSettings(
     [property: JsonPropertyName("scale")] int? Scale,

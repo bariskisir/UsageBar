@@ -1,12 +1,13 @@
 using System.Text.Json;
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>Reports the DeepSeek account USD balance.</summary>
 public sealed class DeepSeekProvider(HttpClient httpClient) : BalanceUsageProvider(httpClient)
 {
-    public override ProviderDescriptor Descriptor { get; } = new("DeepSeek", DisplayOrder: 100);
+    public override ProviderDescriptor Descriptor { get; } = new(
+        "DeepSeek", 100, ProviderAuthenticationKind.ApiKey, CredentialNames.DeepSeek, SettingsOrder: 3);
 
     protected override string CredentialName => CredentialNames.DeepSeek;
 

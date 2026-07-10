@@ -1,4 +1,4 @@
-namespace UsageBar.Domain;
+namespace UsageBar.Core.Domain;
 
 /// <summary>
 /// Raised by providers when an API call fails or returns an unexpected response shape.

@@ -1,6 +1,6 @@
 using System.Net;
-using UsageBar.Domain;
-using UsageBar.Providers;
+using UsageBar.Core.Domain;
+using UsageBar.Core.Providers;
 using Xunit;
 
 namespace UsageBar.Tests;
@@ -66,13 +66,13 @@ public sealed class CodexProviderTests
 
         var metric = Assert.IsType<MetricResult>(result);
         Assert.Collection(
-            metric.IconBars,
-            session => { Assert.Equal(53.0, session.UsedPercent); Assert.Equal(1.0, session.Weight); },
-            weekly => { Assert.Equal(12.5, weekly.UsedPercent); Assert.Equal(1.0, weekly.Weight); });
+            metric.Windows,
+            session => Assert.Equal(53.0, session.UsedPercent),
+            weekly => Assert.Equal(12.5, weekly.UsedPercent));
     }
 
     [Fact]
-    public async Task Free_account_yields_single_double_weight_weekly_bar()
+    public async Task Free_account_retains_both_usage_windows()
     {
         var reset = TestData.FixedNow.AddDays(2).ToUnixTimeSeconds();
         var json = $$"""
@@ -89,9 +89,10 @@ public sealed class CodexProviderTests
 
         var metric = Assert.IsType<MetricResult>(result);
         Assert.Equal("Free", metric.Plan);
-        var bar = Assert.Single(metric.IconBars);
-        Assert.Equal(25.0, bar.UsedPercent); // weekly window
-        Assert.Equal(2.0, bar.Weight);
+        Assert.Collection(
+            metric.Windows,
+            session => Assert.Equal(80.0, session.UsedPercent),
+            weekly => Assert.Equal(25.0, weekly.UsedPercent));
     }
 
     [Fact]

@@ -1,11 +1,11 @@
-using UsageBar.Configuration;
-using UsageBar.Domain;
+using UsageBar.Core.Configuration;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Application;
+namespace UsageBar.Core.Application;
 
 internal interface IThresholdNotificationDispatcher
 {
-    void SendTestNotification();
+    Task SendTestNotificationAsync(AppSettings settings, CancellationToken cancellationToken = default);
 
     Task EmitAsync(IReadOnlyList<UsageWindow> windows, AppSettings settings, CancellationToken cancellationToken = default);
 }

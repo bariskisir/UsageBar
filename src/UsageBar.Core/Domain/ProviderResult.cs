@@ -1,4 +1,4 @@
-namespace UsageBar.Domain;
+namespace UsageBar.Core.Domain;
 
 /// <summary>
 /// The outcome of a single provider refresh. A provider returns exactly one concrete kind —
@@ -9,18 +9,15 @@ public abstract record ProviderResult(string ProviderName);
 
 /// <summary>
 /// A metric provider's result: usage windows and an optional plan/tier label. Tray icon layout is
-/// computed from <see cref="Windows"/> plus user settings; <see cref="IconBars"/> is retained for
-/// existing provider construction paths.
+/// computed solely from <see cref="Windows"/> plus user settings.
 /// </summary>
 /// <param name="ProviderName">Display name of the provider that produced this result.</param>
 /// <param name="Plan">Plan/tier label (e.g. "Pro", "Max", "Free"), or <see langword="null"/>.</param>
 /// <param name="Windows">Usage windows for the tooltip and threshold checks.</param>
-/// <param name="IconBars">Legacy provider bar data; current tray layout uses <paramref name="Windows"/>.</param>
 public sealed record MetricResult(
     string ProviderName,
     string? Plan,
-    IReadOnlyList<UsageWindow> Windows,
-    IReadOnlyList<IconBar> IconBars) : ProviderResult(ProviderName);
+    IReadOnlyList<UsageWindow> Windows) : ProviderResult(ProviderName);
 
 /// <summary>A balance provider's result: a pre-formatted balance string (e.g. "$12.34").</summary>
 /// <param name="ProviderName">Display name of the provider that produced this result.</param>

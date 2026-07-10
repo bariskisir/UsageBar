@@ -1,11 +1,18 @@
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
+
+public enum ProviderAuthenticationKind
+{
+    None,
+    OAuth,
+    ApiKey,
+}
 
 /// <summary>
 /// Static identity and presentation metadata for a provider. Lets the refresh pipeline order
 /// providers without hardcoding their names, so a new provider is fully described by the provider
 /// itself (no edits to layout/tooltip/ordering code).
 /// </summary>
-public sealed class ProviderDescriptor
+public sealed record ProviderDescriptor
 {
     /// <param name="name">Display name, e.g. "Codex" or "DeepSeek".</param>
     /// <param name="displayOrder">
@@ -13,10 +20,22 @@ public sealed class ProviderDescriptor
     /// values (Codex 0, Claude 10) and balance providers use high values (100+), so metric cards
     /// naturally precede balance cards.
     /// </param>
-    public ProviderDescriptor(string Name, int DisplayOrder)
+    public ProviderDescriptor(
+        string Name,
+        int DisplayOrder,
+        ProviderAuthenticationKind AuthenticationKind = ProviderAuthenticationKind.None,
+        string? CredentialName = null,
+        int SettingsOrder = int.MaxValue,
+        string? IconKey = null,
+        string[]? IconLayoutKeys = null)
     {
         this.Name = Name;
         this.DisplayOrder = DisplayOrder;
+        this.AuthenticationKind = AuthenticationKind;
+        this.CredentialName = CredentialName;
+        this.SettingsOrder = SettingsOrder;
+        this.IconKey = IconKey;
+        this.IconLayoutKeys = IconLayoutKeys ?? [];
     }
 
     /// <summary>Display name, e.g. "Codex" or "DeepSeek".</summary>
@@ -25,11 +44,14 @@ public sealed class ProviderDescriptor
     /// <summary>Ascending sort key for tray bars and tooltip cards.</summary>
     public int DisplayOrder { get; }
 
-    /// <summary>
-    /// Set to <see langword="false"/> by a provider when it detects that credentials are
-    /// missing (no API key, no auth file, etc.). The aggregator resets this to
-    /// <see langword="true"/> at the start of each refresh so providers that gain
-    /// credentials mid-session are automatically re-enabled.
-    /// </summary>
-    public bool IsEnabled { get; set; }
+    public ProviderAuthenticationKind AuthenticationKind { get; }
+
+    public string? CredentialName { get; }
+
+    public int SettingsOrder { get; }
+
+    public string? IconKey { get; }
+
+    public IReadOnlyList<string> IconLayoutKeys { get; }
+
 }

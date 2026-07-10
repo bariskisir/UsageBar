@@ -1,5 +1,5 @@
-using UsageBar.Configuration;
-using UsageBar.Domain;
+using UsageBar.Core.Configuration;
+using UsageBar.Core.Domain;
 using System.Text.Json;
 using Xunit;
 

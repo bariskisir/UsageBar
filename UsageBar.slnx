@@ -1,7 +1,9 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/UsageBar.Core/UsageBar.Core.csproj" />
-    <Project Path="src/UsageBar.App/UsageBar.App.csproj" />
+    <Project Path="src/UsageBar.Windows/UsageBar.Windows.csproj" />
+    <Project Path="src/UsageBar.MacOS/UsageBar.MacOS.csproj" />
+    <Project Path="src/UsageBar.Linux/UsageBar.Linux.csproj" />
     <Project Path="src/UsageBar.Tests/UsageBar.Tests.csproj" />
   </Folder>
 </Solution>

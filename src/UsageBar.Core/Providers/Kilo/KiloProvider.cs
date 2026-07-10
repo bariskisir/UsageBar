@@ -1,9 +1,9 @@
 using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text.Json;
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>Reports Kilo credits, and Kilo Pass usage when the account has an active pass.</summary>
 public sealed class KiloProvider(HttpClient httpClient) : IUsageProvider, IResultDisplayOrderProvider
@@ -16,7 +16,8 @@ public sealed class KiloProvider(HttpClient httpClient) : IUsageProvider, IResul
         "user.getAutoTopUpPaymentMethod",
     ];
 
-    public ProviderDescriptor Descriptor { get; } = new("Kilo", DisplayOrder: 30);
+    public ProviderDescriptor Descriptor { get; } = new(
+        "Kilo", 30, ProviderAuthenticationKind.ApiKey, CredentialNames.Kilo, 9, "kilo", ["kilo_pass"]);
 
     public int GetDisplayOrder(ProviderResult result) => result switch
     {
@@ -25,8 +26,8 @@ public sealed class KiloProvider(HttpClient httpClient) : IUsageProvider, IResul
         _ => Descriptor.DisplayOrder,
     };
 
-    public void RefreshEnabled(ProviderQueryContext context) =>
-        Descriptor.IsEnabled = !string.IsNullOrEmpty(context.GetApiKey(CredentialNames.Kilo));
+    public bool IsConfigured(ProviderQueryContext context) =>
+        !string.IsNullOrEmpty(context.GetApiKey(CredentialNames.Kilo));
 
     public async Task<ProviderResult?> GetUsageAsync(ProviderQueryContext context, CancellationToken cancellationToken)
     {
@@ -53,8 +54,7 @@ public sealed class KiloProvider(HttpClient httpClient) : IUsageProvider, IResul
             return new MetricResult(
                 Descriptor.Name,
                 PlanLine(snapshot.PlanName, snapshot.Credits),
-                [window],
-                [IconBar.Create(usedPercent, 1.0)]);
+                [window]);
         }
 
         if (snapshot.Credits is null)

@@ -1,6 +1,6 @@
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>Test provider for MiniMax — randomly returns metric (model windows) or balance (points).</summary>
 public sealed class TestMiniMaxProvider : IUsageProvider, IResultDisplayOrderProvider
@@ -19,6 +19,6 @@ public sealed class TestMiniMaxProvider : IUsageProvider, IResultDisplayOrderPro
         var window = TestData.RandomWindow("MiniMax", "Model");
         var points = $"{Math.Round(1000 + Random.Shared.NextDouble() * 500, 2):0.00} pts";
         return Task.FromResult<ProviderResult?>(
-            new MetricResult("MiniMax", points, [window], TestData.Bars(window)));
+            new MetricResult("MiniMax", points, [window]));
     }
 }

@@ -1,4 +1,4 @@
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>Reads and persists Antigravity OAuth credentials.</summary>
 public interface IAntigravityAuthReader

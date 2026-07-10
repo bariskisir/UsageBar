@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace UsageBar.Domain;
+namespace UsageBar.Core.Domain;
 
 public sealed record NotificationSettings(
     [property: JsonPropertyName("high")] double High,

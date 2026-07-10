@@ -1,11 +1,12 @@
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>Reports the OpenRouter remaining credit balance (credits minus usage).</summary>
 public sealed class OpenRouterProvider(HttpClient httpClient) : BalanceUsageProvider(httpClient)
 {
-    public override ProviderDescriptor Descriptor { get; } = new("OpenRouter", DisplayOrder: 110);
+    public override ProviderDescriptor Descriptor { get; } = new(
+        "OpenRouter", 110, ProviderAuthenticationKind.ApiKey, CredentialNames.OpenRouter, SettingsOrder: 4);
 
     protected override string CredentialName => CredentialNames.OpenRouter;
 

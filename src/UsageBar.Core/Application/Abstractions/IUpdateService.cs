@@ -1,4 +1,4 @@
-namespace UsageBar.Application;
+namespace UsageBar.Core.Application;
 
 public sealed record UpdateCheckResult(
     bool HasUpdate,

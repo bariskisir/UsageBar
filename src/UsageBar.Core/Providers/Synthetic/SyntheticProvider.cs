@@ -1,16 +1,17 @@
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>Reports Synthetic quota usage across rolling-5h, weekly, and search-hourly windows.</summary>
 public sealed class SyntheticProvider(HttpClient httpClient) : IUsageProvider
 {
     private const string QuotasEndpoint = "https://api.synthetic.new/v2/quotas";
 
-    public ProviderDescriptor Descriptor { get; } = new("Synthetic", DisplayOrder: 15);
+    public ProviderDescriptor Descriptor { get; } = new(
+        "Synthetic", 15, ProviderAuthenticationKind.ApiKey, CredentialNames.Synthetic, 17, "synthetic", ["synthetic_*"]);
 
-    public void RefreshEnabled(ProviderQueryContext context) =>
-        Descriptor.IsEnabled = !string.IsNullOrEmpty(context.GetApiKey(CredentialNames.Synthetic));
+    public bool IsConfigured(ProviderQueryContext context) =>
+        !string.IsNullOrEmpty(context.GetApiKey(CredentialNames.Synthetic));
 
     public async Task<ProviderResult?> GetUsageAsync(ProviderQueryContext context, CancellationToken cancellationToken)
     {
@@ -56,7 +57,7 @@ public sealed class SyntheticProvider(HttpClient httpClient) : IUsageProvider
             throw new ProviderException("Synthetic response did not contain usable quota windows.");
         }
 
-        return new MetricResult(Descriptor.Name, null, windows, MetricWindows.EqualWeightBars(windows.ToArray()));
+        return new MetricResult(Descriptor.Name, null, windows);
     }
 
     private static UsageWindow? ReadQuotaWindow(System.Text.Json.JsonElement quota, string providerName, DateTimeOffset now)

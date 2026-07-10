@@ -1,6 +1,6 @@
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>
 /// Shared mock-data helpers for test providers. Each call to a generator produces fresh
@@ -19,17 +19,6 @@ internal static class TestData
     {
         var percent = Math.Round(25.0 + Random.Shared.NextDouble() * 75.0, 1);
         return new UsageWindow(providerName, label, percent, RandomResetText(), subLabel);
-    }
-
-    public static IReadOnlyList<IconBar> Bars(UsageWindow w1, UsageWindow? w2 = null)
-    {
-        var bars = new List<IconBar> { IconBar.Create(w1.UsedPercent, 1.0) };
-        if (w2 is not null)
-        {
-            bars.Add(IconBar.Create(w2.UsedPercent, 1.0));
-        }
-
-        return bars;
     }
 
     public static BalanceResult RandomBalance(string providerName)

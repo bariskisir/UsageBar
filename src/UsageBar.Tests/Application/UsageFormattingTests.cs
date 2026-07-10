@@ -1,4 +1,4 @@
-using UsageBar.Providers;
+using UsageBar.Core.Providers;
 using Xunit;
 
 namespace UsageBar.Tests;

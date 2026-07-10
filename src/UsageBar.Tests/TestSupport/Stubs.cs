@@ -1,7 +1,7 @@
-using UsageBar.Domain;
-using UsageBar.Providers;
-using UsageBar.Configuration;
-using UsageBar.Application;
+using UsageBar.Core.Domain;
+using UsageBar.Core.Providers;
+using UsageBar.Core.Configuration;
+using UsageBar.Core.Application;
 
 namespace UsageBar.Tests;
 
@@ -68,6 +68,12 @@ internal sealed class StubSettingsStore(AppSettings settings) : ISettingsStore
     public AppSettings Current { get; set; } = settings;
 
     public Task<AppSettings> ReadAsync(CancellationToken cancellationToken = default) => Task.FromResult(Current);
+
+    public Task WriteAsync(AppSettings settings, CancellationToken cancellationToken = default)
+    {
+        Current = settings;
+        return Task.CompletedTask;
+    }
 
     public AppSettings Read() => Current;
 

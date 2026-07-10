@@ -1,11 +1,12 @@
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>Reports Venice balance — USD when active, DIEM with epoch allocation percentage otherwise.</summary>
 public sealed class VeniceProvider(HttpClient httpClient) : BalanceUsageProvider(httpClient)
 {
-    public override ProviderDescriptor Descriptor { get; } = new("Venice", DisplayOrder: 108);
+    public override ProviderDescriptor Descriptor { get; } = new(
+        "Venice", 108, ProviderAuthenticationKind.ApiKey, CredentialNames.Venice, SettingsOrder: 11);
 
     protected override string CredentialName => CredentialNames.Venice;
 

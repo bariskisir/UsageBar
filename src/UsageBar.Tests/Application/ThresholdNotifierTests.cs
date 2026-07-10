@@ -1,6 +1,6 @@
-using UsageBar.Application;
-using UsageBar.Configuration;
-using UsageBar.Domain;
+using UsageBar.Core.Application;
+using UsageBar.Core.Configuration;
+using UsageBar.Core.Domain;
 using Xunit;
 
 namespace UsageBar.Tests;

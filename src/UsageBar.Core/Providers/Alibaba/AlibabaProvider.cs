@@ -1,18 +1,20 @@
 using System.Net.Http.Headers;
 using System.Text;
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>Reports Alibaba Coding Plan quota usage across per-5h, per-week, and per-month windows.</summary>
 public sealed class AlibabaProvider(HttpClient httpClient) : IUsageProvider
 {
     private const string Endpoint = "https://modelstudio.console.alibabacloud.com/data/api.json?action=zeldaEasy.broadscope-bailian.codingPlan.queryCodingPlanInstanceInfoV2&product=broadscope-bailian&api=queryCodingPlanInstanceInfoV2&currentRegionId=ap-southeast-1";
 
-    public ProviderDescriptor Descriptor { get; } = new("Alibaba", DisplayOrder: 23);
+    public ProviderDescriptor Descriptor { get; } = new(
+        "Alibaba", 23, ProviderAuthenticationKind.ApiKey, CredentialNames.Alibaba, 21, "alibaba",
+        ["alibaba_5h", "alibaba_weekly", "alibaba_monthly"]);
 
-    public void RefreshEnabled(ProviderQueryContext context) =>
-        Descriptor.IsEnabled = !string.IsNullOrEmpty(context.GetApiKey(CredentialNames.Alibaba));
+    public bool IsConfigured(ProviderQueryContext context) =>
+        !string.IsNullOrEmpty(context.GetApiKey(CredentialNames.Alibaba));
 
     public async Task<ProviderResult?> GetUsageAsync(ProviderQueryContext context, CancellationToken cancellationToken)
     {
@@ -88,7 +90,7 @@ public sealed class AlibabaProvider(HttpClient httpClient) : IUsageProvider
             throw new ProviderException("Alibaba response did not contain usable quota windows.");
         }
 
-        return new MetricResult(Descriptor.Name, planName, windows, MetricWindows.EqualWeightBars(windows.ToArray()));
+        return new MetricResult(Descriptor.Name, planName, windows);
     }
 
     private static void TryAddWindow(

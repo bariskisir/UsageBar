@@ -1,6 +1,6 @@
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>Test provider for Codex — returns mock Session + Weekly windows with random 25–100% usage.</summary>
 public sealed class TestCodexProvider : IUsageProvider
@@ -14,6 +14,6 @@ public sealed class TestCodexProvider : IUsageProvider
         var (session, weekly) = TestData.RandomDualWindow("Codex");
         var plan = Plans[Random.Shared.Next(Plans.Length)];
         return Task.FromResult<ProviderResult?>(
-            new MetricResult("Codex", plan, [session, weekly], TestData.Bars(session, weekly)));
+            new MetricResult("Codex", plan, [session, weekly]));
     }
 }

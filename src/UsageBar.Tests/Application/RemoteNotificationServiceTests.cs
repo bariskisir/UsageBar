@@ -1,9 +1,9 @@
 using System.Net;
 using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
-using UsageBar.Application;
-using UsageBar.Configuration;
-using UsageBar.Domain;
+using UsageBar.Core.Application;
+using UsageBar.Core.Configuration;
+using UsageBar.Core.Domain;
 using Xunit;
 
 namespace UsageBar.Tests;
@@ -16,10 +16,9 @@ public sealed class RemoteNotificationServiceTests
         var handler = CaptureHandler();
         var service = new DiscordNotificationService(
             new HttpClient(handler),
-            new StubSettingsStore(AppSettings.Default),
             NullLogger<DiscordNotificationService>.Instance);
 
-        await service.SendAsync("hello", CancellationToken.None);
+        await service.SendAsync("hello", AppSettings.Default, CancellationToken.None);
         Assert.Empty(handler.Requests);
     }
 
@@ -29,14 +28,14 @@ public sealed class RemoteNotificationServiceTests
         var handler = CaptureHandler();
         var service = new DiscordNotificationService(
             new HttpClient(handler),
-            new StubSettingsStore(AppSettings.Default with
-            {
-                Notification = new NotificationSettings(70, 95, null,
-                    new DiscordSettings("https://discord.test/webhook", "Usage Bot", Enabled: true)),
-            }),
             NullLogger<DiscordNotificationService>.Instance);
 
-        await service.SendAsync("limit reached", CancellationToken.None);
+        var settings = AppSettings.Default with
+        {
+            Notification = new NotificationSettings(70, 95, null,
+                new DiscordSettings("https://discord.test/webhook", "Usage Bot", Enabled: true)),
+        };
+        await service.SendAsync("limit reached", settings, CancellationToken.None);
         var request = Assert.Single(handler.Requests);
         Assert.Equal(HttpMethod.Post, request.Method);
         Assert.Equal("https://discord.test/webhook", request.RequestUri!.ToString());
@@ -53,14 +52,14 @@ public sealed class RemoteNotificationServiceTests
         var handler = CaptureHandler();
         var service = new TelegramNotificationService(
             new HttpClient(handler),
-            new StubSettingsStore(AppSettings.Default with
-            {
-                Notification = new NotificationSettings(70, 95,
-                    new TelegramSettings("token-123", 42, Enabled: true), null),
-            }),
             NullLogger<TelegramNotificationService>.Instance);
 
-        await service.SendAsync("usage high", CancellationToken.None);
+        var settings = AppSettings.Default with
+        {
+            Notification = new NotificationSettings(70, 95,
+                new TelegramSettings("token-123", 42, Enabled: true), null),
+        };
+        await service.SendAsync("usage high", settings, CancellationToken.None);
         var request = Assert.Single(handler.Requests);
         Assert.Equal(HttpMethod.Post, request.Method);
         Assert.Equal("https://api.telegram.org/bottoken-123/sendMessage", request.RequestUri!.ToString());

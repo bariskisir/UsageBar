@@ -1,4 +1,4 @@
-namespace UsageBar.Domain;
+namespace UsageBar.Core.Domain;
 
 /// <summary>
 /// Severity of a threshold notification, selecting the built-in Windows balloon glyph.

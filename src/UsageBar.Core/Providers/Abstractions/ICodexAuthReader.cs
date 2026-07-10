@@ -1,4 +1,4 @@
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>Reads Codex OAuth credentials from the local Codex CLI auth file.</summary>
 public interface ICodexAuthReader

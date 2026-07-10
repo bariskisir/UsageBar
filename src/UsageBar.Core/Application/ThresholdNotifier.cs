@@ -1,7 +1,7 @@
-using UsageBar.Configuration;
-using UsageBar.Domain;
+using UsageBar.Core.Configuration;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Application;
+namespace UsageBar.Core.Application;
 
 /// <summary>
 /// Tracks per-window usage between refreshes and emits one-shot high/critical/limit-reached

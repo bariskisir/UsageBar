@@ -1,5 +1,5 @@
-using UsageBar.Domain;
-using UsageBar.Providers;
+using UsageBar.Core.Domain;
+using UsageBar.Core.Providers;
 using Xunit;
 
 namespace UsageBar.Tests;
@@ -35,30 +35,5 @@ public sealed class MetricWindowsTests
     {
         var exception = Assert.Throws<ProviderException>(() => MetricWindows.Require("Codex", null, null));
         Assert.Contains("Codex", exception.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void EqualWeightBars_builds_one_weight1_bar_per_present_window()
-    {
-        var session = TestData.Window("Claude", "Session", 88);
-        var weekly = TestData.Window("Claude", "Weekly", 40);
-
-        var bars = MetricWindows.EqualWeightBars(session, weekly);
-
-        Assert.Collection(
-            bars,
-            bar => { Assert.Equal(88.0, bar.UsedPercent); Assert.Equal(1.0, bar.Weight); },
-            bar => { Assert.Equal(40.0, bar.UsedPercent); Assert.Equal(1.0, bar.Weight); });
-    }
-
-    [Fact]
-    public void EqualWeightBars_skips_missing_windows()
-    {
-        var weekly = TestData.Window("Claude", "Weekly", 40);
-
-        var bars = MetricWindows.EqualWeightBars(null, weekly);
-
-        var bar = Assert.Single(bars);
-        Assert.Equal(40.0, bar.UsedPercent);
     }
 }

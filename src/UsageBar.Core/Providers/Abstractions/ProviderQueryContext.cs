@@ -1,7 +1,7 @@
-using UsageBar.Configuration;
-using UsageBar.Domain;
+using UsageBar.Core.Configuration;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>
 /// Per-refresh context handed to every provider. Carries the reference "now" used for
@@ -38,7 +38,10 @@ public sealed class ProviderQueryContext
     /// Builds a context from settings, falling back to the same-named environment
     /// variable when a settings value is blank.
     /// </summary>
-    public static ProviderQueryContext FromSettings(AppSettings settings, DateTimeOffset now)
+    public static ProviderQueryContext FromSettings(
+        AppSettings settings,
+        DateTimeOffset now,
+        Func<string, string?> environmentValue)
     {
         var apiKeys = new Dictionary<string, string>(StringComparer.Ordinal);
         var refreshTokenMap = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
@@ -54,20 +57,23 @@ public sealed class ProviderQueryContext
                     continue;
                 }
 
-                apiKeys[p.Credential] = Resolve(p.ApiKey, p.Credential);
+                apiKeys[p.Credential] = Resolve(p.ApiKey, p.Credential, environmentValue);
             }
         }
 
         return new ProviderQueryContext(now, apiKeys, refreshTokenMap);
     }
 
-    private static string Resolve(string? settingsValue, string environmentVariableName)
+    private static string Resolve(
+        string? settingsValue,
+        string environmentVariableName,
+        Func<string, string?> environmentValue)
     {
         if (!string.IsNullOrWhiteSpace(settingsValue))
         {
             return settingsValue;
         }
 
-        return Environment.GetEnvironmentVariable(environmentVariableName) ?? string.Empty;
+        return environmentValue(environmentVariableName) ?? string.Empty;
     }
 }

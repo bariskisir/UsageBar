@@ -1,6 +1,6 @@
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 public sealed class TestAntigravityProvider : IUsageProvider
 {
@@ -39,7 +39,7 @@ public sealed class TestAntigravityProvider : IUsageProvider
         var windows = new List<UsageWindow> { geminiSession, geminiWeekly, thirdPartySession, thirdPartyWeekly };
 
         return Task.FromResult<ProviderResult?>(
-            new MetricResult("Antigravity", "free-tier", windows, TestData.Bars(geminiSession, geminiWeekly)));
+            new MetricResult("Antigravity", "free-tier", windows));
     }
 
     private static double RandomUsedPercent() =>

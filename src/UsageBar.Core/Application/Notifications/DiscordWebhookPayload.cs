@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace UsageBar.Application;
+namespace UsageBar.Core.Application;
 
 internal sealed record DiscordWebhookPayload(
     [property: JsonPropertyName("content")] string Content,

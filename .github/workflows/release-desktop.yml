@@ -16,9 +16,22 @@ env:
   DOTNET_NOLOGO: true
 
 jobs:
-  build:
-    name: Build Windows ${{ matrix.arch }} Setup
+  test:
+    name: Test
     runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - run: dotnet test src/UsageBar.Tests/UsageBar.Tests.csproj -c Release
+
+  build-windows:
+    name: Build Windows ${{ matrix.arch }}
+    runs-on: windows-latest
+    needs: test
     strategy:
       fail-fast: false
       matrix:
@@ -31,56 +44,39 @@ jobs:
             inno_arch: arm64
 
     steps:
-      - name: Checkout release ref
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set release version
         shell: pwsh
         run: |
           $version = "${{ github.ref_name }}"
-          if ($version.StartsWith("v")) {
-            $version = $version.Substring(1)
-          }
+          if ($version.StartsWith("v")) { $version = $version.Substring(1) }
           Add-Content -Path $env:GITHUB_ENV -Value "APP_VERSION=$version"
 
-      - name: Set up .NET
-        uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
 
-      - name: Restore
-        run: dotnet restore UsageBar.slnx
-
-      - name: Build
-        run: dotnet build UsageBar.slnx --configuration Release --no-restore
-
-      - name: Test
-        run: dotnet test UsageBar.slnx --configuration Release --no-build
-
-      - name: Publish desktop app
-        # ReadyToRun is intentionally omitted: it precompiles native images for faster cold
-        # start but roughly adds ~15 MB to the single file. For a login-launched, always-resident
-        # tray app the one-time JIT cost is invisible, so we trade it for a ~25% smaller download.
+      - name: Publish Windows
         run: >
-          dotnet publish src/UsageBar.App/UsageBar.App.csproj
-          --configuration Release
-          --runtime ${{ matrix.runtime }}
+          dotnet publish src/UsageBar.Windows/UsageBar.Windows.csproj
+          -c Release
+          -r ${{ matrix.runtime }}
           --self-contained true
-          --output artifacts/publish/${{ matrix.runtime }}
+          -o artifacts/publish/${{ matrix.runtime }}
           -p:PublishSingleFile=true
           -p:EnableCompressionInSingleFile=true
+          -p:Version=${{ env.APP_VERSION }}
 
-      - name: Install Inno Setup
-        run: choco install innosetup --no-progress --yes
+      - run: choco install innosetup --no-progress --yes
 
-      - name: Build setup package
+      - name: Build installer
         shell: pwsh
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) {
             $iscc = (Get-Command iscc.exe -ErrorAction Stop).Source
           }
-
           & $iscc installer/UsageBar.iss `
             /DAppVersion="$env:APP_VERSION" `
             /DAppArch="${{ matrix.arch }}" `
@@ -88,34 +84,31 @@ jobs:
             /DSourceDir="$PWD\artifacts\publish\${{ matrix.runtime }}" `
             /DOutputDir="$PWD\artifacts\installer"
 
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: usagebar-windows-${{ matrix.arch }}-setup
-          path: artifacts/installer/*_${{ matrix.arch }}-setup.exe
+          name: usagebar-windows-${{ matrix.arch }}
+          path: |
+            artifacts/installer/*_${{ matrix.arch }}-setup.exe
           if-no-files-found: error
 
   publish:
     name: Publish GitHub Release
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build-windows]
 
     steps:
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           path: release-assets
           merge-multiple: true
 
-      - name: List release assets
-        shell: bash
-        run: find release-assets -maxdepth 5 -type f -print
+      - run: find release-assets -maxdepth 5 -type f -print
 
-      - name: Publish release assets
-        uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: UsageBar ${{ github.ref_name }}
-          files: release-assets/**/*_*-setup.exe
+          files: |
+            release-assets/**/*_*-setup.exe
           fail_on_unmatched_files: true
           generate_release_notes: true

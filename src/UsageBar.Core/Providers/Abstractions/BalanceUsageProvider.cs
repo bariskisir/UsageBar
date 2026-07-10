@@ -1,6 +1,6 @@
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>
 /// Returned by <see cref="BalanceUsageProvider.FetchBalanceAsync"/> so the base class can
@@ -35,8 +35,8 @@ public abstract class BalanceUsageProvider : IUsageProvider
     /// <summary>Credential/environment-variable name that enables this provider.</summary>
     protected abstract string CredentialName { get; }
 
-    public void RefreshEnabled(ProviderQueryContext context) =>
-        Descriptor.IsEnabled = !string.IsNullOrEmpty(context.GetApiKey(CredentialName));
+    public bool IsConfigured(ProviderQueryContext context) =>
+        !string.IsNullOrEmpty(context.GetApiKey(CredentialName));
 
     public async Task<ProviderResult?> GetUsageAsync(ProviderQueryContext context, CancellationToken cancellationToken)
     {

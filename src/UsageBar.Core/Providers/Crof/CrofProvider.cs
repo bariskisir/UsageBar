@@ -1,11 +1,12 @@
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>Reports the Crof credit balance (USD).</summary>
 public sealed class CrofProvider(HttpClient httpClient) : BalanceUsageProvider(httpClient)
 {
-    public override ProviderDescriptor Descriptor { get; } = new("Crof", DisplayOrder: 112);
+    public override ProviderDescriptor Descriptor { get; } = new(
+        "Crof", 112, ProviderAuthenticationKind.ApiKey, CredentialNames.Crof, SettingsOrder: 13);
 
     protected override string CredentialName => CredentialNames.Crof;
 

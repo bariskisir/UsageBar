@@ -1,4 +1,4 @@
-namespace UsageBar.Domain;
+namespace UsageBar.Core.Domain;
 
 /// <summary>
 /// Aggregated results of one refresh across all configured providers, ordered by provider

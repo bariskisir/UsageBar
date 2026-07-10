@@ -1,19 +1,20 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>Reports Warp request limit usage via GraphQL.</summary>
 public sealed class WarpProvider(HttpClient httpClient) : IUsageProvider
 {
     private const string GraphQLEndpoint = "https://app.warp.dev/graphql/v2?op=GetRequestLimitInfo";
 
-    public ProviderDescriptor Descriptor { get; } = new("Warp", DisplayOrder: 13);
+    public ProviderDescriptor Descriptor { get; } = new(
+        "Warp", 13, ProviderAuthenticationKind.ApiKey, CredentialNames.Warp, 15, "warp", ["warp_requests"]);
 
-    public void RefreshEnabled(ProviderQueryContext context) =>
-        Descriptor.IsEnabled = !string.IsNullOrEmpty(context.GetApiKey(CredentialNames.Warp));
+    public bool IsConfigured(ProviderQueryContext context) =>
+        !string.IsNullOrEmpty(context.GetApiKey(CredentialNames.Warp));
 
     public async Task<ProviderResult?> GetUsageAsync(ProviderQueryContext context, CancellationToken cancellationToken)
     {
@@ -64,8 +65,7 @@ public sealed class WarpProvider(HttpClient httpClient) : IUsageProvider
             var bonusPlan = ParseBonusPlan(root);
             return new MetricResult(
                 Descriptor.Name, bonusPlan ?? "Unlimited",
-                [new UsageWindow(Descriptor.Name, "Requests", 0, null)],
-                [IconBar.Create(0, 1.0)]);
+                [new UsageWindow(Descriptor.Name, "Requests", 0, null)]);
         }
 
         var requestLimit = ProviderJson.GetDouble(info, "requestLimit");
@@ -88,7 +88,7 @@ public sealed class WarpProvider(HttpClient httpClient) : IUsageProvider
         var plan = ParseBonusPlan(root);
         var window = new UsageWindow(Descriptor.Name, "Requests", Math.Clamp(usedPercent, 0, 100), resetText);
 
-        return new MetricResult(Descriptor.Name, plan, [window], [IconBar.Create(usedPercent, 1.0)]);
+        return new MetricResult(Descriptor.Name, plan, [window]);
     }
 
     private static string? ParseBonusPlan(JsonElement root)

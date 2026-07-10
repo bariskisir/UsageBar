@@ -1,6 +1,6 @@
-using UsageBar.Configuration;
-using UsageBar.Domain;
-using UsageBar.Providers;
+using UsageBar.Core.Configuration;
+using UsageBar.Core.Domain;
+using UsageBar.Core.Providers;
 using Xunit;
 
 namespace UsageBar.Tests;
@@ -28,7 +28,7 @@ public sealed class ProviderQueryContextTests
     public void Settings_value_takes_precedence()
     {
         var settings = AppSettings.Default with { Providers = Provider("DeepSeek", "from-settings") };
-        var context = ProviderQueryContext.FromSettings(settings, TestData.FixedNow);
+        var context = ProviderQueryContext.FromSettings(settings, TestData.FixedNow, Environment.GetEnvironmentVariable);
         Assert.Equal("from-settings", context.GetApiKey(CredentialNames.DeepSeek));
     }
 
@@ -39,7 +39,7 @@ public sealed class ProviderQueryContextTests
         Environment.SetEnvironmentVariable(CredentialNames.OpenRouter, "from-env");
         try
         {
-            var context = ProviderQueryContext.FromSettings(settings, TestData.FixedNow);
+            var context = ProviderQueryContext.FromSettings(settings, TestData.FixedNow, Environment.GetEnvironmentVariable);
             Assert.Equal("from-env", context.GetApiKey(CredentialNames.OpenRouter));
         }
         finally
@@ -53,7 +53,7 @@ public sealed class ProviderQueryContextTests
     {
         var settings = AppSettings.Default with { Providers = Provider("Deepgram", "") };
         Environment.SetEnvironmentVariable(CredentialNames.Deepgram, null);
-        var context = ProviderQueryContext.FromSettings(settings, TestData.FixedNow);
+        var context = ProviderQueryContext.FromSettings(settings, TestData.FixedNow, Environment.GetEnvironmentVariable);
         Assert.Null(context.GetApiKey(CredentialNames.Deepgram));
     }
 
@@ -64,7 +64,7 @@ public sealed class ProviderQueryContextTests
         Environment.SetEnvironmentVariable(CredentialNames.ElevenLabs, "eleven-env");
         try
         {
-            var context = ProviderQueryContext.FromSettings(settings, TestData.FixedNow);
+            var context = ProviderQueryContext.FromSettings(settings, TestData.FixedNow, Environment.GetEnvironmentVariable);
             Assert.Equal("eleven-env", context.GetApiKey(CredentialNames.ElevenLabs));
         }
         finally
@@ -80,7 +80,7 @@ public sealed class ProviderQueryContextTests
         Environment.SetEnvironmentVariable(CredentialNames.Moonshot, "moonshot-env");
         try
         {
-            var context = ProviderQueryContext.FromSettings(settings, TestData.FixedNow);
+            var context = ProviderQueryContext.FromSettings(settings, TestData.FixedNow, Environment.GetEnvironmentVariable);
             Assert.Equal("moonshot-env", context.GetApiKey(CredentialNames.Moonshot));
         }
         finally
@@ -96,7 +96,7 @@ public sealed class ProviderQueryContextTests
         Environment.SetEnvironmentVariable(CredentialNames.Kilo, "kilo-env");
         try
         {
-            var context = ProviderQueryContext.FromSettings(settings, TestData.FixedNow);
+            var context = ProviderQueryContext.FromSettings(settings, TestData.FixedNow, Environment.GetEnvironmentVariable);
             Assert.Equal("kilo-env", context.GetApiKey(CredentialNames.Kilo));
         }
         finally
@@ -112,7 +112,7 @@ public sealed class ProviderQueryContextTests
         Environment.SetEnvironmentVariable(CredentialNames.ZenMux, "zenmux-env");
         try
         {
-            var context = ProviderQueryContext.FromSettings(settings, TestData.FixedNow);
+            var context = ProviderQueryContext.FromSettings(settings, TestData.FixedNow, Environment.GetEnvironmentVariable);
             Assert.Equal("zenmux-env", context.GetApiKey(CredentialNames.ZenMux));
         }
         finally

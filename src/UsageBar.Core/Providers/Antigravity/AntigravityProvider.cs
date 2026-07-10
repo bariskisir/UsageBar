@@ -1,11 +1,11 @@
 using System.Globalization;
-using System.Net;
 using System.Net.Http.Headers;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 public sealed class AntigravityProvider(HttpClient httpClient, IAntigravityAuthReader authReader) : IUsageProvider
 {
@@ -17,7 +17,6 @@ public sealed class AntigravityProvider(HttpClient httpClient, IAntigravityAuthR
     private const string OAuthClientSecret = "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";
     private const string DefaultCliVersion = "1.0.14";
     private const string UserAgentPrefix = "antigravity/cli";
-    private const string UserAgentSuffix = "(aidev_client; os_type=windows; arch=amd64)";
 
     private string? _cachedProjectId;
     private string? _cachedTierId;
@@ -25,10 +24,12 @@ public sealed class AntigravityProvider(HttpClient httpClient, IAntigravityAuthR
     private readonly SemaphoreSlim _initGate = new(1, 1);
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
 
-    public ProviderDescriptor Descriptor { get; } = new("Antigravity", DisplayOrder: 5);
+    public ProviderDescriptor Descriptor { get; } = new(
+        "Antigravity", 5, ProviderAuthenticationKind.OAuth, SettingsOrder: 2, IconKey: "antigravity",
+        IconLayoutKeys: ["antigravity_*"]);
 
-    public void RefreshEnabled(ProviderQueryContext context) =>
-        Descriptor.IsEnabled = !string.IsNullOrEmpty(authReader.Read()?.AccessToken);
+    public bool IsConfigured(ProviderQueryContext context) =>
+        !string.IsNullOrEmpty(authReader.Read()?.AccessToken);
 
     public async Task<ProviderResult?> GetUsageAsync(ProviderQueryContext context, CancellationToken cancellationToken)
     {
@@ -38,69 +39,57 @@ public sealed class AntigravityProvider(HttpClient httpClient, IAntigravityAuthR
             return null;
         }
 
-        var canRefresh = context.CanRefreshToken(Descriptor.Name);
-
-        if (canRefresh)
-        {
-            // Proactive token refresh if expired.
-            await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
-            try
-            {
-                auth = await ProviderAuthFlow
-                    .RefreshIfNeededAsync(auth, context.Now, ShouldRefresh, RefreshAuthAsync, cancellationToken)
-                    .ConfigureAwait(false);
-            }
-            finally
-            {
-                _refreshGate.Release();
-            }
-        }
-
-        // One-time init: project ID + tier ID + CLI version, cached for the app lifetime.
-        if (_cachedProjectId is null)
-        {
-            await _initGate.WaitAsync(cancellationToken).ConfigureAwait(false);
-            try
-            {
-                if (_cachedProjectId is null)
-                {
-                    var projectTask = FetchProjectAsync(auth, cancellationToken);
-                    var versionTask = FetchLatestVersionAsync(cancellationToken);
-                    await Task.WhenAll(projectTask, versionTask).ConfigureAwait(false);
-
-                    (_cachedProjectId, _cachedTierId) = projectTask.Result;
-                    _cachedCliVersion = versionTask.Result;
-                }
-            }
-            finally
-            {
-                _initGate.Release();
-            }
-        }
-
-        var userAgent = BuildUserAgent();
-
-        JsonDocument document;
-
-        if (canRefresh)
-        {
-            // Quota fetch with refresh-retry on 401.
-            document = await ProviderAuthFlow
-                .ExecuteWithRefreshRetryAsync(
-                    auth,
-                    (a, ct) => FetchQuotaAsync(a, userAgent, ct),
-                    IsAuthFailure,
-                    HasRefreshToken,
-                    RefreshAuthAsync,
-                    cancellationToken)
-                .ConfigureAwait(false);
-        }
-        else
-        {
-            document = await FetchQuotaAsync(auth, userAgent, cancellationToken).ConfigureAwait(false);
-        }
+        var execution = await ProviderAuthFlow.ExecuteAsync(
+                auth,
+                context.CanRefreshToken(Descriptor.Name),
+                context.Now,
+                _refreshGate,
+                authReader.Read,
+                ShouldRefresh,
+                static value => value.RefreshToken,
+                RefreshAuthAsync,
+                FetchUsageDocumentAsync,
+                cancellationToken)
+            .ConfigureAwait(false);
+        using var document = execution.Result;
 
         return ParseQuotaResponse(document, context);
+    }
+
+    private async Task<JsonDocument> FetchUsageDocumentAsync(
+        AntigravityAuth auth,
+        CancellationToken cancellationToken)
+    {
+        await EnsureInitializedAsync(auth, cancellationToken).ConfigureAwait(false);
+        return await FetchQuotaAsync(auth, BuildUserAgent(), cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task EnsureInitializedAsync(AntigravityAuth auth, CancellationToken cancellationToken)
+    {
+        if (_cachedProjectId is not null)
+        {
+            return;
+        }
+
+        await _initGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (_cachedProjectId is not null)
+            {
+                return;
+            }
+
+            var projectTask = FetchProjectAsync(auth, cancellationToken);
+            var versionTask = FetchLatestVersionAsync(cancellationToken);
+            await Task.WhenAll(projectTask, versionTask).ConfigureAwait(false);
+
+            (_cachedProjectId, _cachedTierId) = await projectTask.ConfigureAwait(false);
+            _cachedCliVersion = await versionTask.ConfigureAwait(false);
+        }
+        finally
+        {
+            _initGate.Release();
+        }
     }
 
     private MetricResult ParseQuotaResponse(JsonDocument document, ProviderQueryContext context)
@@ -155,8 +144,7 @@ public sealed class AntigravityProvider(HttpClient httpClient, IAntigravityAuthR
             throw new ProviderException("Antigravity quota response did not contain usable buckets.");
         }
 
-        var iconBars = windows.Select(w => IconBar.Create(w.UsedPercent, 1.0)).ToList();
-        return new MetricResult(Descriptor.Name, PlanLabel(_cachedTierId), windows, iconBars);
+        return new MetricResult(Descriptor.Name, PlanLabel(_cachedTierId), windows);
     }
 
     private async Task<(string ProjectId, string? TierId)> FetchProjectAsync(AntigravityAuth auth, CancellationToken cancellationToken)
@@ -206,7 +194,14 @@ public sealed class AntigravityProvider(HttpClient httpClient, IAntigravityAuthR
                 return tagName.StartsWith('v') ? tagName[1..] : tagName;
             }
         }
-        catch { }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            // Version discovery is optional; use the last known compatible fallback.
+        }
 
         return DefaultCliVersion;
     }
@@ -226,7 +221,10 @@ public sealed class AntigravityProvider(HttpClient httpClient, IAntigravityAuthR
         return await ProviderHttp.GetJsonAsync(httpClient, request, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<AntigravityAuth> RefreshAuthAsync(AntigravityAuth auth, CancellationToken cancellationToken)
+    private async Task<AntigravityAuth> RefreshAuthAsync(
+        AntigravityAuth auth,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(auth.RefreshToken))
         {
@@ -248,8 +246,7 @@ public sealed class AntigravityProvider(HttpClient httpClient, IAntigravityAuthR
         using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
         {
-            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-            throw new ProviderException($"Antigravity token refresh failed with HTTP {(int)response.StatusCode}: {errorBody}");
+            throw new ProviderException($"Antigravity token refresh failed with HTTP {(int)response.StatusCode}.");
         }
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
@@ -264,7 +261,7 @@ public sealed class AntigravityProvider(HttpClient httpClient, IAntigravityAuthR
 
         var expiresIn = ProviderJson.GetDouble(root, "expires_in");
         var expiry = expiresIn is not null
-            ? DateTimeOffset.UtcNow.AddSeconds(expiresIn.Value)
+            ? now.AddSeconds(expiresIn.Value)
             : (DateTimeOffset?)null;
 
         var refreshed = auth with
@@ -275,23 +272,48 @@ public sealed class AntigravityProvider(HttpClient httpClient, IAntigravityAuthR
             IdToken = ProviderJson.GetString(root, "id_token") ?? auth.IdToken,
         };
 
-        try { authReader.Save(refreshed); }
-        catch { }
+        try
+        {
+            authReader.Save(refreshed);
+        }
+        catch
+        {
+            // The refreshed credential remains valid for this query even if persistence fails.
+        }
 
         return refreshed;
     }
 
     private static bool ShouldRefresh(AntigravityAuth auth, DateTimeOffset now) =>
-        HasRefreshToken(auth) && (auth.Expiry is null || now >= auth.Expiry);
-
-    private static bool HasRefreshToken(AntigravityAuth auth) =>
-        !string.IsNullOrWhiteSpace(auth.RefreshToken);
-
-    private static bool IsAuthFailure(HttpStatusCode? statusCode) =>
-        statusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden;
+        !string.IsNullOrWhiteSpace(auth.RefreshToken) && (auth.Expiry is null || now >= auth.Expiry);
 
     private string BuildUserAgent() =>
-        $"{UserAgentPrefix}/{(_cachedCliVersion ?? DefaultCliVersion)} {UserAgentSuffix}";
+        $"{UserAgentPrefix}/{(_cachedCliVersion ?? DefaultCliVersion)} " +
+        $"(aidev_client; os_type={GetOsType()}; arch={GetArchitecture()})";
+
+    private static string GetOsType()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return "windows";
+        }
+
+        if (OperatingSystem.IsMacOS())
+        {
+            return "darwin";
+        }
+
+        return "linux";
+    }
+
+    private static string GetArchitecture() => RuntimeInformation.ProcessArchitecture switch
+    {
+        Architecture.X64 => "amd64",
+        Architecture.Arm64 => "arm64",
+        Architecture.X86 => "386",
+        Architecture.Arm => "arm",
+        var architecture => architecture.ToString().ToLowerInvariant(),
+    };
 
     private static string? PlanLabel(string? tierId)
     {

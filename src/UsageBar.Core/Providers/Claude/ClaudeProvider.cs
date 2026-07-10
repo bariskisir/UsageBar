@@ -1,10 +1,9 @@
 using System.Globalization;
-using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>
 /// Reports Claude usage as Session (five_hour) and Weekly (seven_day) windows, plus the
@@ -20,10 +19,12 @@ public sealed class ClaudeProvider(HttpClient httpClient, IClaudeAuthReader auth
 
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
 
-    public ProviderDescriptor Descriptor { get; } = new("Claude", DisplayOrder: 10);
+    public ProviderDescriptor Descriptor { get; } = new(
+        "Claude", 10, ProviderAuthenticationKind.OAuth, SettingsOrder: 1, IconKey: "claude",
+        IconLayoutKeys: ["claude_session", "claude_weekly"]);
 
-    public void RefreshEnabled(ProviderQueryContext context) =>
-        Descriptor.IsEnabled = !string.IsNullOrEmpty(authReader.Read()?.AccessToken);
+    public bool IsConfigured(ProviderQueryContext context) =>
+        !string.IsNullOrEmpty(authReader.Read()?.AccessToken);
 
     public async Task<ProviderResult?> GetUsageAsync(ProviderQueryContext context, CancellationToken cancellationToken)
     {
@@ -33,31 +34,20 @@ public sealed class ClaudeProvider(HttpClient httpClient, IClaudeAuthReader auth
             return null;
         }
 
-        JsonDocument document;
-
-        if (context.CanRefreshToken(Descriptor.Name))
-        {
-            // Serialize auth refresh so two concurrent calls don't race on the same token.
-            await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
-            try
-            {
-                auth = await ProviderAuthFlow
-                    .RefreshIfNeededAsync(auth, context.Now, ShouldRefresh, RefreshAuthAsync, cancellationToken)
-                    .ConfigureAwait(false);
-            }
-            finally
-            {
-                _refreshGate.Release();
-            }
-
-            document = await ProviderAuthFlow
-                .ExecuteWithRefreshRetryAsync(auth, GetUsageDocumentAsync, IsAuthFailure, HasRefreshToken, RefreshAuthAsync, cancellationToken)
-                .ConfigureAwait(false);
-        }
-        else
-        {
-            document = await GetUsageDocumentAsync(auth, cancellationToken).ConfigureAwait(false);
-        }
+        var execution = await ProviderAuthFlow.ExecuteAsync(
+                auth,
+                context.CanRefreshToken(Descriptor.Name),
+                context.Now,
+                _refreshGate,
+                authReader.Read,
+                ShouldRefresh,
+                static value => value.RefreshToken,
+                RefreshAuthAsync,
+                GetUsageDocumentAsync,
+                cancellationToken)
+            .ConfigureAwait(false);
+        auth = execution.Auth;
+        using var document = execution.Result;
 
         var plan = PlanLabel(auth.SubscriptionType ?? auth.RateLimitTier);
 
@@ -65,7 +55,7 @@ public sealed class ClaudeProvider(HttpClient httpClient, IClaudeAuthReader auth
         var weekly = ReadWindow(document.RootElement, "seven_day", "Weekly", Descriptor.Name, context.Now);
 
         var windows = MetricWindows.Require(Descriptor.Name, session, weekly);
-        return new MetricResult(Descriptor.Name, plan, windows, MetricWindows.EqualWeightBars(session, weekly));
+        return new MetricResult(Descriptor.Name, plan, windows);
     }
 
     private async Task<JsonDocument> GetUsageDocumentAsync(ClaudeAuth auth, CancellationToken cancellationToken)
@@ -89,7 +79,10 @@ public sealed class ClaudeProvider(HttpClient httpClient, IClaudeAuthReader auth
         return await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<ClaudeAuth> RefreshAuthAsync(ClaudeAuth auth, CancellationToken cancellationToken)
+    private async Task<ClaudeAuth> RefreshAuthAsync(
+        ClaudeAuth auth,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(auth.RefreshToken))
         {
@@ -126,7 +119,7 @@ public sealed class ClaudeProvider(HttpClient httpClient, IClaudeAuthReader auth
         {
             AccessToken = accessToken,
             RefreshToken = ProviderJson.GetString(root, "refresh_token") ?? auth.RefreshToken,
-            ExpiresAt = ReadExpiresAt(root),
+            ExpiresAt = ReadExpiresAt(root, now),
         };
 
         try
@@ -145,15 +138,11 @@ public sealed class ClaudeProvider(HttpClient httpClient, IClaudeAuthReader auth
 
     private static bool ShouldRefresh(ClaudeAuth auth, DateTimeOffset now)
     {
-        return HasRefreshToken(auth) && (auth.ExpiresAt is null || now >= auth.ExpiresAt);
+        return !string.IsNullOrWhiteSpace(auth.RefreshToken) &&
+            (auth.ExpiresAt is null || now >= auth.ExpiresAt);
     }
 
-    private static bool HasRefreshToken(ClaudeAuth auth) => !string.IsNullOrWhiteSpace(auth.RefreshToken);
-
-    private static bool IsAuthFailure(HttpStatusCode? statusCode) =>
-        statusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden;
-
-    private static DateTimeOffset? ReadExpiresAt(JsonElement root)
+    private static DateTimeOffset? ReadExpiresAt(JsonElement root, DateTimeOffset now)
     {
         var expiresIn = ProviderJson.GetDouble(root, "expires_in");
         if (expiresIn is null)
@@ -161,7 +150,7 @@ public sealed class ClaudeProvider(HttpClient httpClient, IClaudeAuthReader auth
             return null;
         }
 
-        return DateTimeOffset.UtcNow.AddSeconds(expiresIn.Value);
+        return now.AddSeconds(expiresIn.Value);
     }
 
     /// <summary>Maps a Claude subscription tier to a short plan label.</summary>

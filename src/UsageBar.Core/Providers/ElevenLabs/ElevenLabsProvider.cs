@@ -1,17 +1,19 @@
 using System.Net.Http.Headers;
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>Reports ElevenLabs character-credit usage as a percentage-based quota window.</summary>
 public sealed class ElevenLabsProvider(HttpClient httpClient) : IUsageProvider
 {
     private const string SubscriptionEndpoint = "https://api.elevenlabs.io/v1/user/subscription";
 
-    public ProviderDescriptor Descriptor { get; } = new("ElevenLabs", DisplayOrder: 20);
+    public ProviderDescriptor Descriptor { get; } = new(
+        "ElevenLabs", 20, ProviderAuthenticationKind.ApiKey, CredentialNames.ElevenLabs, 8, "elevenlabs",
+        ["elevenlabs_session"]);
 
-    public void RefreshEnabled(ProviderQueryContext context) =>
-        Descriptor.IsEnabled = !string.IsNullOrEmpty(context.GetApiKey(CredentialNames.ElevenLabs));
+    public bool IsConfigured(ProviderQueryContext context) =>
+        !string.IsNullOrEmpty(context.GetApiKey(CredentialNames.ElevenLabs));
 
     public async Task<ProviderResult?> GetUsageAsync(ProviderQueryContext context, CancellationToken cancellationToken)
     {
@@ -57,8 +59,7 @@ public sealed class ElevenLabsProvider(HttpClient httpClient) : IUsageProvider
         return new MetricResult(
             Descriptor.Name,
             plan,
-            [window],
-            [IconBar.Create(usedPercent, 1.0)]);
+            [window]);
     }
 
     private static string? PlanLabel(string? tier) =>

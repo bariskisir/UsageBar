@@ -1,6 +1,6 @@
-using UsageBar.Domain;
+using UsageBar.Core.Domain;
 
-namespace UsageBar.Providers;
+namespace UsageBar.Core.Providers;
 
 /// <summary>Test provider for Zai — returns a mock Token limit window with random usage.</summary>
 public sealed class TestZaiProvider : IUsageProvider
@@ -11,6 +11,6 @@ public sealed class TestZaiProvider : IUsageProvider
     {
         var window = TestData.RandomWindow("Zai", "TOKENS_LIMIT");
         return Task.FromResult<ProviderResult?>(
-            new MetricResult("Zai", null, [window], TestData.Bars(window)));
+            new MetricResult("Zai", null, [window]));
     }
 }
