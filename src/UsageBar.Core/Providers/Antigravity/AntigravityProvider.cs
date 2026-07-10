@@ -38,17 +38,22 @@ public sealed class AntigravityProvider(HttpClient httpClient, IAntigravityAuthR
             return null;
         }
 
-        // Proactive token refresh if expired.
-        await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        var canRefresh = context.CanRefreshToken(Descriptor.Name);
+
+        if (canRefresh)
         {
-            auth = await ProviderAuthFlow
-                .RefreshIfNeededAsync(auth, context.Now, ShouldRefresh, RefreshAuthAsync, cancellationToken)
-                .ConfigureAwait(false);
-        }
-        finally
-        {
-            _refreshGate.Release();
+            // Proactive token refresh if expired.
+            await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                auth = await ProviderAuthFlow
+                    .RefreshIfNeededAsync(auth, context.Now, ShouldRefresh, RefreshAuthAsync, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            finally
+            {
+                _refreshGate.Release();
+            }
         }
 
         // One-time init: project ID + tier ID + CLI version, cached for the app lifetime.
@@ -75,16 +80,25 @@ public sealed class AntigravityProvider(HttpClient httpClient, IAntigravityAuthR
 
         var userAgent = BuildUserAgent();
 
-        // Quota fetch with refresh-retry on 401.
-        using var document = await ProviderAuthFlow
-            .ExecuteWithRefreshRetryAsync(
-                auth,
-                (a, ct) => FetchQuotaAsync(a, userAgent, ct),
-                IsAuthFailure,
-                HasRefreshToken,
-                RefreshAuthAsync,
-                cancellationToken)
-            .ConfigureAwait(false);
+        JsonDocument document;
+
+        if (canRefresh)
+        {
+            // Quota fetch with refresh-retry on 401.
+            document = await ProviderAuthFlow
+                .ExecuteWithRefreshRetryAsync(
+                    auth,
+                    (a, ct) => FetchQuotaAsync(a, userAgent, ct),
+                    IsAuthFailure,
+                    HasRefreshToken,
+                    RefreshAuthAsync,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+        else
+        {
+            document = await FetchQuotaAsync(auth, userAgent, cancellationToken).ConfigureAwait(false);
+        }
 
         return ParseQuotaResponse(document, context);
     }

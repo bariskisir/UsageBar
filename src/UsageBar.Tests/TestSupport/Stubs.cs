@@ -81,7 +81,7 @@ internal static class TestData
     public static ProviderQueryContext Context(params (string Name, string Value)[] apiKeys)
     {
         var dictionary = apiKeys.ToDictionary(pair => pair.Name, pair => pair.Value, StringComparer.Ordinal);
-        return new ProviderQueryContext(FixedNow, dictionary);
+        return new ProviderQueryContext(FixedNow, dictionary, new Dictionary<string, bool>());
     }
 
     public static UsageWindow Window(string provider, string label, double percent, string? reset = null) =>

@@ -7,7 +7,8 @@ public sealed record ProviderSettings(
     [property: JsonPropertyName("type")] string Type,
     [property: JsonPropertyName("credential")] string? Credential,
     [property: JsonPropertyName("apiKey")] string? ApiKey,
-    [property: JsonPropertyName("enabled")] bool Enabled)
+    [property: JsonPropertyName("enabled")] bool Enabled,
+    [property: JsonPropertyName("refreshToken")] bool RefreshToken = true)
 {
     public const string TypeOAuth = "oauth";
     public const string TypeApiKey = "apiKey";

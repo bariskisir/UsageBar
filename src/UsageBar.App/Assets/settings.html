@@ -238,6 +238,12 @@ select:focus, input:focus { border-color: var(--input-focus-border); }
             </div>
           </div>
           <div class="settings__row">
+            <span class="settings__label">Notifications</span>
+            <div class="settings__value">
+              <label class="toggle"><input type="checkbox" id="notificationsEnabled" /><span class="toggle__slider"></span></label>
+            </div>
+          </div>
+          <div class="settings__row">
             <span class="settings__label">Test Notification</span>
             <button class="btn btn--secondary btn--sm" id="testNotify">Send Test</button>
           </div>
@@ -436,6 +442,24 @@ select:focus, input:focus { border-color: var(--input-focus-border); }
       toggleLabel.appendChild(slider);
       row.appendChild(toggleLabel);
 
+      // Refresh-token toggle for OAuth providers
+      if (isOAuth) {
+        var refreshLabel = document.createElement("label");
+        refreshLabel.className = "toggle";
+        refreshLabel.title = "Auto-refresh token when expired";
+        var refreshCb = document.createElement("input");
+        refreshCb.type = "checkbox";
+        refreshCb.className = "provider-refresh-toggle";
+        refreshCb.dataset.providerName = pr.name;
+        refreshCb.checked = pr.refreshToken !== false;
+        refreshCb.addEventListener("change", function () { markDirty(); });
+        refreshLabel.appendChild(refreshCb);
+        var refreshSlider = document.createElement("span");
+        refreshSlider.className = "toggle__slider";
+        refreshLabel.appendChild(refreshSlider);
+        row.appendChild(refreshLabel);
+      }
+
       if (!isOAuth && pr.credential) {
         var envVal = _envApiKeys[pr.credential] || "";
         var settingsVal = pr.apiKey || "";
@@ -561,6 +585,7 @@ select:focus, input:focus { border-color: var(--input-focus-border); }
     var notif = settings.notification || {};
     document.getElementById("highPct").value = String(notif.high || 70);
     document.getElementById("criticalPct").value = String(notif.critical || 95);
+    document.getElementById("notificationsEnabled").checked = notif.enabled !== false;
 
     var update = settings.update || {};
     document.getElementById("checkUpdates").checked = update.onStartup !== false;
@@ -603,6 +628,7 @@ select:focus, input:focus { border-color: var(--input-focus-border); }
     settings.notification = {
       high: parseFloat(document.getElementById("highPct").value) || 70,
       critical: parseFloat(document.getElementById("criticalPct").value) || 95,
+      enabled: document.getElementById("notificationsEnabled").checked,
       telegram: {
         token: tgToken || null,
         chatId: isNaN(tgChatId) ? 0 : tgChatId,
@@ -645,13 +671,12 @@ select:focus, input:focus { border-color: var(--input-focus-border); }
       }
       if (orig && !credential) credential = orig.credential || null;
 
-      providers.push({
-        name: name,
-        type: isOAuth ? "oauth" : "apiKey",
-        credential: credential,
-        apiKey: apiKey,
-        enabled: enabled
-      });
+      var refreshCb = row.querySelector(".provider-refresh-toggle");
+      var refreshToken = refreshCb ? refreshCb.checked : true;
+
+      providers.push(refreshCb
+        ? { name: name, type: isOAuth ? "oauth" : "apiKey", credential: credential, apiKey: apiKey, enabled: enabled, refreshToken: refreshToken }
+        : { name: name, type: isOAuth ? "oauth" : "apiKey", credential: credential, apiKey: apiKey, enabled: enabled });
     });
     settings.providers = providers;
 
