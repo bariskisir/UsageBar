@@ -3,7 +3,7 @@ using UsageBar.Core.Domain;
 namespace UsageBar.Core.Providers;
 
 /// <summary>Test provider for Alibaba — returns mock 5h, Weekly, and Monthly windows.</summary>
-public sealed class TestAlibabaProvider : IUsageProvider
+public sealed class TestAlibabaProvider : ISingleResultUsageProvider
 {
     public ProviderDescriptor Descriptor { get; } = new("Alibaba", DisplayOrder: 23);
 

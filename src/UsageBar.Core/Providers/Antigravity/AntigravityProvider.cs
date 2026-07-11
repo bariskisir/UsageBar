@@ -6,8 +6,7 @@ using System.Text.Json;
 using UsageBar.Core.Domain;
 
 namespace UsageBar.Core.Providers;
-
-public sealed class AntigravityProvider(HttpClient httpClient, IAntigravityAuthReader authReader) : IUsageProvider
+public sealed class AntigravityProvider(HttpClient httpClient, IAntigravityAuthReader authReader) : ISingleResultUsageProvider
 {
     private const string LoadCodeAssistEndpoint = "https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist";
     private const string QuotaEndpoint = "https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary";
@@ -17,20 +16,14 @@ public sealed class AntigravityProvider(HttpClient httpClient, IAntigravityAuthR
     private const string OAuthClientSecret = "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";
     private const string DefaultCliVersion = "1.0.14";
     private const string UserAgentPrefix = "antigravity/cli";
-
     private string? _cachedProjectId;
     private string? _cachedTierId;
     private string? _cachedCliVersion;
     private readonly SemaphoreSlim _initGate = new(1, 1);
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
+    public ProviderDescriptor Descriptor { get; } = new("Antigravity", 5, ProviderAuthenticationKind.OAuth, SettingsOrder: 2, IconKey: "antigravity", IconLayoutKeys: ["antigravity_*"]);
 
-    public ProviderDescriptor Descriptor { get; } = new(
-        "Antigravity", 5, ProviderAuthenticationKind.OAuth, SettingsOrder: 2, IconKey: "antigravity",
-        IconLayoutKeys: ["antigravity_*"]);
-
-    public bool IsConfigured(ProviderQueryContext context) =>
-        !string.IsNullOrEmpty(authReader.Read()?.AccessToken);
-
+    public bool IsConfigured(ProviderQueryContext context) => !string.IsNullOrEmpty(authReader.Read()?.AccessToken);
     public async Task<ProviderResult?> GetUsageAsync(ProviderQueryContext context, CancellationToken cancellationToken)
     {
         var auth = authReader.Read();
@@ -39,26 +32,14 @@ public sealed class AntigravityProvider(HttpClient httpClient, IAntigravityAuthR
             return null;
         }
 
-        var execution = await ProviderAuthFlow.ExecuteAsync(
-                auth,
-                context.CanRefreshToken(Descriptor.Name),
-                context.Now,
-                _refreshGate,
-                authReader.Read,
-                ShouldRefresh,
-                static value => value.RefreshToken,
-                RefreshAuthAsync,
-                FetchUsageDocumentAsync,
-                cancellationToken)
-            .ConfigureAwait(false);
-        using var document = execution.Result;
-
-        return ParseQuotaResponse(document, context);
+        var execution = await ProviderAuthFlow.ExecuteAsync(auth, context.CanRefreshToken(Descriptor.Name), context.Now, _refreshGate, authReader.Read, ShouldRefresh, static value => value.RefreshToken, RefreshAuthAsync, FetchUsageDocumentAsync, cancellationToken).ConfigureAwait(false);
+        using (var document = execution.Result)
+        {
+            return ParseQuotaResponse(document, context);
+        }
     }
 
-    private async Task<JsonDocument> FetchUsageDocumentAsync(
-        AntigravityAuth auth,
-        CancellationToken cancellationToken)
+    private async Task<JsonDocument> FetchUsageDocumentAsync(AntigravityAuth auth, CancellationToken cancellationToken)
     {
         await EnsureInitializedAsync(auth, cancellationToken).ConfigureAwait(false);
         return await FetchQuotaAsync(auth, BuildUserAgent(), cancellationToken).ConfigureAwait(false);
@@ -82,7 +63,6 @@ public sealed class AntigravityProvider(HttpClient httpClient, IAntigravityAuthR
             var projectTask = FetchProjectAsync(auth, cancellationToken);
             var versionTask = FetchLatestVersionAsync(cancellationToken);
             await Task.WhenAll(projectTask, versionTask).ConfigureAwait(false);
-
             (_cachedProjectId, _cachedTierId) = await projectTask.ConfigureAwait(false);
             _cachedCliVersion = await versionTask.ConfigureAwait(false);
         }
@@ -95,9 +75,7 @@ public sealed class AntigravityProvider(HttpClient httpClient, IAntigravityAuthR
     private MetricResult ParseQuotaResponse(JsonDocument document, ProviderQueryContext context)
     {
         var windows = new List<(int GroupIndex, UsageWindow Window)>();
-
-        if (!ProviderJson.TryGetProperty(document.RootElement, "groups", out var groupsArray) ||
-            groupsArray.ValueKind != JsonValueKind.Array)
+        if (!ProviderJson.TryGetProperty(document.RootElement, "groups", out var groupsArray) || groupsArray.ValueKind != JsonValueKind.Array)
         {
             throw new ProviderException("Antigravity quota response did not contain groups.");
         }
@@ -107,9 +85,7 @@ public sealed class AntigravityProvider(HttpClient httpClient, IAntigravityAuthR
         {
             var groupName = ProviderJson.GetString(group, "displayName") ?? string.Empty;
             groupName = groupName.Replace("Models", "", StringComparison.OrdinalIgnoreCase).Trim();
-
-            if (!ProviderJson.TryGetProperty(group, "buckets", out var bucketsArray) ||
-                bucketsArray.ValueKind != JsonValueKind.Array)
+            if (!ProviderJson.TryGetProperty(group, "buckets", out var bucketsArray) || bucketsArray.ValueKind != JsonValueKind.Array)
             {
                 groupIndex++;
                 continue;
@@ -127,18 +103,14 @@ public sealed class AntigravityProvider(HttpClient httpClient, IAntigravityAuthR
                 var window = MapWindowLabel(UsageFormatting.Capitalize(rawWindow));
                 var usedPercent = (1.0 - remainingFraction.Value) * 100.0;
                 var resetTimeStr = ProviderJson.GetString(bucket, "resetTime");
-
-                var resetText = (string?)null;
-                if (!string.IsNullOrWhiteSpace(resetTimeStr) &&
-                    DateTimeOffset.TryParse(resetTimeStr, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var resetTime))
+                var resetText = (string? )null;
+                if (!string.IsNullOrWhiteSpace(resetTimeStr) && DateTimeOffset.TryParse(resetTimeStr, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var resetTime))
                 {
                     resetText = UsageFormatting.ResetDuration(resetTime - context.Now);
                 }
 
                 var label = !string.IsNullOrWhiteSpace(window) ? window : groupName;
-
-                windows.Add((groupIndex, new UsageWindow(Descriptor.Name, label, Math.Clamp(usedPercent, 0, 100), resetText,
-                    subLabel: !string.IsNullOrWhiteSpace(window) && !string.IsNullOrWhiteSpace(groupName) ? groupName : null)));
+                windows.Add((groupIndex, new UsageWindow(Descriptor.Name, label, Math.Clamp(usedPercent, 0, 100), resetText, subLabel: !string.IsNullOrWhiteSpace(window) && !string.IsNullOrWhiteSpace(groupName) ? groupName : null)));
             }
 
             groupIndex++;
@@ -152,12 +124,14 @@ public sealed class AntigravityProvider(HttpClient httpClient, IAntigravityAuthR
         windows.Sort((a, b) =>
         {
             var groupCmp = a.GroupIndex.CompareTo(b.GroupIndex);
-            if (groupCmp != 0) return groupCmp;
+            if (groupCmp != 0)
+            {
+                return groupCmp;
+            }
+
             return WindowRank(a.Window.Label).CompareTo(WindowRank(b.Window.Label));
         });
-
         var ordered = windows.Select(w => w.Window).ToList();
-
         return new MetricResult(Descriptor.Name, PlanLabel(_cachedTierId), ordered);
     }
 
@@ -185,57 +159,61 @@ public sealed class AntigravityProvider(HttpClient httpClient, IAntigravityAuthR
     private async Task<(string ProjectId, string? TierId)> FetchProjectAsync(AntigravityAuth auth, CancellationToken cancellationToken)
     {
         var body = JsonSerializer.Serialize(new { metadata = new { ideType = "ANTIGRAVITY" } });
-
-        using var request = new HttpRequestMessage(HttpMethod.Post, LoadCodeAssistEndpoint)
+        using (var request = new HttpRequestMessage(HttpMethod.Post, LoadCodeAssistEndpoint)
         {
             Content = new StringContent(body, Encoding.UTF8, "application/json"),
-        };
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", auth.AccessToken);
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        request.Headers.TryAddWithoutValidation("User-Agent", BuildUserAgent());
-
-        using var document = await ProviderHttp.GetJsonAsync(httpClient, request, cancellationToken).ConfigureAwait(false);
-        var root = document.RootElement;
-
-        var projectId = ProviderJson.GetString(root, "cloudaicompanionProject");
-        if (string.IsNullOrWhiteSpace(projectId))
-        {
-            throw new ProviderException("Antigravity loadCodeAssist response did not contain cloudaicompanionProject.");
         }
 
-        string? tierId = null;
-        if (ProviderJson.TryGetProperty(root, "currentTier", out var currentTier) &&
-            currentTier.ValueKind == JsonValueKind.Object)
+        )
         {
-            tierId = ProviderJson.GetString(currentTier, "id");
-        }
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", auth.AccessToken);
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            request.Headers.TryAddWithoutValidation("User-Agent", BuildUserAgent());
+            using (var document = await ProviderHttp.GetJsonAsync(httpClient, request, cancellationToken).ConfigureAwait(false))
+            {
+                var root = document.RootElement;
+                var projectId = ProviderJson.GetString(root, "cloudaicompanionProject");
+                if (string.IsNullOrWhiteSpace(projectId))
+                {
+                    throw new ProviderException("Antigravity loadCodeAssist response did not contain cloudaicompanionProject.");
+                }
 
-        return (projectId, tierId);
+                string? tierId = null;
+                if (ProviderJson.TryGetProperty(root, "currentTier", out var currentTier) && currentTier.ValueKind == JsonValueKind.Object)
+                {
+                    tierId = ProviderJson.GetString(currentTier, "id");
+                }
+
+                return (projectId, tierId);
+            }
+        }
     }
 
     private async Task<string> FetchLatestVersionAsync(CancellationToken cancellationToken)
     {
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, GitHubReleasesEndpoint);
-            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-            request.Headers.TryAddWithoutValidation("User-Agent", "UsageBar");
-
-            using var document = await ProviderHttp.GetJsonAsync(httpClient, request, cancellationToken).ConfigureAwait(false);
-            var tagName = ProviderJson.GetString(document.RootElement, "tag_name");
-
-            if (!string.IsNullOrWhiteSpace(tagName))
+            using (var request = new HttpRequestMessage(HttpMethod.Get, GitHubReleasesEndpoint))
             {
-                return tagName.StartsWith('v') ? tagName[1..] : tagName;
+                request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+                request.Headers.TryAddWithoutValidation("User-Agent", "UsageBar");
+                using (var document = await ProviderHttp.GetJsonAsync(httpClient, request, cancellationToken).ConfigureAwait(false))
+                {
+                    var tagName = ProviderJson.GetString(document.RootElement, "tag_name");
+                    if (!string.IsNullOrWhiteSpace(tagName))
+                    {
+                        return tagName.StartsWith('v') ? tagName[1..] : tagName;
+                    }
+                }
             }
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException)when (cancellationToken.IsCancellationRequested)
         {
             throw;
         }
         catch
         {
-            // Version discovery is optional; use the last known compatible fallback.
+        // Version discovery is optional; use the last known compatible fallback.
         }
 
         return DefaultCliVersion;
@@ -244,88 +222,80 @@ public sealed class AntigravityProvider(HttpClient httpClient, IAntigravityAuthR
     private async Task<JsonDocument> FetchQuotaAsync(AntigravityAuth auth, string userAgent, CancellationToken cancellationToken)
     {
         var body = JsonSerializer.Serialize(new { project = _cachedProjectId! });
-
-        using var request = new HttpRequestMessage(HttpMethod.Post, QuotaEndpoint)
+        using (var request = new HttpRequestMessage(HttpMethod.Post, QuotaEndpoint)
         {
             Content = new StringContent(body, Encoding.UTF8, "application/json"),
-        };
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", auth.AccessToken);
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        request.Headers.TryAddWithoutValidation("User-Agent", userAgent);
+        }
 
-        return await ProviderHttp.GetJsonAsync(httpClient, request, cancellationToken).ConfigureAwait(false);
+        )
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", auth.AccessToken);
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            request.Headers.TryAddWithoutValidation("User-Agent", userAgent);
+            return await ProviderHttp.GetJsonAsync(httpClient, request, cancellationToken).ConfigureAwait(false);
+        }
     }
 
-    private async Task<AntigravityAuth> RefreshAuthAsync(
-        AntigravityAuth auth,
-        DateTimeOffset now,
-        CancellationToken cancellationToken)
+    private async Task<AntigravityAuth> RefreshAuthAsync(AntigravityAuth auth, DateTimeOffset now, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(auth.RefreshToken))
         {
             return auth;
         }
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, TokenRefreshEndpoint)
+        using (var request = new HttpRequestMessage(HttpMethod.Post, TokenRefreshEndpoint)
         {
-            Content = new FormUrlEncodedContent(
-            [
-                new KeyValuePair<string, string>("client_id", OAuthClientId),
-                new KeyValuePair<string, string>("client_secret", OAuthClientSecret),
-                new KeyValuePair<string, string>("refresh_token", auth.RefreshToken),
-                new KeyValuePair<string, string>("grant_type", "refresh_token"),
-            ]),
-        };
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-
-        using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        if (!response.IsSuccessStatusCode)
-        {
-            throw new ProviderException($"Antigravity token refresh failed with HTTP {(int)response.StatusCode}.");
+            Content = new FormUrlEncodedContent([new KeyValuePair<string, string>("client_id", OAuthClientId), new KeyValuePair<string, string>("client_secret", OAuthClientSecret), new KeyValuePair<string, string>("refresh_token", auth.RefreshToken), new KeyValuePair<string, string>("grant_type", "refresh_token"), ]),
         }
 
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
-        var root = document.RootElement;
-
-        var newAccessToken = ProviderJson.GetString(root, "access_token");
-        if (string.IsNullOrWhiteSpace(newAccessToken))
+        )
         {
-            throw new ProviderException("Antigravity token refresh response did not include an access token.");
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            using (var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false))
+            {
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw new ProviderException($"Antigravity token refresh failed with HTTP {(int)response.StatusCode}.");
+                }
+
+                await using (var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    using (var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false))
+                    {
+                        var root = document.RootElement;
+                        var newAccessToken = ProviderJson.GetString(root, "access_token");
+                        if (string.IsNullOrWhiteSpace(newAccessToken))
+                        {
+                            throw new ProviderException("Antigravity token refresh response did not include an access token.");
+                        }
+
+                        var expiresIn = ProviderJson.GetDouble(root, "expires_in");
+                        var expiry = expiresIn is not null ? now.AddSeconds(expiresIn.Value) : (DateTimeOffset? )null;
+                        var refreshed = auth with
+                        {
+                            AccessToken = newAccessToken,
+                            RefreshToken = ProviderJson.GetString(root, "refresh_token") ?? auth.RefreshToken,
+                            Expiry = expiry,
+                            IdToken = ProviderJson.GetString(root, "id_token") ?? auth.IdToken,
+                        };
+                        try
+                        {
+                            authReader.Save(refreshed);
+                        }
+                        catch
+                        {
+                        // The refreshed credential remains valid for this query even if persistence fails.
+                        }
+
+                        return refreshed;
+                    }
+                }
+            }
         }
-
-        var expiresIn = ProviderJson.GetDouble(root, "expires_in");
-        var expiry = expiresIn is not null
-            ? now.AddSeconds(expiresIn.Value)
-            : (DateTimeOffset?)null;
-
-        var refreshed = auth with
-        {
-            AccessToken = newAccessToken,
-            RefreshToken = ProviderJson.GetString(root, "refresh_token") ?? auth.RefreshToken,
-            Expiry = expiry,
-            IdToken = ProviderJson.GetString(root, "id_token") ?? auth.IdToken,
-        };
-
-        try
-        {
-            authReader.Save(refreshed);
-        }
-        catch
-        {
-            // The refreshed credential remains valid for this query even if persistence fails.
-        }
-
-        return refreshed;
     }
 
-    private static bool ShouldRefresh(AntigravityAuth auth, DateTimeOffset now) =>
-        !string.IsNullOrWhiteSpace(auth.RefreshToken) && (auth.Expiry is null || now >= auth.Expiry);
-
-    private string BuildUserAgent() =>
-        $"{UserAgentPrefix}/{(_cachedCliVersion ?? DefaultCliVersion)} " +
-        $"(aidev_client; os_type={GetOsType()}; arch={GetArchitecture()})";
-
+    private static bool ShouldRefresh(AntigravityAuth auth, DateTimeOffset now) => !string.IsNullOrWhiteSpace(auth.RefreshToken) && (auth.Expiry is null || now >= auth.Expiry);
+    private string BuildUserAgent() => $"{UserAgentPrefix}/{(_cachedCliVersion ?? DefaultCliVersion)} " + $"(aidev_client; os_type={GetOsType()}; arch={GetArchitecture()})";
     private static string GetOsType()
     {
         if (OperatingSystem.IsWindows())
@@ -349,7 +319,6 @@ public sealed class AntigravityProvider(HttpClient httpClient, IAntigravityAuthR
         Architecture.Arm => "arm",
         var architecture => architecture.ToString().ToLowerInvariant(),
     };
-
     private static string? PlanLabel(string? tierId)
     {
         if (string.IsNullOrWhiteSpace(tierId))

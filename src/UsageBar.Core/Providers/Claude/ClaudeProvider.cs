@@ -4,28 +4,21 @@ using System.Text.Json;
 using UsageBar.Core.Domain;
 
 namespace UsageBar.Core.Providers;
-
 /// <summary>
 /// Reports Claude usage as Session (five_hour) and Weekly (seven_day) windows, plus the
 /// subscription tier. Credentials come from the local Claude credentials file.
 /// </summary>
-public sealed class ClaudeProvider(HttpClient httpClient, IClaudeAuthReader authReader) : IUsageProvider
+public sealed class ClaudeProvider(HttpClient httpClient, IClaudeAuthReader authReader) : ISingleResultUsageProvider
 {
     private const string UsageEndpoint = "https://api.anthropic.com/api/oauth/usage";
     private const string RefreshEndpoint = "https://platform.claude.com/v1/oauth/token";
     private const string OAuthClientId = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
     private const string BetaHeader = "oauth-2025-04-20";
     private const string ClaudeCodeUserAgent = "claude-code/2.1.0";
-
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
+    public ProviderDescriptor Descriptor { get; } = new("Claude", 10, ProviderAuthenticationKind.OAuth, SettingsOrder: 1, IconKey: "claude", IconLayoutKeys: ["claude_session", "claude_weekly"]);
 
-    public ProviderDescriptor Descriptor { get; } = new(
-        "Claude", 10, ProviderAuthenticationKind.OAuth, SettingsOrder: 1, IconKey: "claude",
-        IconLayoutKeys: ["claude_session", "claude_weekly"]);
-
-    public bool IsConfigured(ProviderQueryContext context) =>
-        !string.IsNullOrEmpty(authReader.Read()?.AccessToken);
-
+    public bool IsConfigured(ProviderQueryContext context) => !string.IsNullOrEmpty(authReader.Read()?.AccessToken);
     public async Task<ProviderResult?> GetUsageAsync(ProviderQueryContext context, CancellationToken cancellationToken)
     {
         var auth = authReader.Read();
@@ -34,112 +27,101 @@ public sealed class ClaudeProvider(HttpClient httpClient, IClaudeAuthReader auth
             return null;
         }
 
-        var execution = await ProviderAuthFlow.ExecuteAsync(
-                auth,
-                context.CanRefreshToken(Descriptor.Name),
-                context.Now,
-                _refreshGate,
-                authReader.Read,
-                ShouldRefresh,
-                static value => value.RefreshToken,
-                RefreshAuthAsync,
-                GetUsageDocumentAsync,
-                cancellationToken)
-            .ConfigureAwait(false);
+        var execution = await ProviderAuthFlow.ExecuteAsync(auth, context.CanRefreshToken(Descriptor.Name), context.Now, _refreshGate, authReader.Read, ShouldRefresh, static value => value.RefreshToken, RefreshAuthAsync, GetUsageDocumentAsync, cancellationToken).ConfigureAwait(false);
         auth = execution.Auth;
-        using var document = execution.Result;
-
-        var plan = PlanLabel(auth.SubscriptionType ?? auth.RateLimitTier);
-
-        var session = ReadWindow(document.RootElement, "five_hour", "Session", Descriptor.Name, context.Now);
-        var weekly = ReadWindow(document.RootElement, "seven_day", "Weekly", Descriptor.Name, context.Now);
-
-        var windows = MetricWindows.Require(Descriptor.Name, session, weekly);
-        return new MetricResult(Descriptor.Name, plan, windows);
+        using (var document = execution.Result)
+        {
+            var plan = PlanLabel(auth.SubscriptionType ?? auth.RateLimitTier);
+            var session = ReadWindow(document.RootElement, "five_hour", "Session", Descriptor.Name, context.Now);
+            var weekly = ReadWindow(document.RootElement, "seven_day", "Weekly", Descriptor.Name, context.Now);
+            var windows = MetricWindows.Require(Descriptor.Name, session, weekly);
+            return new MetricResult(Descriptor.Name, plan, windows);
+        }
     }
 
     private async Task<JsonDocument> GetUsageDocumentAsync(ClaudeAuth auth, CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, UsageEndpoint);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", auth.AccessToken);
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        request.Headers.TryAddWithoutValidation("anthropic-beta", BetaHeader);
-        request.Headers.TryAddWithoutValidation("User-Agent", ClaudeCodeUserAgent);
-
-        using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        if (!response.IsSuccessStatusCode)
+        using (var request = new HttpRequestMessage(HttpMethod.Get, UsageEndpoint))
         {
-            throw new HttpRequestException(
-                $"Claude usage request failed with HTTP {(int)response.StatusCode}.",
-                inner: null,
-                response.StatusCode);
-        }
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", auth.AccessToken);
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            request.Headers.TryAddWithoutValidation("anthropic-beta", BetaHeader);
+            request.Headers.TryAddWithoutValidation("User-Agent", ClaudeCodeUserAgent);
+            using (var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false))
+            {
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw new HttpRequestException($"Claude usage request failed with HTTP {(int)response.StatusCode}.", inner: null, response.StatusCode);
+                }
 
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        return await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+                await using (var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    return await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+                }
+            }
+        }
     }
 
-    private async Task<ClaudeAuth> RefreshAuthAsync(
-        ClaudeAuth auth,
-        DateTimeOffset now,
-        CancellationToken cancellationToken)
+    private async Task<ClaudeAuth> RefreshAuthAsync(ClaudeAuth auth, DateTimeOffset now, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(auth.RefreshToken))
         {
             return auth;
         }
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, RefreshEndpoint)
+        using (var request = new HttpRequestMessage(HttpMethod.Post, RefreshEndpoint)
         {
-            Content = new FormUrlEncodedContent(
-            [
-                new KeyValuePair<string, string>("grant_type", "refresh_token"),
-                new KeyValuePair<string, string>("refresh_token", auth.RefreshToken),
-                new KeyValuePair<string, string>("client_id", OAuthClientId),
-            ]),
-        };
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-
-        using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        if (!response.IsSuccessStatusCode)
-        {
-            throw new ProviderException($"Claude token refresh failed with HTTP {(int)response.StatusCode}.");
+            Content = new FormUrlEncodedContent([new KeyValuePair<string, string>("grant_type", "refresh_token"), new KeyValuePair<string, string>("refresh_token", auth.RefreshToken), new KeyValuePair<string, string>("client_id", OAuthClientId), ]),
         }
 
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
-        var root = document.RootElement;
-        var accessToken = ProviderJson.GetString(root, "access_token");
-        if (string.IsNullOrWhiteSpace(accessToken))
+        )
         {
-            throw new ProviderException("Claude token refresh response did not include an access token.");
-        }
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            using (var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false))
+            {
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw new ProviderException($"Claude token refresh failed with HTTP {(int)response.StatusCode}.");
+                }
 
-        var refreshed = auth with
-        {
-            AccessToken = accessToken,
-            RefreshToken = ProviderJson.GetString(root, "refresh_token") ?? auth.RefreshToken,
-            ExpiresAt = ReadExpiresAt(root, now),
-        };
+                await using (var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    using (var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false))
+                    {
+                        var root = document.RootElement;
+                        var accessToken = ProviderJson.GetString(root, "access_token");
+                        if (string.IsNullOrWhiteSpace(accessToken))
+                        {
+                            throw new ProviderException("Claude token refresh response did not include an access token.");
+                        }
 
-        try
-        {
-            authReader.Save(refreshed);
-        }
-        catch
-        {
-            // Persisting the new credentials failed (disk full, permissions, etc.).
-            // The in-memory auth is still valid for this refresh cycle; on the next
-            // cycle the old token will be read from disk and re-refreshed if expired.
-        }
+                        var refreshed = auth with
+                        {
+                            AccessToken = accessToken,
+                            RefreshToken = ProviderJson.GetString(root, "refresh_token") ?? auth.RefreshToken,
+                            ExpiresAt = ReadExpiresAt(root, now),
+                        };
+                        try
+                        {
+                            authReader.Save(refreshed);
+                        }
+                        catch
+                        {
+                        // Persisting the new credentials failed (disk full, permissions, etc.).
+                        // The in-memory auth is still valid for this refresh cycle; on the next
+                        // cycle the old token will be read from disk and re-refreshed if expired.
+                        }
 
-        return refreshed;
+                        return refreshed;
+                    }
+                }
+            }
+        }
     }
 
     private static bool ShouldRefresh(ClaudeAuth auth, DateTimeOffset now)
     {
-        return !string.IsNullOrWhiteSpace(auth.RefreshToken) &&
-            (auth.ExpiresAt is null || now >= auth.ExpiresAt);
+        return !string.IsNullOrWhiteSpace(auth.RefreshToken) && (auth.ExpiresAt is null || now >= auth.ExpiresAt);
     }
 
     private static DateTimeOffset? ReadExpiresAt(JsonElement root, DateTimeOffset now)
@@ -162,7 +144,6 @@ public sealed class ClaudeProvider(HttpClient httpClient, IClaudeAuthReader auth
         }
 
         var normalized = tier.Trim().ToLowerInvariant();
-
         return normalized switch
         {
             _ when normalized.Contains("max") => "Max",
@@ -190,7 +171,6 @@ public sealed class ClaudeProvider(HttpClient httpClient, IClaudeAuthReader auth
 
         var resetTime = ParseResetTime(ProviderJson.GetString(window, "resets_at"));
         var resetText = resetTime is { } reset ? UsageFormatting.ResetDuration(reset - now) : null;
-
         return new UsageWindow(providerName, label, Math.Clamp(utilization.Value, 0, 100), resetText);
     }
 
@@ -201,8 +181,6 @@ public sealed class ClaudeProvider(HttpClient httpClient, IClaudeAuthReader auth
             return null;
         }
 
-        return DateTimeOffset.TryParse(iso8601, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed)
-            ? parsed
-            : null;
+        return DateTimeOffset.TryParse(iso8601, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed) ? parsed : null;
     }
 }

@@ -179,9 +179,11 @@ function signalReady() {
   if (window.ipc) window.ipc.postMessage(JSON.stringify({ type: "ready" }));
 }
 
-window.chrome.webview.addEventListener("message", function (event) {
-  if (window.__render) window.__render(event.data || {});
-});
+if (window.ipc && window.ipc.addMessageListener) {
+  window.ipc.addMessageListener(function (message) {
+    if (window.__render) window.__render(message || {});
+  });
+}
 if (document.readyState === "complete" || document.readyState === "interactive") {
   signalReady();
 } else {

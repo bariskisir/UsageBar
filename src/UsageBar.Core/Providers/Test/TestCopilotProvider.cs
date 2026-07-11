@@ -3,7 +3,7 @@ using UsageBar.Core.Domain;
 namespace UsageBar.Core.Providers;
 
 /// <summary>Test provider for Copilot — returns mock Premium and Chat windows with random usage.</summary>
-public sealed class TestCopilotProvider : IUsageProvider
+public sealed class TestCopilotProvider : ISingleResultUsageProvider
 {
     private static readonly string[] Plans = ["Free", "Individual", "Business", "Enterprise"];
 

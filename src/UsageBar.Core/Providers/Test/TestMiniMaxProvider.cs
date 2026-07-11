@@ -3,7 +3,7 @@ using UsageBar.Core.Domain;
 namespace UsageBar.Core.Providers;
 
 /// <summary>Test provider for MiniMax — randomly returns metric (model windows) or balance (points).</summary>
-public sealed class TestMiniMaxProvider : IUsageProvider, IResultDisplayOrderProvider
+public sealed class TestMiniMaxProvider : ISingleResultUsageProvider, IResultDisplayOrderProvider
 {
     public ProviderDescriptor Descriptor { get; } = new("MiniMax", DisplayOrder: 25);
 

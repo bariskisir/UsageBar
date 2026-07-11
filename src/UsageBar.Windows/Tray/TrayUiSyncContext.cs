@@ -1,9 +1,8 @@
 using System.Collections.Concurrent;
 
 namespace UsageBar.Windows.Tray;
-
 /// <summary>
-/// Minimal <see cref="SynchronizationContext"/> that marshals delegates to the STA UI
+/// Minimal <see cref = "SynchronizationContext"/> that marshals delegates to the STA UI
 /// thread via a Win32 window message pump. Required for WebView2 async continuations to
 /// land on the tray message-loop thread.
 /// </summary>
@@ -12,9 +11,7 @@ internal sealed class TrayUiSyncContext : SynchronizationContext
     private readonly nint _hwnd;
     private readonly ConcurrentQueue<(SendOrPostCallback Callback, object? State)> _queue = new();
     private readonly int _managedThreadId = Environment.CurrentManagedThreadId;
-
     public TrayUiSyncContext(nint hwnd) => _hwnd = hwnd;
-
     public override void Post(SendOrPostCallback d, object? state)
     {
         _queue.Enqueue((d, state));
@@ -29,9 +26,9 @@ internal sealed class TrayUiSyncContext : SynchronizationContext
             return;
         }
 
-        using var done = new ManualResetEventSlim();
-        Post(
-            _ =>
+        using (var done = new ManualResetEventSlim())
+        {
+            Post(_ =>
             {
                 try
                 {
@@ -41,14 +38,14 @@ internal sealed class TrayUiSyncContext : SynchronizationContext
                 {
                     done.Set();
                 }
-            },
-            state);
-        done.Wait();
+            }, state);
+            done.Wait();
+        }
     }
 
     /// <summary>
-    /// Drains the current thread's <see cref="TrayUiSyncContext"/>, if one is installed. Call
-    /// from a UI-thread WndProc when <see cref="NativeMethods.WmRunDelegate"/> is received.
+    /// Drains the current thread's <see cref = "TrayUiSyncContext"/>, if one is installed. Call
+    /// from a UI-thread WndProc when <see cref = "NativeMethods.WmRunDelegate"/> is received.
     /// </summary>
     public static void DrainCurrent()
     {

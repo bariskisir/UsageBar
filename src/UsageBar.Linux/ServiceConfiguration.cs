@@ -4,6 +4,7 @@ using UsageBar.Core.Application;
 using UsageBar.Core.Infrastructure;
 using UsageBar.Core.Providers;
 using UsageBar.Linux.Infrastructure;
+using UsageBar.Linux.Settings;
 using UsageBar.Linux.Tooltip;
 using UsageBar.Linux.Tray;
 
@@ -23,6 +24,7 @@ internal static class ServiceConfiguration
 
         services.AddSingleton<NativeTray>();
         services.AddSingleton<NativeTooltip>();
+        services.AddSingleton<SettingsPanel>();
         services.AddSingleton<IUsageView, UsageView>();
         services.AddSingleton<TrayApplication>();
 

@@ -9,7 +9,7 @@ namespace UsageBar.Tests;
 public sealed class ProviderInitializerTests
 {
     [Fact]
-    public void Builds_missing_provider_settings_from_registered_descriptors_in_settings_order()
+    public async Task Builds_missing_provider_settings_from_registered_descriptors_in_settings_order()
     {
         var settings = new StubSettingsStore(AppSettings.Default with
         {
@@ -24,7 +24,7 @@ public sealed class ProviderInitializerTests
                 "OAuth", 10, ProviderAuthenticationKind.OAuth, SettingsOrder: 1)),
         };
 
-        new ProviderInitializer(settings, providers).EnsureProviders();
+        await new ProviderInitializer(settings, providers).EnsureProvidersAsync();
 
         var initialized = settings.Current;
         Assert.True(initialized.Initialized);
@@ -33,6 +33,7 @@ public sealed class ProviderInitializerTests
             oauth =>
             {
                 Assert.Equal("OAuth", oauth.Name);
+                Assert.Equal("oauth", oauth.Id);
                 Assert.Equal(ProviderSettings.TypeOAuth, oauth.Type);
                 Assert.Null(oauth.Credential);
                 Assert.True(oauth.Enabled);
@@ -40,13 +41,14 @@ public sealed class ProviderInitializerTests
             apiKey =>
             {
                 Assert.Equal("Balance", apiKey.Name);
+                Assert.Equal("balance", apiKey.Id);
                 Assert.Equal(ProviderSettings.TypeApiKey, apiKey.Type);
                 Assert.Equal("BALANCE_KEY", apiKey.Credential);
                 Assert.True(apiKey.Enabled);
             });
     }
 
-    private sealed class MetadataProvider(ProviderDescriptor descriptor) : IUsageProvider
+    private sealed class MetadataProvider(ProviderDescriptor descriptor) : ISingleResultUsageProvider
     {
         public ProviderDescriptor Descriptor { get; } = descriptor;
 

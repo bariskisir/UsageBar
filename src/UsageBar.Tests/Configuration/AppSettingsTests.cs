@@ -1,6 +1,6 @@
+using System.Text.Json;
 using UsageBar.Core.Configuration;
 using UsageBar.Core.Domain;
-using System.Text.Json;
 using Xunit;
 
 namespace UsageBar.Tests;
@@ -18,6 +18,15 @@ public sealed class AppSettingsTests
         Assert.Equal(TrayIconLayoutSettings.AutoMode, defaults.Visual!.IconLayout!.Mode);
         Assert.Null(defaults.Providers);
         Assert.False(defaults.Initialized);
+        Assert.Equal(AppSettings.CurrentSchemaVersion, defaults.SchemaVersion);
+    }
+
+    [Fact]
+    public void Provider_descriptor_derives_stable_id_independently_from_display_formatting()
+    {
+        var descriptor = new UsageBar.Core.Providers.ProviderDescriptor("Moonshot (Kimi)", 0);
+
+        Assert.Equal("moonshotkimi", descriptor.Id);
     }
 
     [Fact]

@@ -1,8 +1,8 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Web.WebView2.Core;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
-using Microsoft.Extensions.Logging;
-using Microsoft.Web.WebView2.Core;
 using UsageBar.Core.Application;
 using UsageBar.Core.Domain;
 using UsageBar.Core.Infrastructure;
@@ -11,7 +11,6 @@ using UsageBar.Windows.Infrastructure;
 using UsageBar.Windows.Tray;
 
 namespace UsageBar.Windows.Tooltip;
-
 /// <summary>
 /// Custom tooltip rendered with WebView2. The popup is a borderless, top-most,
 /// non-activating window shown on <c>NIN_POPUPOPEN</c> and hidden on <c>NIN_POPUPCLOSE</c>.
@@ -19,7 +18,7 @@ namespace UsageBar.Windows.Tooltip;
 /// </summary>
 /// <remarks>
 /// If WebView2 initialisation fails (missing runtime, COM error, directory access), the
-/// popup window is torn down and <see cref="Hwnd"/> stays 0, so show/push calls become
+/// popup window is torn down and <see cref = "Hwnd"/> stays 0, so show/push calls become
 /// no-ops — the app simply runs without a hover tooltip.
 /// </remarks>
 internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
@@ -27,31 +26,22 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
     private const int DefaultWidth = 300;
     private const int CornerRadius = 10;
     private const int MinHeight = 60;
-
     private readonly WebViewEnvironment _webViewEnv;
-    private readonly ISettingsStore _settingsStore;
     private readonly NativeMethods.WndProc _wndProc;
     private readonly WebViewPopupLifecycle _lifecycle;
-
     private volatile nint _hwnd;
     private CoreWebView2Environment? _env;
     private CoreWebView2Controller? _controller;
     private CoreWebView2? _core;
-
     private readonly Lock _gate = new();
     private string _pendingJson = """{"cards":[]}""";
     private NativeMethods.Rect _lastIconRect;
     private int _widthCss = DefaultWidth;
     private int _heightCss;
     private volatile bool _visible;
-
-    public WebViewTooltip(
-        WebViewEnvironment webViewEnv,
-        ISettingsStore settingsStore,
-        ILogger<WebViewTooltip> logger)
+    public WebViewTooltip(WebViewEnvironment webViewEnv, ILogger<WebViewTooltip> logger)
     {
         _webViewEnv = webViewEnv;
-        _settingsStore = settingsStore;
         _wndProc = WndProc;
         _lifecycle = new WebViewPopupLifecycle(logger, "Tooltip");
     }
@@ -75,29 +65,21 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
         var scale = WindowScale();
         var initialWidth = Scaled(DefaultWidth, scale);
         var initialHeight = Scaled(MinHeight, scale);
-        NativeMethods.SetWindowPos(
-            _hwnd, 0, 0, 0, initialWidth, initialHeight,
-            NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOZORDER);
-
+        NativeMethods.SetWindowPos(_hwnd, 0, 0, 0, initialWidth, initialHeight, NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOZORDER);
         try
         {
             _env = await _webViewEnv.GetAsync().ConfigureAwait(true);
-
             _controller = await _env.CreateCoreWebView2ControllerAsync(_hwnd).ConfigureAwait(true);
             _core = _controller.CoreWebView2;
             _lifecycle.Attach(_controller);
             _controller.Bounds = new System.Drawing.Rectangle(0, 0, initialWidth, initialHeight);
             _controller.DefaultBackgroundColor = System.Drawing.Color.FromArgb(0x1c, 0x1c, 0x1e);
-
             _core.Settings.AreDevToolsEnabled = false;
             _core.Settings.AreDefaultContextMenusEnabled = false;
             _core.Settings.IsStatusBarEnabled = false;
             _core.Settings.IsZoomControlEnabled = false;
-
             // IPC shim MUST exist before NavigateToString so the page script can signal ready.
-            await _core.AddScriptToExecuteOnDocumentCreatedAsync(
-                "window.ipc={postMessage:(m)=>window.chrome.webview.postMessage(typeof m==='string'?JSON.parse(m):m)};").ConfigureAwait(true);
-
+            await _core.AddScriptToExecuteOnDocumentCreatedAsync("window.ipc={postMessage:(m)=>window.chrome.webview.postMessage(typeof m==='string'?JSON.parse(m):m)," + "addMessageListener:(cb)=>window.chrome.webview.addEventListener('message',(e)=>cb(e.data))};").ConfigureAwait(true);
             _core.WebMessageReceived += OnWebMessageReceived;
             _core.NavigateToString(ReadHtmlDocument());
             // _navigated is set to true only after the page signals "ready" — see
@@ -117,9 +99,8 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
     /// Replaces the tooltip content. Thread-safe; the actual script execution happens on the
     /// UI thread via a posted message.
     /// </summary>
-    public void SetContent(IReadOnlyList<TooltipCard> cards)
+    public void SetContent(IReadOnlyList<TooltipCard> cards, int scale)
     {
-        var scale = ReadUserScale();
         var json = JsonSerializer.Serialize(new TooltipPayload(cards, scale), TooltipJsonContext.Default.TooltipPayload);
         lock (_gate)
         {
@@ -146,7 +127,6 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
             Right = fallbackX + 8,
             Bottom = fallbackY + 8,
         };
-
         _visible = true;
         ResumeCore();
         Reposition();
@@ -169,7 +149,7 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
     /// Wakes the WebView before showing: makes the controller visible, restores the normal
     /// memory band, resumes the suspended renderer, and re-renders the latest content (updates
     /// pushed while suspended are skipped, so the freshest payload is applied here).
-    /// Bumps the suspend version so any in-flight <see cref="SuspendCore"/> continuation
+    /// Bumps the suspend version so any in-flight <see cref = "SuspendCore"/> continuation
     /// recognises it is stale and discards its result.
     /// </summary>
     private void ResumeCore()
@@ -185,12 +165,11 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
     /// Frees renderer memory while hidden: hides the controller, drops to the low memory band,
     /// and suspends the renderer. Suspend requires a hidden controller and a completed initial
     /// navigation, so it is a no-op before the page is ready.
-    /// Captures the current suspend version before awaiting; if <see cref="ResumeCore"/> bumps
+    /// Captures the current suspend version before awaiting; if <see cref = "ResumeCore"/> bumps
     /// the version while the async operation is in-flight the continuation discards the stale
     /// result so <c>_suspended</c> never flips back to <see langword="true"/> after a resume.
     /// </summary>
     private Task SuspendCore() => _lifecycle.SuspendAsync();
-
     public void Dispose()
     {
         if (_lifecycle.IsDisposed)
@@ -199,13 +178,11 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
         }
 
         _lifecycle.Dispose();
-
         // Close and dispose the WebView2 controller first — its child window is hosted
         // inside the popup window and must be torn down before the parent is destroyed.
         _controller = null;
         _core = null;
         _env = null;
-
         // Now destroy the popup window itself.
         if (_hwnd != 0)
         {
@@ -221,11 +198,9 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
             case NativeMethods.WmTooltipSetData:
                 HandleSetData();
                 return 0;
-
             case NativeMethods.WmRunDelegate:
                 TrayUiSyncContext.DrainCurrent();
                 return 0;
-
             case NativeMethods.WmDestroy:
                 return 0;
         }
@@ -252,9 +227,9 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
         }
         catch (Exception)
         {
-            // The WebView may be mid-navigation, disposed, or otherwise unavailable.
-            // Silently skip this push — the next hover-triggered ResumeCore will
-            // re-post the latest payload via WmTooltipSetData.
+        // The WebView may be mid-navigation, disposed, or otherwise unavailable.
+        // Silently skip this push — the next hover-triggered ResumeCore will
+        // re-post the latest payload via WmTooltipSetData.
         }
     }
 
@@ -276,46 +251,45 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
             return;
         }
 
-            switch (message.Type)
-            {
-                case "ready":
-                    _lifecycle.MarkReady();
-                    if (_visible)
+        switch (message.Type)
+        {
+            case "ready":
+                _lifecycle.MarkReady();
+                if (_visible)
+                {
+                    if (_hwnd != 0)
                     {
-                        if (_hwnd != 0)
-                        {
-                            NativeMethods.PostMessage(_hwnd, NativeMethods.WmTooltipSetData, 0, 0);
-                        }
+                        NativeMethods.PostMessage(_hwnd, NativeMethods.WmTooltipSetData, 0, 0);
                     }
-                    else
-                    {
-                        // Hidden at startup: suspend now so the renderer sits in the low band
-                        // until the first hover wakes it (ResumeCore renders the latest payload),
-                        // then hand the startup churn back to the OS.
-                        _ = SuspendCore();
-                        NativeMethods.TrimWorkingSet();
-                    }
+                }
+                else
+                {
+                    // Hidden at startup: suspend now so the renderer sits in the low band
+                    // until the first hover wakes it (ResumeCore renders the latest payload),
+                    // then hand the startup churn back to the OS.
+                    _ = SuspendCore();
+                    NativeMethods.TrimWorkingSet();
+                }
 
-                    break;
+                break;
+            case "size":
+                if (message.Width is> 0)
+                {
+                    _widthCss = message.Width.Value;
+                }
 
-                case "size":
-                    if (message.Width is > 0)
-                    {
-                        _widthCss = message.Width.Value;
-                    }
+                if (message.Height is { } height)
+                {
+                    _heightCss = Math.Max(MinHeight, height);
+                }
 
-                    if (message.Height is { } height)
-                    {
-                        _heightCss = Math.Max(MinHeight, height);
-                    }
+                if (_visible)
+                {
+                    Reposition();
+                }
 
-                    if (_visible)
-                    {
-                        Reposition();
-                    }
-
-                    break;
-            }
+                break;
+        }
     }
 
     private void Reposition()
@@ -328,24 +302,8 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
         var iconRect = new LayoutRect(_lastIconRect.Left, _lastIconRect.Top, _lastIconRect.Right, _lastIconRect.Bottom);
         var wa = WorkArea();
         var workArea = new LayoutRect(wa.Left, wa.Top, wa.Right, wa.Bottom);
-        var placement = TooltipPlacementCalculator.Compute(
-            iconRect,
-            workArea,
-            _widthCss,
-            _heightCss,
-            MinHeight,
-            CornerRadius,
-            WindowScale());
-
-        NativeMethods.SetWindowPos(
-            _hwnd,
-            NativeMethods.HWND_TOPMOST,
-            placement.X,
-            placement.Y,
-            placement.Width,
-            placement.Height,
-            NativeMethods.SWP_NOACTIVATE);
-
+        var placement = TooltipPlacementCalculator.Compute(iconRect, workArea, _widthCss, _heightCss, MinHeight, CornerRadius, WindowScale());
+        NativeMethods.SetWindowPos(_hwnd, NativeMethods.HWND_TOPMOST, placement.X, placement.Y, placement.Width, placement.Height, NativeMethods.SWP_NOACTIVATE);
         if (_controller is not null)
         {
             _controller.Bounds = new System.Drawing.Rectangle(0, 0, placement.Width, placement.Height);
@@ -355,13 +313,7 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
         // new one. This avoids GDI handle accumulation on Windows versions where
         // SetWindowRgn does not reliably free the old region.
         NativeMethods.SetWindowRgn(_hwnd, 0, false);
-        var region = NativeMethods.CreateRoundRectRgn(
-            0,
-            0,
-            placement.Width + 1,
-            placement.Height + 1,
-            placement.CornerRadius * 2,
-            placement.CornerRadius * 2);
+        var region = NativeMethods.CreateRoundRectRgn(0, 0, placement.Width + 1, placement.Height + 1, placement.CornerRadius * 2, placement.CornerRadius * 2);
         NativeMethods.SetWindowRgn(_hwnd, region, true);
     }
 
@@ -373,31 +325,8 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
             return 0;
         }
 
-        var hwnd = NativeMethods.CreateWindowEx(
-            NativeMethods.WS_EX_TOOLWINDOW | NativeMethods.WS_EX_TOPMOST | NativeMethods.WS_EX_NOACTIVATE,
-            className,
-            "UsageBarWebTooltip",
-            NativeMethods.WS_POPUP,
-            0, 0,
-            _widthCss, MinHeight,
-            0, 0,
-            instance,
-            0);
-
+        var hwnd = NativeMethods.CreateWindowEx(NativeMethods.WS_EX_TOOLWINDOW | NativeMethods.WS_EX_TOPMOST | NativeMethods.WS_EX_NOACTIVATE, className, "UsageBarWebTooltip", NativeMethods.WS_POPUP, 0, 0, _widthCss, MinHeight, 0, 0, instance, 0);
         return hwnd;
-    }
-
-    private int ReadUserScale()
-    {
-        try
-        {
-            var settings = _settingsStore.Read();
-            return settings.Visual?.Scale ?? 100;
-        }
-        catch
-        {
-            return 100;
-        }
     }
 
     private double WindowScale()
@@ -412,7 +341,6 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
     }
 
     private static int Scaled(int value, double scale) => (int)Math.Round(value * scale);
-
     private static NativeMethods.Rect WorkArea()
     {
         var rect = new NativeMethods.Rect();
@@ -425,11 +353,23 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
             var height = NativeMethods.GetSystemMetrics(NativeMethods.SM_CYSCREEN);
             if (width > 0 && height > 0)
             {
-                return new NativeMethods.Rect { Left = 0, Top = 0, Right = width, Bottom = height };
+                return new NativeMethods.Rect
+                {
+                    Left = 0,
+                    Top = 0,
+                    Right = width,
+                    Bottom = height
+                };
             }
 
             // Absolute last resort — a safe 1080p-ish default.
-            return new NativeMethods.Rect { Left = 0, Top = 0, Right = 1920, Bottom = 1040 };
+            return new NativeMethods.Rect
+            {
+                Left = 0,
+                Top = 0,
+                Right = 1920,
+                Bottom = 1040
+            };
         }
 
         return rect;
@@ -441,7 +381,6 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
         _controller = null;
         _core = null;
         _env = null;
-
         if (_hwnd != 0)
         {
             NativeMethods.DestroyWindow(_hwnd);
@@ -452,35 +391,16 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
     private static string ReadHtmlDocument()
     {
         var assembly = typeof(EmbeddedPageLoader).Assembly;
-        return EmbeddedPageLoader.Load(
-                assembly,
-                "UsageBar.Core.Frontend.index.html",
-                "UsageBar.Core.Frontend.tooltip.css",
-                "UsageBar.Core.Frontend.tooltip.js",
-                "{{TOOLTIP_CSS}}",
-                "{{TOOLTIP_JS}}")
-            .Replace("{{OPENAI_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Core.Providers.OpenAI.openai.svg"), StringComparison.Ordinal)
-            .Replace("{{CLAUDE_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Core.Providers.Claude.claude.svg"), StringComparison.Ordinal)
-            .Replace("{{ELEVENLABS_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Core.Providers.ElevenLabs.elevenlabs.svg"), StringComparison.Ordinal)
-            .Replace("{{KILO_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Core.Providers.Kilo.kilo.svg"), StringComparison.Ordinal)
-            .Replace("{{COPILOT_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Core.Providers.Copilot.copilot.svg"), StringComparison.Ordinal)
-            .Replace("{{WARP_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Core.Providers.Warp.warp.svg"), StringComparison.Ordinal)
-            .Replace("{{SYNTHETIC_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Core.Providers.Synthetic.synthetic.svg"), StringComparison.Ordinal)
-            .Replace("{{CHUTES_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Core.Providers.Chutes.chutes.svg"), StringComparison.Ordinal)
-            .Replace("{{ZAI_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Core.Providers.Zai.zai.svg"), StringComparison.Ordinal)
-            .Replace("{{ALIBABA_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Core.Providers.Alibaba.alibaba.svg"), StringComparison.Ordinal)
-            .Replace("{{MINIMAX_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Core.Providers.MiniMax.minimax.svg"), StringComparison.Ordinal)
-            .Replace("{{CODEBUFF_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Core.Providers.Codebuff.codebuff.svg"), StringComparison.Ordinal)
-            .Replace("{{ANTIGRAVITY_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Core.Providers.Antigravity.antigravity.svg"), StringComparison.Ordinal);
+        return EmbeddedPageLoader.Load(assembly, "UsageBar.Core.Frontend.index.html", "UsageBar.Core.Frontend.tooltip.css", "UsageBar.Core.Frontend.tooltip.js", "{{TOOLTIP_CSS}}", "{{TOOLTIP_JS}}").Replace("{{OPENAI_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Core.Providers.OpenAI.openai.svg"), StringComparison.Ordinal).Replace("{{CLAUDE_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Core.Providers.Claude.claude.svg"), StringComparison.Ordinal).Replace("{{ELEVENLABS_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Core.Providers.ElevenLabs.elevenlabs.svg"), StringComparison.Ordinal).Replace("{{KILO_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Core.Providers.Kilo.kilo.svg"), StringComparison.Ordinal).Replace("{{COPILOT_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Core.Providers.Copilot.copilot.svg"), StringComparison.Ordinal).Replace("{{WARP_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Core.Providers.Warp.warp.svg"), StringComparison.Ordinal).Replace("{{SYNTHETIC_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Core.Providers.Synthetic.synthetic.svg"), StringComparison.Ordinal).Replace("{{CHUTES_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Core.Providers.Chutes.chutes.svg"), StringComparison.Ordinal).Replace("{{ZAI_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Core.Providers.Zai.zai.svg"), StringComparison.Ordinal).Replace("{{ALIBABA_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Core.Providers.Alibaba.alibaba.svg"), StringComparison.Ordinal).Replace("{{MINIMAX_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Core.Providers.MiniMax.minimax.svg"), StringComparison.Ordinal).Replace("{{CODEBUFF_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Core.Providers.Codebuff.codebuff.svg"), StringComparison.Ordinal).Replace("{{ANTIGRAVITY_ICON}}", ReadSvgDataUri(assembly, "UsageBar.Core.Providers.Antigravity.antigravity.svg"), StringComparison.Ordinal);
     }
 
     private static string ReadSvgDataUri(Assembly assembly, string resourceName)
     {
-        var stream = assembly.GetManifestResourceStream(resourceName)
-                     ?? throw new InvalidOperationException($"Embedded resource '{resourceName}' is missing.");
-        using var reader = new StreamReader(stream);
-        var bytes = Encoding.UTF8.GetBytes(reader.ReadToEnd());
-        return $"data:image/svg+xml;base64,{Convert.ToBase64String(bytes)}";
+        var stream = assembly.GetManifestResourceStream(resourceName) ?? throw new InvalidOperationException($"Embedded resource '{resourceName}' is missing.");
+        using (var reader = new StreamReader(stream))
+        {
+            var bytes = Encoding.UTF8.GetBytes(reader.ReadToEnd());
+            return $"data:image/svg+xml;base64,{Convert.ToBase64String(bytes)}";
+        }
     }
-
 }

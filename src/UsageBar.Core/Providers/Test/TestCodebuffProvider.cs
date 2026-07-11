@@ -3,7 +3,7 @@ using UsageBar.Core.Domain;
 namespace UsageBar.Core.Providers;
 
 /// <summary>Test provider for Codebuff — returns a mock Quota window with random 25–100% usage and a balance plan line.</summary>
-public sealed class TestCodebuffProvider : IUsageProvider
+public sealed class TestCodebuffProvider : ISingleResultUsageProvider
 {
     public ProviderDescriptor Descriptor { get; } = new("Codebuff", DisplayOrder: 27);
 

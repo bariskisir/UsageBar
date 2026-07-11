@@ -39,7 +39,10 @@ internal static class InputDialog
         if (_className is null)
         {
             _className = NativeMethods.RegisterWindowClass("InputDialog", WindowProc, instance);
-            if (_className is null) return null;
+            if (_className is null)
+            {
+                return null;
+            }
         }
 
         var screenW = NativeMethods.GetSystemMetrics(NativeMethods.SM_CXSCREEN);
@@ -56,7 +59,10 @@ internal static class InputDialog
             DlgW, DlgH,
             parentHwnd, 0, instance, 0);
 
-        if (_hwnd == 0) return null;
+        if (_hwnd == 0)
+        {
+            return null;
+        }
 
         // Explicitly set title after creation (works around a marshalling edge case
         // where the CreateWindowEx lpWindowName parameter may not render fully).

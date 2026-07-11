@@ -10,8 +10,11 @@ public sealed record AppSettings(
     [property: JsonPropertyName("update")] UpdateSettings? Update,
     [property: JsonPropertyName("providers")] List<ProviderSettings>? Providers,
     [property: JsonPropertyName("initialized")] bool? Initialized,
-    [property: JsonPropertyName("startWithSystem")] bool? StartWithSystem)
+    [property: JsonPropertyName("startWithSystem")] bool? StartWithSystem,
+    [property: JsonPropertyName("schemaVersion")] int? SchemaVersion = 3)
 {
+    public const int CurrentSchemaVersion = 3;
+
     public static AppSettings Default { get; } =
         new(
             Refresh: RefreshSettings.Default,
@@ -20,7 +23,8 @@ public sealed record AppSettings(
             Update: UpdateSettings.Default,
             Providers: null,
             Initialized: false,
-            StartWithSystem: true);
+            StartWithSystem: true,
+            SchemaVersion: CurrentSchemaVersion);
 
     public AppSettings Normalize()
     {
@@ -41,9 +45,13 @@ public sealed record AppSettings(
         {
             var adjusted = Math.Min(100, high + 10);
             if (adjusted > high)
+            {
                 critical = adjusted;
+            }
             else
+            {
                 high = Math.Max(1, critical - 10);
+            }
         }
 
         notification = notification with
@@ -75,6 +83,7 @@ public sealed record AppSettings(
             Update = update,
             Initialized = Initialized ?? (Providers is { Count: > 0 } ? true : false),
             StartWithSystem = StartWithSystem ?? true,
+            SchemaVersion = CurrentSchemaVersion,
         };
     }
 }

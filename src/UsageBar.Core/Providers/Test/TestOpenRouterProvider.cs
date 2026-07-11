@@ -3,7 +3,7 @@ using UsageBar.Core.Domain;
 namespace UsageBar.Core.Providers;
 
 /// <summary>Test provider for OpenRouter — returns a mock USD balance between $10.00 and $20.00.</summary>
-public sealed class TestOpenRouterProvider : IUsageProvider
+public sealed class TestOpenRouterProvider : ISingleResultUsageProvider
 {
     public ProviderDescriptor Descriptor { get; } = new("OpenRouter", DisplayOrder: 110);
 

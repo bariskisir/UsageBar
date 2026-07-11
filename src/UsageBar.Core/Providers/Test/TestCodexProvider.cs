@@ -3,7 +3,7 @@ using UsageBar.Core.Domain;
 namespace UsageBar.Core.Providers;
 
 /// <summary>Test provider for Codex — returns mock Session + Weekly windows with random 25–100% usage.</summary>
-public sealed class TestCodexProvider : IUsageProvider
+public sealed class TestCodexProvider : ISingleResultUsageProvider
 {
     private static readonly string[] Plans = ["Free", "Plus", "Pro", "Pro Lite", "Go", "Team", "Business", "Enterprise", "Education", "Guest"];
 

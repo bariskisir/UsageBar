@@ -3,7 +3,6 @@ using Microsoft.Win32;
 using UsageBar.Core.Infrastructure;
 
 namespace UsageBar.Windows.Infrastructure;
-
 /// <summary>
 /// Registers UsageBar to launch at user logon via
 /// <c>HKCU\Software\Microsoft\Windows\CurrentVersion\Run</c>. Failures are logged, never thrown.
@@ -12,7 +11,6 @@ internal sealed class StartupRegistrationService(ILogger<StartupRegistrationServ
 {
     private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string ValueName = "UsageBar";
-
     public void Register()
     {
         try
@@ -23,16 +21,16 @@ internal sealed class StartupRegistrationService(ILogger<StartupRegistrationServ
                 throw new InvalidOperationException("Could not resolve the UsageBar executable path.");
             }
 
-            using var runKey = Registry.CurrentUser.CreateSubKey(RunKeyPath, writable: true)
-                ?? throw new InvalidOperationException("Could not open the current-user startup registry key.");
-
-            var currentCommand = runKey.GetValue(ValueName) as string;
-            if (PointsToExecutable(currentCommand, executablePath))
+            using (var runKey = Registry.CurrentUser.CreateSubKey(RunKeyPath, writable: true) ?? throw new InvalidOperationException("Could not open the current-user startup registry key."))
             {
-                return;
-            }
+                var currentCommand = runKey.GetValue(ValueName) as string;
+                if (PointsToExecutable(currentCommand, executablePath))
+                {
+                    return;
+                }
 
-            runKey.SetValue(ValueName, Quote(executablePath), RegistryValueKind.String);
+                runKey.SetValue(ValueName, Quote(executablePath), RegistryValueKind.String);
+            }
         }
         catch (Exception exception)
         {
@@ -44,15 +42,17 @@ internal sealed class StartupRegistrationService(ILogger<StartupRegistrationServ
     {
         try
         {
-            using var runKey = Registry.CurrentUser.OpenSubKey(RunKeyPath, writable: true);
-            if (runKey is null)
+            using (var runKey = Registry.CurrentUser.OpenSubKey(RunKeyPath, writable: true))
             {
-                return;
-            }
+                if (runKey is null)
+                {
+                    return;
+                }
 
-            if (runKey.GetValue(ValueName) is not null)
-            {
-                runKey.DeleteValue(ValueName, throwOnMissingValue: false);
+                if (runKey.GetValue(ValueName)is not null)
+                {
+                    runKey.DeleteValue(ValueName, throwOnMissingValue: false);
+                }
             }
         }
         catch (Exception exception)
@@ -72,11 +72,7 @@ internal sealed class StartupRegistrationService(ILogger<StartupRegistrationServ
         return File.Exists(appHostPath) ? appHostPath : null;
     }
 
-    private static bool IsUsageBarExecutable(string? path) =>
-        !string.IsNullOrWhiteSpace(path) &&
-        string.Equals(Path.GetExtension(path), ".exe", StringComparison.OrdinalIgnoreCase) &&
-        !string.Equals(Path.GetFileName(path), "dotnet.exe", StringComparison.OrdinalIgnoreCase);
-
+    private static bool IsUsageBarExecutable(string? path) => !string.IsNullOrWhiteSpace(path) && string.Equals(Path.GetExtension(path), ".exe", StringComparison.OrdinalIgnoreCase) && !string.Equals(Path.GetFileName(path), "dotnet.exe", StringComparison.OrdinalIgnoreCase);
     private static bool PointsToExecutable(string? command, string executablePath)
     {
         var currentPath = ExtractExecutablePath(command);
@@ -85,10 +81,7 @@ internal sealed class StartupRegistrationService(ILogger<StartupRegistrationServ
             return false;
         }
 
-        return string.Equals(
-            Path.GetFullPath(currentPath),
-            Path.GetFullPath(executablePath),
-            StringComparison.OrdinalIgnoreCase);
+        return string.Equals(Path.GetFullPath(currentPath), Path.GetFullPath(executablePath), StringComparison.OrdinalIgnoreCase);
     }
 
     private static string? ExtractExecutablePath(string? command)

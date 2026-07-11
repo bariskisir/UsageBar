@@ -8,7 +8,7 @@ internal interface IWebViewTooltip
     nint Hwnd { get; }
 
     Task<bool> InitAsync(nint instance);
-    void SetContent(IReadOnlyList<TooltipCard> cards);
+    void SetContent(IReadOnlyList<TooltipCard> cards, int scale);
     void ShowNearIcon(NativeMethods.Rect? iconRect, int fallbackX, int fallbackY);
     void Hide();
 }

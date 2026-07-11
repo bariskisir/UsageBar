@@ -3,7 +3,7 @@ using UsageBar.Core.Domain;
 namespace UsageBar.Core.Providers;
 
 /// <summary>Test provider for Venice — returns a mock USD balance between $10.00 and $20.00.</summary>
-public sealed class TestVeniceProvider : IUsageProvider
+public sealed class TestVeniceProvider : ISingleResultUsageProvider
 {
     public ProviderDescriptor Descriptor { get; } = new("Venice", DisplayOrder: 108);
 

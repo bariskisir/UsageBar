@@ -24,7 +24,8 @@ public sealed class KiloProviderTests
         var handler = FakeHttpMessageHandler.Json(json);
         var provider = new KiloProvider(new HttpClient(handler));
 
-        var result = await provider.GetUsageAsync(TestData.Context((CredentialNames.Kilo, "kilo-key")), CancellationToken.None);
+        var result = Assert.Single(await provider.QueryAsync(
+            TestData.Context((CredentialNames.Kilo, "kilo-key")), CancellationToken.None));
 
         Assert.Equal("$12.50", Assert.IsType<BalanceResult>(result).BalanceText);
         var request = Assert.Single(handler.Requests);
@@ -39,11 +40,11 @@ public sealed class KiloProviderTests
     }
 
     [Fact]
-    public async Task Returns_null_without_api_key()
+    public async Task Returns_empty_without_api_key()
     {
         var provider = new KiloProvider(new HttpClient(FakeHttpMessageHandler.Json("{}")));
-        var result = await provider.GetUsageAsync(TestData.Context(), CancellationToken.None);
-        Assert.Null(result);
+        var results = await provider.QueryAsync(TestData.Context(), CancellationToken.None);
+        Assert.Empty(results);
     }
 
     [Fact]
@@ -71,7 +72,8 @@ public sealed class KiloProviderTests
         """;
         var provider = new KiloProvider(new HttpClient(FakeHttpMessageHandler.Json(json)));
 
-        var result = await provider.GetUsageAsync(TestData.Context((CredentialNames.Kilo, "key")), CancellationToken.None);
+        var result = Assert.Single(await provider.QueryAsync(
+            TestData.Context((CredentialNames.Kilo, "key")), CancellationToken.None));
 
         var metric = Assert.IsType<MetricResult>(result);
         Assert.Equal("Kilo", metric.ProviderName);
@@ -103,7 +105,8 @@ public sealed class KiloProviderTests
         """;
         var provider = new KiloProvider(new HttpClient(FakeHttpMessageHandler.Json(json)));
 
-        var result = await provider.GetUsageAsync(TestData.Context((CredentialNames.Kilo, "key")), CancellationToken.None);
+        var result = Assert.Single(await provider.QueryAsync(
+            TestData.Context((CredentialNames.Kilo, "key")), CancellationToken.None));
 
         var metric = Assert.IsType<MetricResult>(result);
         Assert.Equal("Starter", metric.Plan);

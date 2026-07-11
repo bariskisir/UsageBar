@@ -13,9 +13,9 @@ internal sealed class UsageView(NativeTray tray, NativeTooltip tooltip) : IUsage
         tray.UpdateIcon(image);
     }
 
-    public void ShowCards(IReadOnlyList<TooltipCard> cards)
+    public void ShowCards(IReadOnlyList<TooltipCard> cards, int scale)
     {
-        tooltip.SetContent(cards);
+        tooltip.SetContent(cards, scale);
     }
 
     public void Notify(NotificationLevel level, string message)

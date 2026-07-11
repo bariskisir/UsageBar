@@ -2,24 +2,17 @@ using System.Diagnostics;
 using UsageBar.Core.Infrastructure;
 
 namespace UsageBar.MacOS.Infrastructure;
-
 internal sealed class StartupRegistrationService : IStartupRegistrationService
 {
-    private static readonly string LaunchAgentsDir = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-        "Library",
-        "LaunchAgents");
-
-    private static readonly string PlistPath = Path.Combine(
-        LaunchAgentsDir,
-        "com.usagebar.plist");
-
+    private static readonly string LaunchAgentsDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library", "LaunchAgents");
+    private static readonly string PlistPath = Path.Combine(LaunchAgentsDir, "com.usagebar.plist");
     private static readonly string? ExePath;
-
     static StartupRegistrationService()
     {
-        using var process = Process.GetCurrentProcess();
-        ExePath = process.MainModule?.FileName;
+        using (var process = Process.GetCurrentProcess())
+        {
+            ExePath = process.MainModule?.FileName;
+        }
     }
 
     public void Register()
@@ -30,7 +23,6 @@ internal sealed class StartupRegistrationService : IStartupRegistrationService
         }
 
         Directory.CreateDirectory(LaunchAgentsDir);
-
         var plist = $"""
             <?xml version="1.0" encoding="UTF-8"?>
             <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -49,7 +41,6 @@ internal sealed class StartupRegistrationService : IStartupRegistrationService
             </dict>
             </plist>
             """;
-
         File.WriteAllText(PlistPath, plist);
     }
 

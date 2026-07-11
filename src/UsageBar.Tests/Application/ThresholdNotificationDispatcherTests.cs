@@ -51,7 +51,7 @@ public sealed class ThresholdNotificationDispatcherTests
         {
         }
 
-        public void ShowCards(IReadOnlyList<TooltipCard> cards)
+        public void ShowCards(IReadOnlyList<TooltipCard> cards, int scale)
         {
         }
 

@@ -4,20 +4,12 @@ using System.Text.Json;
 using UsageBar.Core.Domain;
 
 namespace UsageBar.Core.Providers;
-
 /// <summary>Reports Kilo credits, and Kilo Pass usage when the account has an active pass.</summary>
 public sealed class KiloProvider(HttpClient httpClient) : IUsageProvider, IResultDisplayOrderProvider
 {
     private const string TrpcEndpoint = "https://app.kilo.ai/api/trpc";
-    private static readonly string[] Procedures =
-    [
-        "user.getCreditBlocks",
-        "kiloPass.getState",
-        "user.getAutoTopUpPaymentMethod",
-    ];
-
-    public ProviderDescriptor Descriptor { get; } = new(
-        "Kilo", 30, ProviderAuthenticationKind.ApiKey, CredentialNames.Kilo, 9, "kilo", ["kilo_pass"]);
+    private static readonly string[] Procedures = ["user.getCreditBlocks", "kiloPass.getState", "user.getAutoTopUpPaymentMethod", ];
+    public ProviderDescriptor Descriptor { get; } = new("Kilo", 30, ProviderAuthenticationKind.ApiKey, CredentialNames.Kilo, 9, "kilo", ["kilo_pass"]);
 
     public int GetDisplayOrder(ProviderResult result) => result switch
     {
@@ -25,44 +17,39 @@ public sealed class KiloProvider(HttpClient httpClient) : IUsageProvider, IResul
         BalanceResult => 116,
         _ => Descriptor.DisplayOrder,
     };
-
-    public bool IsConfigured(ProviderQueryContext context) =>
-        !string.IsNullOrEmpty(context.GetApiKey(CredentialNames.Kilo));
-
-    public async Task<ProviderResult?> GetUsageAsync(ProviderQueryContext context, CancellationToken cancellationToken)
+    public bool IsConfigured(ProviderQueryContext context) => !string.IsNullOrEmpty(context.GetApiKey(CredentialNames.Kilo));
+    public async Task<IReadOnlyList<ProviderResult>> QueryAsync(ProviderQueryContext context, CancellationToken cancellationToken)
     {
         var apiKey = context.GetApiKey(CredentialNames.Kilo);
         if (apiKey is null)
         {
-            return null;
+            return[];
         }
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, BuildUsageUri());
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-
-        using var document = await ProviderHttp.GetJsonAsync(httpClient, request, cancellationToken).ConfigureAwait(false);
-        var snapshot = Parse(document.RootElement);
-
-        if (snapshot.Pass is not null)
+        using (var request = new HttpRequestMessage(HttpMethod.Get, BuildUsageUri()))
         {
-            var pass = snapshot.Pass.Value;
-            var usedPercent = pass.Total > 0 ? (double)(pass.Used / pass.Total * 100) : 100;
-            var resetText = pass.ResetsAt is null ? null : UsageFormatting.ResetDuration(pass.ResetsAt.Value - context.Now);
-            var window = new UsageWindow(Descriptor.Name, "Pass", usedPercent, resetText);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            using (var document = await ProviderHttp.GetJsonAsync(httpClient, request, cancellationToken).ConfigureAwait(false))
+            {
+                var snapshot = Parse(document.RootElement);
+                if (snapshot.Pass is not null)
+                {
+                    var pass = snapshot.Pass.Value;
+                    var usedPercent = pass.Total > 0 ? (double)(pass.Used / pass.Total * 100) : 100;
+                    var resetText = pass.ResetsAt is null ? null : UsageFormatting.ResetDuration(pass.ResetsAt.Value - context.Now);
+                    var window = new UsageWindow(Descriptor.Name, "Pass", usedPercent, resetText);
+                    return[new MetricResult(Descriptor.Name, PlanLine(snapshot.PlanName, snapshot.Credits), [window])];
+                }
 
-            return new MetricResult(
-                Descriptor.Name,
-                PlanLine(snapshot.PlanName, snapshot.Credits),
-                [window]);
+                if (snapshot.Credits is null)
+                {
+                    throw new ProviderException("Kilo response did not contain credit or pass usage.");
+                }
+
+                return[new BalanceResult(Descriptor.Name, BalanceText(snapshot.Credits.Value), snapshot.Credits.Value.Remaining)];
+            }
         }
-
-        if (snapshot.Credits is null)
-        {
-            throw new ProviderException("Kilo response did not contain credit or pass usage.");
-        }
-
-        return new BalanceResult(Descriptor.Name, BalanceText(snapshot.Credits.Value), snapshot.Credits.Value.Remaining);
     }
 
     private static Uri BuildUsageUri()
@@ -76,11 +63,7 @@ public sealed class KiloProvider(HttpClient httpClient) : IUsageProvider, IResul
     {
         var creditPayload = PayloadAt(root, 0);
         var passPayload = PayloadAt(root, 1);
-
-        return new KiloSnapshot(
-            Credits: ParseCredits(creditPayload),
-            Pass: ParsePass(passPayload),
-            PlanName: ParsePlanName(passPayload));
+        return new KiloSnapshot(Credits: ParseCredits(creditPayload), Pass: ParsePass(passPayload), PlanName: ParsePlanName(passPayload));
     }
 
     private static JsonElement? PayloadAt(JsonElement root, int index)
@@ -143,13 +126,12 @@ public sealed class KiloProvider(HttpClient httpClient) : IUsageProvider, IResul
             return null;
         }
 
-        if (FindProperty(payload.Value, "creditBlocks") is { ValueKind: JsonValueKind.Array } creditBlocks)
+        if (FindProperty(payload.Value, "creditBlocks")is { ValueKind: JsonValueKind.Array } creditBlocks)
         {
             var total = 0m;
             var remaining = 0m;
             var sawTotal = false;
             var sawRemaining = false;
-
             foreach (var block in creditBlocks.EnumerateArray())
             {
                 var amount = ProviderJson.GetDecimal(block, "amount_mUsd");
@@ -169,10 +151,7 @@ public sealed class KiloProvider(HttpClient httpClient) : IUsageProvider, IResul
 
             if (sawTotal || sawRemaining)
             {
-                return new KiloCredits(
-                    Used: sawTotal && sawRemaining ? Math.Max(0, total - remaining) : 0,
-                    Total: Math.Max(0, total),
-                    Remaining: Math.Max(0, remaining));
+                return new KiloCredits(Used: sawTotal && sawRemaining ? Math.Max(0, total - remaining) : 0, Total: Math.Max(0, total), Remaining: Math.Max(0, remaining));
             }
         }
 
@@ -186,7 +165,6 @@ public sealed class KiloProvider(HttpClient httpClient) : IUsageProvider, IResul
         var used = FindDecimal(payload.Value, "used", "usedCredits", "creditsUsed", "consumed", "spent");
         var totalGeneric = FindDecimal(payload.Value, "total", "totalCredits", "creditsTotal", "limit");
         var remainingGeneric = FindDecimal(payload.Value, "remaining", "remainingCredits", "creditsRemaining");
-
         if (used is null && totalGeneric is null && remainingGeneric is null)
         {
             return null;
@@ -194,10 +172,7 @@ public sealed class KiloProvider(HttpClient httpClient) : IUsageProvider, IResul
 
         var resolvedTotal = totalGeneric ?? Math.Max(0, used.GetValueOrDefault() + remainingGeneric.GetValueOrDefault());
         var resolvedRemaining = remainingGeneric ?? Math.Max(0, resolvedTotal - used.GetValueOrDefault());
-        return new KiloCredits(
-            Used: Math.Max(0, used ?? resolvedTotal - resolvedRemaining),
-            Total: Math.Max(0, resolvedTotal),
-            Remaining: Math.Max(0, resolvedRemaining));
+        return new KiloCredits(Used: Math.Max(0, used ?? resolvedTotal - resolvedRemaining), Total: Math.Max(0, resolvedTotal), Remaining: Math.Max(0, resolvedRemaining));
     }
 
     private static KiloPass? ParsePass(JsonElement? payload)
@@ -207,29 +182,17 @@ public sealed class KiloProvider(HttpClient httpClient) : IUsageProvider, IResul
             return null;
         }
 
-        var source = FindProperty(payload.Value, "subscription") is { ValueKind: JsonValueKind.Object } subscription
-            ? subscription
-            : payload.Value;
-
+        var source = FindProperty(payload.Value, "subscription")is { ValueKind: JsonValueKind.Object } subscription ? subscription : payload.Value;
         var used = ProviderJson.GetDecimal(source, "currentPeriodUsageUsd");
         var baseCredits = ProviderJson.GetDecimal(source, "currentPeriodBaseCreditsUsd");
         var bonusCredits = ProviderJson.GetDecimal(source, "currentPeriodBonusCreditsUsd") ?? 0;
-
         if (used is null || baseCredits is null)
         {
             return null;
         }
 
         var total = Math.Max(0, baseCredits.Value) + Math.Max(0, bonusCredits);
-        return new KiloPass(
-            Used: Math.Max(0, used.Value),
-            Total: total,
-            Bonus: Math.Max(0, bonusCredits),
-            ResetsAt: ParseDate(
-                ProviderJson.GetString(source, "nextBillingAt") ??
-                ProviderJson.GetString(source, "nextRenewalAt") ??
-                ProviderJson.GetString(source, "renewsAt") ??
-                ProviderJson.GetString(source, "renewAt")));
+        return new KiloPass(Used: Math.Max(0, used.Value), Total: total, Bonus: Math.Max(0, bonusCredits), ResetsAt: ParseDate(ProviderJson.GetString(source, "nextBillingAt") ?? ProviderJson.GetString(source, "nextRenewalAt") ?? ProviderJson.GetString(source, "renewsAt") ?? ProviderJson.GetString(source, "renewAt")));
     }
 
     private static string? ParsePlanName(JsonElement? payload)
@@ -246,18 +209,11 @@ public sealed class KiloProvider(HttpClient httpClient) : IUsageProvider, IResul
             return null;
         }
 
-        var source = subscriptionProperty is { ValueKind: JsonValueKind.Object }
-            ? subscriptionProperty.Value
-            : payload.Value;
-
+        var source = subscriptionProperty is { ValueKind: JsonValueKind.Object } ? subscriptionProperty.Value : payload.Value;
         var tier = ProviderJson.GetString(source, "tier", "planName", "tierName", "passName", "subscriptionName");
         if (string.IsNullOrWhiteSpace(tier))
         {
-            var hasPassShape =
-                ProviderJson.GetDecimal(source, "currentPeriodUsageUsd") is not null ||
-                ProviderJson.GetDecimal(source, "currentPeriodBaseCreditsUsd") is not null ||
-                ProviderJson.GetDecimal(source, "currentPeriodBonusCreditsUsd") is not null;
-
+            var hasPassShape = ProviderJson.GetDecimal(source, "currentPeriodUsageUsd")is not null || ProviderJson.GetDecimal(source, "currentPeriodBaseCreditsUsd")is not null || ProviderJson.GetDecimal(source, "currentPeriodBonusCreditsUsd")is not null;
             return hasSubscription || hasPassShape ? "Kilo Pass" : null;
         }
 
@@ -329,9 +285,7 @@ public sealed class KiloProvider(HttpClient httpClient) : IUsageProvider, IResul
             return DateTimeOffset.FromUnixTimeSeconds(Convert.ToInt64(seconds));
         }
 
-        return DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsed)
-            ? parsed.ToUniversalTime()
-            : null;
+        return DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsed) ? parsed.ToUniversalTime() : null;
     }
 
     private static string? PlanLine(string? planName, KiloCredits? credits)
@@ -351,18 +305,13 @@ public sealed class KiloProvider(HttpClient httpClient) : IUsageProvider, IResul
     }
 
     private static string BalanceText(KiloCredits credits) => UsageFormatting.Currency(credits.Remaining);
-
     private static string ErrorMessage(JsonElement error)
     {
-        var message = ProviderJson.GetString(error, "message") ??
-            (ProviderJson.TryGetProperty(error, "json", out var json) ? ProviderJson.GetString(json, "message") : null);
-
+        var message = ProviderJson.GetString(error, "message") ?? (ProviderJson.TryGetProperty(error, "json", out var json) ? ProviderJson.GetString(json, "message") : null);
         return string.IsNullOrWhiteSpace(message) ? "unknown error" : message;
     }
 
     private readonly record struct KiloSnapshot(KiloCredits? Credits, KiloPass? Pass, string? PlanName);
-
     private readonly record struct KiloCredits(decimal Used, decimal Total, decimal Remaining);
-
     private readonly record struct KiloPass(decimal Used, decimal Total, decimal Bonus, DateTimeOffset? ResetsAt);
 }

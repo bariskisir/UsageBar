@@ -2,9 +2,8 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace UsageBar.Core.Providers;
-
 /// <summary>
-/// Default <see cref="IClaudeAuthReader"/> that reads
+/// Default <see cref = "IClaudeAuthReader"/> that reads
 /// <c>%USERPROFILE%\.claude\.credentials.json</c> under the <c>claudeAiOauth</c> key.
 /// The access token is read but never logged.
 /// </summary>
@@ -12,14 +11,11 @@ public sealed class ClaudeAuthReader : IClaudeAuthReader
 {
     private readonly string _authFilePath;
     private readonly Lock _gate = new();
-
-    public ClaudeAuthReader()
-        : this(DefaultAuthFilePath())
+    public ClaudeAuthReader() : this(DefaultAuthFilePath())
     {
     }
 
     public ClaudeAuthReader(string authFilePath) => _authFilePath = authFilePath;
-
     /// <summary>The conventional Claude credentials file location for the current user.</summary>
     public static string DefaultAuthFilePath()
     {
@@ -36,27 +32,27 @@ public sealed class ClaudeAuthReader : IClaudeAuthReader
                 return null;
             }
 
-            using var document = JsonDocument.Parse(File.ReadAllText(_authFilePath));
-            var root = document.RootElement;
-
-            if (!ProviderJson.TryGetProperty(root, "claudeAiOauth", out var oauth) || oauth.ValueKind != JsonValueKind.Object)
+            using (var document = JsonDocument.Parse(File.ReadAllText(_authFilePath)))
             {
-                return null;
+                var root = document.RootElement;
+                if (!ProviderJson.TryGetProperty(root, "claudeAiOauth", out var oauth) || oauth.ValueKind != JsonValueKind.Object)
+                {
+                    return null;
+                }
+
+                var accessToken = ProviderJson.GetString(oauth, "accessToken");
+                if (string.IsNullOrWhiteSpace(accessToken))
+                {
+                    return null;
+                }
+
+                var subscriptionType = ProviderJson.GetString(oauth, "subscriptionType");
+                var rateLimitTier = ProviderJson.GetString(oauth, "rateLimitTier");
+                var refreshToken = ProviderJson.GetString(oauth, "refreshToken");
+                var expiresAt = ReadExpiresAt(oauth);
+                var scopes = ReadScopes(oauth);
+                return new ClaudeAuth(accessToken, subscriptionType, rateLimitTier, refreshToken, expiresAt, scopes);
             }
-
-            var accessToken = ProviderJson.GetString(oauth, "accessToken");
-            if (string.IsNullOrWhiteSpace(accessToken))
-            {
-                return null;
-            }
-
-            var subscriptionType = ProviderJson.GetString(oauth, "subscriptionType");
-            var rateLimitTier = ProviderJson.GetString(oauth, "rateLimitTier");
-            var refreshToken = ProviderJson.GetString(oauth, "refreshToken");
-            var expiresAt = ReadExpiresAt(oauth);
-            var scopes = ReadScopes(oauth);
-
-            return new ClaudeAuth(accessToken, subscriptionType, rateLimitTier, refreshToken, expiresAt, scopes);
         }
     }
 
@@ -72,7 +68,6 @@ public sealed class ClaudeAuthReader : IClaudeAuthReader
             var root = LoadRootObject();
             var oauth = root["claudeAiOauth"] as JsonObject ?? [];
             oauth["accessToken"] = auth.AccessToken;
-
             if (!string.IsNullOrWhiteSpace(auth.RefreshToken))
             {
                 oauth["refreshToken"] = auth.RefreshToken;
@@ -107,7 +102,7 @@ public sealed class ClaudeAuthReader : IClaudeAuthReader
     {
         if (!File.Exists(_authFilePath))
         {
-            return [];
+            return[];
         }
 
         try
@@ -116,7 +111,7 @@ public sealed class ClaudeAuthReader : IClaudeAuthReader
         }
         catch (JsonException)
         {
-            return [];
+            return[];
         }
     }
 
@@ -150,15 +145,9 @@ public sealed class ClaudeAuthReader : IClaudeAuthReader
     {
         if (!ProviderJson.TryGetProperty(oauth, "scopes", out var scopes) || scopes.ValueKind != JsonValueKind.Array)
         {
-            return [];
+            return[];
         }
 
-        return scopes
-            .EnumerateArray()
-            .Where(scope => scope.ValueKind == JsonValueKind.String)
-            .Select(scope => scope.GetString())
-            .Where(scope => !string.IsNullOrWhiteSpace(scope))
-            .Select(scope => scope!.Trim())
-            .ToArray();
+        return scopes.EnumerateArray().Where(scope => scope.ValueKind == JsonValueKind.String).Select(scope => scope.GetString()).Where(scope => !string.IsNullOrWhiteSpace(scope)).Select(scope => scope!.Trim()).ToArray();
     }
 }

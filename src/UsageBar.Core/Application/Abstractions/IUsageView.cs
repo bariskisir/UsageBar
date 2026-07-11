@@ -13,7 +13,7 @@ public interface IUsageView
     void ShowIcon(IReadOnlyList<IconLayout.Bar> bars);
 
     /// <summary>Pushes the latest tooltip cards to the popup.</summary>
-    void ShowCards(IReadOnlyList<TooltipCard> cards);
+    void ShowCards(IReadOnlyList<TooltipCard> cards, int scale);
 
     /// <summary>Shows a balloon notification at the given severity.</summary>
     void Notify(NotificationLevel level, string message);

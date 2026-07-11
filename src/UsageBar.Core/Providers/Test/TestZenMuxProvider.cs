@@ -3,7 +3,7 @@ using UsageBar.Core.Domain;
 namespace UsageBar.Core.Providers;
 
 /// <summary>Test provider for ZenMux - returns a mock USD balance.</summary>
-public sealed class TestZenMuxProvider : IUsageProvider
+public sealed class TestZenMuxProvider : ISingleResultUsageProvider
 {
     public ProviderDescriptor Descriptor { get; } = new("ZenMux", DisplayOrder: 111);
 

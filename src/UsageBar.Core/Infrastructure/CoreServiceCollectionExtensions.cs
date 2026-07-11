@@ -4,6 +4,7 @@ using UsageBar.Core.Application;
 using UsageBar.Core.Infrastructure;
 using UsageBar.Core.Infrastructure.Logging;
 using UsageBar.Core.Providers;
+using UsageBar.Core.Settings;
 
 namespace UsageBar.Core.Infrastructure;
 
@@ -26,7 +27,8 @@ internal static class CoreServiceCollectionExtensions
         services.AddSingleton<IClock, SystemClock>();
         services.AddSingleton<IProviderQueryContextFactory, SystemProviderQueryContextFactory>();
         services.AddSingleton(new UsageRefreshOptions(
-            ForceAutomaticIconLayout: Environment.GetEnvironmentVariable("USAGEBAR_TEST") == "1"));
+            ForceAutomaticIconLayout: Environment.GetEnvironmentVariable("USAGEBAR_TEST") == "1",
+            ProviderTimeout: TimeSpan.FromSeconds(45)));
         services.AddSingleton<ISettingsStore>(sp => new JsonSettingsStore(
             PlatformPaths.SettingsFilePath,
             sp.GetRequiredService<ILogger<JsonSettingsStore>>()));
@@ -37,6 +39,13 @@ internal static class CoreServiceCollectionExtensions
         RegisterProviders(services);
 
         services.AddSingleton<ProviderInitializer>();
+        services.AddSingleton<IUsageAggregator, UsageAggregator>();
+        services.AddSingleton<IThresholdNotificationDispatcher>(sp => new ThresholdNotificationDispatcher(
+            sp.GetRequiredService<IUsageView>(),
+            sp.GetServices<IRemoteNotificationService>()));
+        services.AddSingleton<IRefreshCycleRunner, RefreshCycleRunner>();
+        services.AddSingleton<DesktopApplicationCoordinator>();
+        services.AddSingleton<SettingsController>();
         services.AddSingleton<IUpdateService, UpdateService>();
 
         services.AddSingleton<IRemoteNotificationService, TelegramNotificationService>();
@@ -48,55 +57,37 @@ internal static class CoreServiceCollectionExtensions
 
     private static void RegisterProviders(IServiceCollection services)
     {
-        if (Environment.GetEnvironmentVariable("USAGEBAR_TEST") == "1")
-        {
-            services.AddSingleton<IUsageProvider, TestCodexProvider>();
-            services.AddSingleton<IUsageProvider, TestClaudeProvider>();
-            services.AddSingleton<IUsageProvider, TestElevenLabsProvider>();
-            services.AddSingleton<IUsageProvider, TestKiloProvider>();
-            services.AddSingleton<IUsageProvider, TestDeepSeekProvider>();
-            services.AddSingleton<IUsageProvider, TestOpenRouterProvider>();
-            services.AddSingleton<IUsageProvider, TestZenMuxProvider>();
-            services.AddSingleton<IUsageProvider, TestMoonshotProvider>();
-            services.AddSingleton<IUsageProvider, TestDeepgramProvider>();
-            services.AddSingleton<IUsageProvider, TestOpenAIProvider>();
-            services.AddSingleton<IUsageProvider, TestVeniceProvider>();
-            services.AddSingleton<IUsageProvider, TestCopilotProvider>();
-            services.AddSingleton<IUsageProvider, TestCrofProvider>();
-            services.AddSingleton<IUsageProvider, TestCodebuffProvider>();
-            services.AddSingleton<IUsageProvider, TestWarpProvider>();
-            services.AddSingleton<IUsageProvider, TestZaiProvider>();
-            services.AddSingleton<IUsageProvider, TestSyntheticProvider>();
-            services.AddSingleton<IUsageProvider, TestChutesProvider>();
-            services.AddSingleton<IUsageProvider, TestMiniMaxProvider>();
-            services.AddSingleton<IUsageProvider, TestPoeProvider>();
-            services.AddSingleton<IUsageProvider, TestAlibabaProvider>();
-            services.AddSingleton<IUsageProvider, TestAntigravityProvider>();
-        }
-        else
-        {
-            services.AddSingleton<IUsageProvider, CodexProvider>();
-            services.AddSingleton<IUsageProvider, ClaudeProvider>();
-            services.AddSingleton<IUsageProvider, ElevenLabsProvider>();
-            services.AddSingleton<IUsageProvider, KiloProvider>();
-            services.AddSingleton<IUsageProvider, DeepSeekProvider>();
-            services.AddSingleton<IUsageProvider, OpenRouterProvider>();
-            services.AddSingleton<IUsageProvider, ZenMuxProvider>();
-            services.AddSingleton<IUsageProvider, MoonshotProvider>();
-            services.AddSingleton<IUsageProvider, DeepgramProvider>();
-            services.AddSingleton<IUsageProvider, OpenAIProvider>();
-            services.AddSingleton<IUsageProvider, VeniceProvider>();
-            services.AddSingleton<IUsageProvider, CopilotProvider>();
-            services.AddSingleton<IUsageProvider, CrofProvider>();
-            services.AddSingleton<IUsageProvider, CodebuffProvider>();
-            services.AddSingleton<IUsageProvider, WarpProvider>();
-            services.AddSingleton<IUsageProvider, ZaiProvider>();
-            services.AddSingleton<IUsageProvider, SyntheticProvider>();
-            services.AddSingleton<IUsageProvider, ChutesProvider>();
-            services.AddSingleton<IUsageProvider, MiniMaxProvider>();
-            services.AddSingleton<IUsageProvider, PoeProvider>();
-            services.AddSingleton<IUsageProvider, AlibabaProvider>();
-            services.AddSingleton<IUsageProvider, AntigravityProvider>();
-        }
+        var useDemoProviders = Environment.GetEnvironmentVariable("USAGEBAR_TEST") == "1";
+        RegisterProvider<CodexProvider, TestCodexProvider>(services, useDemoProviders);
+        RegisterProvider<ClaudeProvider, TestClaudeProvider>(services, useDemoProviders);
+        RegisterProvider<ElevenLabsProvider, TestElevenLabsProvider>(services, useDemoProviders);
+        RegisterProvider<KiloProvider, TestKiloProvider>(services, useDemoProviders);
+        RegisterProvider<DeepSeekProvider, TestDeepSeekProvider>(services, useDemoProviders);
+        RegisterProvider<OpenRouterProvider, TestOpenRouterProvider>(services, useDemoProviders);
+        RegisterProvider<ZenMuxProvider, TestZenMuxProvider>(services, useDemoProviders);
+        RegisterProvider<MoonshotProvider, TestMoonshotProvider>(services, useDemoProviders);
+        RegisterProvider<DeepgramProvider, TestDeepgramProvider>(services, useDemoProviders);
+        RegisterProvider<OpenAIProvider, TestOpenAIProvider>(services, useDemoProviders);
+        RegisterProvider<VeniceProvider, TestVeniceProvider>(services, useDemoProviders);
+        RegisterProvider<CopilotProvider, TestCopilotProvider>(services, useDemoProviders);
+        RegisterProvider<CrofProvider, TestCrofProvider>(services, useDemoProviders);
+        RegisterProvider<CodebuffProvider, TestCodebuffProvider>(services, useDemoProviders);
+        RegisterProvider<WarpProvider, TestWarpProvider>(services, useDemoProviders);
+        RegisterProvider<ZaiProvider, TestZaiProvider>(services, useDemoProviders);
+        RegisterProvider<SyntheticProvider, TestSyntheticProvider>(services, useDemoProviders);
+        RegisterProvider<ChutesProvider, TestChutesProvider>(services, useDemoProviders);
+        RegisterProvider<MiniMaxProvider, TestMiniMaxProvider>(services, useDemoProviders);
+        RegisterProvider<PoeProvider, TestPoeProvider>(services, useDemoProviders);
+        RegisterProvider<AlibabaProvider, TestAlibabaProvider>(services, useDemoProviders);
+        RegisterProvider<AntigravityProvider, TestAntigravityProvider>(services, useDemoProviders);
     }
+
+    private static void RegisterProvider<TProvider, TDemoProvider>(
+        IServiceCollection services,
+        bool useDemoProvider)
+        where TProvider : class, IUsageProvider
+        where TDemoProvider : class, IUsageProvider =>
+        services.AddSingleton(
+            typeof(IUsageProvider),
+            useDemoProvider ? typeof(TDemoProvider) : typeof(TProvider));
 }

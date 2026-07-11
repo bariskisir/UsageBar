@@ -2,24 +2,17 @@ using System.Diagnostics;
 using UsageBar.Core.Infrastructure;
 
 namespace UsageBar.Linux.Infrastructure;
-
 internal sealed class StartupRegistrationService : IStartupRegistrationService
 {
-    private static readonly string AutostartDir = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-        ".config",
-        "autostart");
-
-    private static readonly string DesktopFilePath = Path.Combine(
-        AutostartDir,
-        "usagebar.desktop");
-
+    private static readonly string AutostartDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "autostart");
+    private static readonly string DesktopFilePath = Path.Combine(AutostartDir, "usagebar.desktop");
     private static readonly string? ExePath;
-
     static StartupRegistrationService()
     {
-        using var process = Process.GetCurrentProcess();
-        ExePath = process.MainModule?.FileName;
+        using (var process = Process.GetCurrentProcess())
+        {
+            ExePath = process.MainModule?.FileName;
+        }
     }
 
     public void Register()
@@ -30,7 +23,6 @@ internal sealed class StartupRegistrationService : IStartupRegistrationService
         }
 
         Directory.CreateDirectory(AutostartDir);
-
         var desktopFile = $"""
             [Desktop Entry]
             Type=Application
@@ -41,7 +33,6 @@ internal sealed class StartupRegistrationService : IStartupRegistrationService
             Categories=Utility;
             X-GNOME-Autostart-enabled=true
             """;
-
         File.WriteAllText(DesktopFilePath, desktopFile);
     }
 

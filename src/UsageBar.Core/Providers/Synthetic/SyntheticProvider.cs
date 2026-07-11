@@ -1,18 +1,13 @@
 using UsageBar.Core.Domain;
 
 namespace UsageBar.Core.Providers;
-
 /// <summary>Reports Synthetic quota usage across rolling-5h, weekly, and search-hourly windows.</summary>
-public sealed class SyntheticProvider(HttpClient httpClient) : IUsageProvider
+public sealed class SyntheticProvider(HttpClient httpClient) : ISingleResultUsageProvider
 {
     private const string QuotasEndpoint = "https://api.synthetic.new/v2/quotas";
+    public ProviderDescriptor Descriptor { get; } = new("Synthetic", 15, ProviderAuthenticationKind.ApiKey, CredentialNames.Synthetic, 17, "synthetic", ["synthetic_*"]);
 
-    public ProviderDescriptor Descriptor { get; } = new(
-        "Synthetic", 15, ProviderAuthenticationKind.ApiKey, CredentialNames.Synthetic, 17, "synthetic", ["synthetic_*"]);
-
-    public bool IsConfigured(ProviderQueryContext context) =>
-        !string.IsNullOrEmpty(context.GetApiKey(CredentialNames.Synthetic));
-
+    public bool IsConfigured(ProviderQueryContext context) => !string.IsNullOrEmpty(context.GetApiKey(CredentialNames.Synthetic));
     public async Task<ProviderResult?> GetUsageAsync(ProviderQueryContext context, CancellationToken cancellationToken)
     {
         var apiKey = context.GetApiKey(CredentialNames.Synthetic);
@@ -21,43 +16,43 @@ public sealed class SyntheticProvider(HttpClient httpClient) : IUsageProvider
             return null;
         }
 
-        using var document = await ProviderHttp.GetJsonWithBearerAsync(httpClient, QuotasEndpoint, apiKey, cancellationToken).ConfigureAwait(false);
-        var root = document.RootElement;
-
-        var windows = new List<UsageWindow>();
-
-        if (root.ValueKind == System.Text.Json.JsonValueKind.Array)
+        using (var document = await ProviderHttp.GetJsonWithBearerAsync(httpClient, QuotasEndpoint, apiKey, cancellationToken).ConfigureAwait(false))
         {
-            foreach (var quota in root.EnumerateArray())
+            var root = document.RootElement;
+            var windows = new List<UsageWindow>();
+            if (root.ValueKind == System.Text.Json.JsonValueKind.Array)
             {
-                var window = ReadQuotaWindow(quota, Descriptor.Name, context.Now);
-                if (window is not null)
+                foreach (var quota in root.EnumerateArray())
                 {
-                    windows.Add(window);
-                }
-            }
-        }
-        else if (root.ValueKind == System.Text.Json.JsonValueKind.Object)
-        {
-            foreach (var property in root.EnumerateObject())
-            {
-                if (property.Value.ValueKind == System.Text.Json.JsonValueKind.Object)
-                {
-                    var window = ReadQuotaWindow(property.Value, Descriptor.Name, context.Now);
+                    var window = ReadQuotaWindow(quota, Descriptor.Name, context.Now);
                     if (window is not null)
                     {
                         windows.Add(window);
                     }
                 }
             }
-        }
+            else if (root.ValueKind == System.Text.Json.JsonValueKind.Object)
+            {
+                foreach (var property in root.EnumerateObject())
+                {
+                    if (property.Value.ValueKind == System.Text.Json.JsonValueKind.Object)
+                    {
+                        var window = ReadQuotaWindow(property.Value, Descriptor.Name, context.Now);
+                        if (window is not null)
+                        {
+                            windows.Add(window);
+                        }
+                    }
+                }
+            }
 
-        if (windows.Count == 0)
-        {
-            throw new ProviderException("Synthetic response did not contain usable quota windows.");
-        }
+            if (windows.Count == 0)
+            {
+                throw new ProviderException("Synthetic response did not contain usable quota windows.");
+            }
 
-        return new MetricResult(Descriptor.Name, null, windows);
+            return new MetricResult(Descriptor.Name, null, windows);
+        }
     }
 
     private static UsageWindow? ReadQuotaWindow(System.Text.Json.JsonElement quota, string providerName, DateTimeOffset now)
@@ -71,10 +66,8 @@ public sealed class SyntheticProvider(HttpClient httpClient) : IUsageProvider
         var label = ProviderJson.GetString(quota, "label") ?? "Quota";
         var windowMinutes = ProviderJson.GetDouble(quota, "windowMinutes");
         var resetsAt = ProviderJson.GetString(quota, "resetsAt");
-
         string? resetText = null;
-        if (resetsAt is not null &&
-            DateTimeOffset.TryParse(resetsAt, null, System.Globalization.DateTimeStyles.AssumeUniversal, out var parsed))
+        if (resetsAt is not null && DateTimeOffset.TryParse(resetsAt, null, System.Globalization.DateTimeStyles.AssumeUniversal, out var parsed))
         {
             resetText = UsageFormatting.ResetDuration(parsed - now);
         }

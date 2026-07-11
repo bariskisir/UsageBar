@@ -1,7 +1,7 @@
+using UsageBar.Core.Application;
+using UsageBar.Core.Configuration;
 using UsageBar.Core.Domain;
 using UsageBar.Core.Providers;
-using UsageBar.Core.Configuration;
-using UsageBar.Core.Application;
 
 namespace UsageBar.Tests;
 
@@ -36,7 +36,7 @@ internal sealed class StubClaudeAuthReader(ClaudeAuth? auth) : IClaudeAuthReader
 }
 
 /// <summary>A provider whose result (or exception) is supplied by a delegate.</summary>
-internal sealed class StubProvider(string name, Func<ProviderResult?> result, int displayOrder = 0) : IUsageProvider
+internal sealed class StubProvider(string name, Func<ProviderResult?> result, int displayOrder = 0) : ISingleResultUsageProvider
 {
     public ProviderDescriptor Descriptor { get; } = new(name, displayOrder);
 
@@ -48,7 +48,7 @@ internal sealed class DynamicOrderProvider(
     string name,
     Func<ProviderResult?> result,
     int metricOrder,
-    int balanceOrder) : IUsageProvider, IResultDisplayOrderProvider
+    int balanceOrder) : ISingleResultUsageProvider, IResultDisplayOrderProvider
 {
     public ProviderDescriptor Descriptor { get; } = new(name, DisplayOrder: 0);
 

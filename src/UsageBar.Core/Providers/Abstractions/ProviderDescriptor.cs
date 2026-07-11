@@ -27,8 +27,10 @@ public sealed record ProviderDescriptor
         string? CredentialName = null,
         int SettingsOrder = int.MaxValue,
         string? IconKey = null,
-        string[]? IconLayoutKeys = null)
+        string[]? IconLayoutKeys = null,
+        string? Id = null)
     {
+        this.Id = string.IsNullOrWhiteSpace(Id) ? CreateId(Name) : Id;
         this.Name = Name;
         this.DisplayOrder = DisplayOrder;
         this.AuthenticationKind = AuthenticationKind;
@@ -37,6 +39,9 @@ public sealed record ProviderDescriptor
         this.IconKey = IconKey;
         this.IconLayoutKeys = IconLayoutKeys ?? [];
     }
+
+    /// <summary>Stable, presentation-independent provider identity used by v3 settings.</summary>
+    public string Id { get; }
 
     /// <summary>Display name, e.g. "Codex" or "DeepSeek".</summary>
     public string Name { get; }
@@ -53,5 +58,16 @@ public sealed record ProviderDescriptor
     public string? IconKey { get; }
 
     public IReadOnlyList<string> IconLayoutKeys { get; }
+
+    private static string CreateId(string name)
+    {
+        var id = string.Concat(name.Where(char.IsLetterOrDigit)).ToLowerInvariant();
+        if (id.Length == 0)
+        {
+            throw new ArgumentException("Provider name must contain at least one letter or digit.", nameof(name));
+        }
+
+        return id;
+    }
 
 }

@@ -3,7 +3,7 @@ using UsageBar.Core.Domain;
 namespace UsageBar.Core.Providers;
 
 /// <summary>Test provider for Chutes — returns mock 4h Rolling and Monthly windows.</summary>
-public sealed class TestChutesProvider : IUsageProvider
+public sealed class TestChutesProvider : ISingleResultUsageProvider
 {
     public ProviderDescriptor Descriptor { get; } = new("Chutes", DisplayOrder: 17);
 

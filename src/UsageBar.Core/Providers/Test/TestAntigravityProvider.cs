@@ -2,7 +2,7 @@ using UsageBar.Core.Domain;
 
 namespace UsageBar.Core.Providers;
 
-public sealed class TestAntigravityProvider : IUsageProvider
+public sealed class TestAntigravityProvider : ISingleResultUsageProvider
 {
     public ProviderDescriptor Descriptor { get; } = new("Antigravity", DisplayOrder: 5);
 

@@ -15,35 +15,22 @@ public interface IUsageProvider
     /// <summary>Returns whether this provider has usable credentials for this refresh.</summary>
     bool IsConfigured(ProviderQueryContext context) => true;
 
-    /// <summary>
-    /// Primary refresh contract. Implementations return an empty collection when no result can be
-    /// produced; the compatibility methods below keep existing provider implementations small
-    /// while they migrate independently.
-    /// </summary>
+    /// <summary>Queries the provider and returns every result produced by the request.</summary>
     Task<IReadOnlyList<ProviderResult>> QueryAsync(
         ProviderQueryContext context,
-        CancellationToken cancellationToken) =>
-        GetUsageResultsAsync(context, cancellationToken);
+        CancellationToken cancellationToken);
+}
 
-    /// <summary>
-    /// Queries the provider for the current refresh.
-    /// </summary>
-    /// <returns>
-    /// A <see cref="ProviderResult"/>, or <see langword="null"/> when the provider is
-    /// not configured (missing credentials/auth). Throws <see cref="ProviderException"/>
-    /// (or other exceptions) on API or parsing failures, which the aggregator logs and isolates.
-    /// </returns>
+/// <summary>Adapter contract for providers that produce at most one result.</summary>
+public interface ISingleResultUsageProvider : IUsageProvider
+{
     Task<ProviderResult?> GetUsageAsync(ProviderQueryContext context, CancellationToken cancellationToken);
 
-    /// <summary>
-    /// Queries the provider and returns zero or more results. The default implementation
-    /// wraps <see cref="GetUsageAsync"/> to return a single result (or empty when null).
-    /// Override to return multiple results (e.g. a metric and a balance card together).
-    /// </summary>
-    async Task<IReadOnlyList<ProviderResult>> GetUsageResultsAsync(ProviderQueryContext context, CancellationToken cancellationToken)
+    async Task<IReadOnlyList<ProviderResult>> IUsageProvider.QueryAsync(
+        ProviderQueryContext context,
+        CancellationToken cancellationToken)
     {
         var result = await GetUsageAsync(context, cancellationToken).ConfigureAwait(false);
-        return result is null ? Array.Empty<ProviderResult>() : new ProviderResult[] { result };
+        return result is null ? [] : [result];
     }
-
 }

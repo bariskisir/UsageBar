@@ -3,7 +3,7 @@ using UsageBar.Core.Domain;
 namespace UsageBar.Core.Providers;
 
 /// <summary>Test provider for Warp — returns a mock Requests window with random usage.</summary>
-public sealed class TestWarpProvider : IUsageProvider
+public sealed class TestWarpProvider : ISingleResultUsageProvider
 {
     public ProviderDescriptor Descriptor { get; } = new("Warp", DisplayOrder: 13);
 

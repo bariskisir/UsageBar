@@ -4,16 +4,10 @@ using System.Text.Json.Nodes;
 using UsageBar.Core.Providers;
 
 namespace UsageBar.Linux.Infrastructure;
-
 public sealed class AntigravityAuthReader : IAntigravityAuthReader
 {
-    private static readonly string FallbackPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-        ".antigravity",
-        "auth.json");
-
+    private static readonly string FallbackPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".antigravity", "auth.json");
     private readonly Lock _gate = new();
-
     public AntigravityAuth? Read()
     {
         lock (_gate)
@@ -46,23 +40,21 @@ public sealed class AntigravityAuthReader : IAntigravityAuthReader
     {
         try
         {
-            using var process = Process.Start(new ProcessStartInfo
+            using (var process = Process.Start(new ProcessStartInfo { FileName = "secret-tool", ArgumentList = { "lookup", "application", "antigravity", "target", "gemini:antigravity" }, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true, }))
             {
-                FileName = "secret-tool",
-                ArgumentList = { "lookup", "application", "antigravity", "target", "gemini:antigravity" },
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            });
+                if (process is null)
+                {
+                    return null;
+                }
 
-            if (process is null)
-            {
-                return null;
+                if (!process.WaitForExit(5000))
+                {
+                    process.Kill(entireProcessTree: true);
+                    return null;
+                }
+
+                return process.ExitCode == 0 ? process.StandardOutput.ReadToEnd().Trim() : null;
             }
-
-            process.WaitForExit(5000);
-            return process.ExitCode == 0 ? process.StandardOutput.ReadToEnd().Trim() : null;
         }
         catch
         {
@@ -73,35 +65,30 @@ public sealed class AntigravityAuthReader : IAntigravityAuthReader
     private void SaveToLibsecret(AntigravityAuth auth)
     {
         var json = SerializeAuth(auth);
-
         try
         {
-            using var process = Process.Start(new ProcessStartInfo
+            using (var process = Process.Start(new ProcessStartInfo { FileName = "secret-tool", ArgumentList = { "store", "--label=gemini:antigravity", "application", "antigravity", "target", "gemini:antigravity" }, RedirectStandardInput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true, }))
             {
-                FileName = "secret-tool",
-                ArgumentList = { "store", "--label=gemini:antigravity", "application", "antigravity", "target", "gemini:antigravity" },
-                RedirectStandardInput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            });
+                if (process is null)
+                {
+                    throw new InvalidOperationException("Failed to start secret-tool.");
+                }
 
-            if (process is null)
-            {
-                throw new InvalidOperationException("Failed to start secret-tool.");
-            }
+                process.StandardInput.Write(json);
+                process.StandardInput.Close();
+                if (!process.WaitForExit(5000))
+                {
+                    process.Kill(entireProcessTree: true);
+                    throw new InvalidOperationException("secret-tool store timed out.");
+                }
 
-            process.StandardInput.Write(json);
-            process.StandardInput.Close();
-            process.WaitForExit(5000);
-
-            if (process.ExitCode != 0)
-            {
-                throw new InvalidOperationException(
-                    $"secret-tool store failed with exit code {process.ExitCode}.");
+                if (process.ExitCode != 0)
+                {
+                    throw new InvalidOperationException($"secret-tool store failed with exit code {process.ExitCode}.");
+                }
             }
         }
-        catch (Exception ex) when (ex is not InvalidOperationException)
+        catch (Exception ex)when (ex is not InvalidOperationException)
         {
             throw new InvalidOperationException("Failed to store Antigravity credential in libsecret.", ex);
         }
@@ -111,25 +98,22 @@ public sealed class AntigravityAuthReader : IAntigravityAuthReader
     {
         try
         {
-            using var document = JsonDocument.Parse(json);
-            var root = document.RootElement;
-
-            if (!ProviderJson.TryGetProperty(root, "token", out var token) || token.ValueKind != JsonValueKind.Object)
+            using (var document = JsonDocument.Parse(json))
             {
-                return null;
-            }
+                var root = document.RootElement;
+                if (!ProviderJson.TryGetProperty(root, "token", out var token) || token.ValueKind != JsonValueKind.Object)
+                {
+                    return null;
+                }
 
-            var accessToken = ProviderJson.GetString(token, "access_token");
-            if (string.IsNullOrWhiteSpace(accessToken))
-            {
-                return null;
-            }
+                var accessToken = ProviderJson.GetString(token, "access_token");
+                if (string.IsNullOrWhiteSpace(accessToken))
+                {
+                    return null;
+                }
 
-            return new AntigravityAuth(
-                accessToken,
-                ProviderJson.GetString(token, "refresh_token"),
-                ParseExpiry(ProviderJson.GetString(token, "expiry")),
-                IdToken: ProviderJson.GetString(token, "id_token"));
+                return new AntigravityAuth(accessToken, ProviderJson.GetString(token, "refresh_token"), ParseExpiry(ProviderJson.GetString(token, "expiry")), IdToken: ProviderJson.GetString(token, "id_token"));
+            }
         }
         catch (JsonException)
         {
@@ -144,7 +128,6 @@ public sealed class AntigravityAuthReader : IAntigravityAuthReader
             ["access_token"] = auth.AccessToken,
             ["token_type"] = "Bearer",
         };
-
         if (!string.IsNullOrWhiteSpace(auth.RefreshToken))
         {
             tokenObj["refresh_token"] = auth.RefreshToken;
@@ -165,7 +148,6 @@ public sealed class AntigravityAuthReader : IAntigravityAuthReader
             ["token"] = tokenObj,
             ["auth_method"] = "consumer",
         };
-
         return root.ToJsonString();
     }
 
@@ -176,12 +158,6 @@ public sealed class AntigravityAuthReader : IAntigravityAuthReader
             return null;
         }
 
-        return DateTimeOffset.TryParse(
-            value,
-            System.Globalization.CultureInfo.InvariantCulture,
-            System.Globalization.DateTimeStyles.RoundtripKind,
-            out var parsed)
-            ? parsed
-            : null;
+        return DateTimeOffset.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.RoundtripKind, out var parsed) ? parsed : null;
     }
 }

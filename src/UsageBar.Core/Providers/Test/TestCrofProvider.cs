@@ -3,7 +3,7 @@ using UsageBar.Core.Domain;
 namespace UsageBar.Core.Providers;
 
 /// <summary>Test provider for Crof — returns a mock USD balance between $10.00 and $20.00.</summary>
-public sealed class TestCrofProvider : IUsageProvider
+public sealed class TestCrofProvider : ISingleResultUsageProvider
 {
     public ProviderDescriptor Descriptor { get; } = new("Crof", DisplayOrder: 112);
 

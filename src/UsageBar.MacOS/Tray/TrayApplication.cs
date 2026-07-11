@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using UsageBar.Core.Application;
 using UsageBar.Core.Configuration;
 using UsageBar.Core.Infrastructure;
+using UsageBar.MacOS.Settings;
 using UsageBar.MacOS.Tooltip;
 using UsageBar.MacOS.Tray;
 
@@ -14,10 +15,9 @@ internal sealed class TrayApplication : IDisposable
     private readonly NativeTray _tray;
     private readonly NativeTooltip _tooltip;
     private readonly IUsageRefreshService _refresh;
-    private readonly IStartupRegistrationService _startupRegistration;
+    private readonly DesktopApplicationCoordinator _coordinator;
     private readonly IUpdateService _updateService;
-    private readonly ISettingsStore _settingsStore;
-    private readonly ProviderInitializer _providerInitializer;
+    private readonly SettingsPanel _settingsPanel;
     private readonly ILogger<TrayApplication> _logger;
     private readonly CancellationTokenSource _lifetime = new();
 
@@ -25,19 +25,17 @@ internal sealed class TrayApplication : IDisposable
         NativeTray tray,
         NativeTooltip tooltip,
         IUsageRefreshService refresh,
-        IStartupRegistrationService startupRegistration,
+        DesktopApplicationCoordinator coordinator,
         IUpdateService updateService,
-        ISettingsStore settingsStore,
-        ProviderInitializer providerInitializer,
+        SettingsPanel settingsPanel,
         ILogger<TrayApplication> logger)
     {
         _tray = tray;
         _tooltip = tooltip;
         _refresh = refresh;
-        _startupRegistration = startupRegistration;
+        _coordinator = coordinator;
         _updateService = updateService;
-        _settingsStore = settingsStore;
-        _providerInitializer = providerInitializer;
+        _settingsPanel = settingsPanel;
         _logger = logger;
     }
 
@@ -46,13 +44,14 @@ internal sealed class TrayApplication : IDisposable
         NSApplication.SharedApplication.ActivationPolicy = NSApplicationActivationPolicy.Accessory;
 
         _logger.LogInformation("macOS tray application initialising.");
-        _providerInitializer.EnsureProviders();
         WireEvents();
 
-        var settings = _settingsStore.Read();
-        ApplyStartup(settings);
+        var settings = _coordinator.InitializeAsync(_lifetime.Token).GetAwaiter().GetResult();
 
         var refreshTask = _refresh.RunAsync(_lifetime.Token);
+        var updateTask = settings.Update?.OnStartup ?? true
+            ? CheckForUpdatesAsync(_lifetime.Token)
+            : Task.CompletedTask;
 
         _logger.LogInformation("macOS event loop starting.");
         NSApplication.SharedApplication.Run();
@@ -61,7 +60,7 @@ internal sealed class TrayApplication : IDisposable
         _lifetime.Cancel();
         try
         {
-            refreshTask.GetAwaiter().GetResult();
+            Task.WhenAll(refreshTask, updateTask).GetAwaiter().GetResult();
         }
         catch (OperationCanceledException)
         {
@@ -73,14 +72,14 @@ internal sealed class TrayApplication : IDisposable
         _lifetime.Cancel();
         _lifetime.Dispose();
         _tooltip.Dispose();
+        _settingsPanel.Dispose();
     }
 
     private void WireEvents()
     {
         _tray.SettingsRequested += () =>
         {
-            // Settings panel launch on main thread.
-            _logger.LogInformation("Settings requested.");
+            _settingsPanel.Show();
         };
 
         _tray.RefreshRequested += () =>
@@ -96,15 +95,14 @@ internal sealed class TrayApplication : IDisposable
         };
     }
 
-    private void ApplyStartup(AppSettings settings)
+    private async Task CheckForUpdatesAsync(CancellationToken cancellationToken)
     {
-        if (settings.StartWithSystem ?? true)
+        var result = await _updateService.CheckAsync(cancellationToken).ConfigureAwait(false);
+        if (result.HasUpdate)
         {
-            _startupRegistration.Register();
-        }
-        else
-        {
-            _startupRegistration.Unregister();
+            _tray.ShowNotification(
+                UsageBar.Core.Domain.NotificationLevel.High,
+                $"Usage Bar {result.LatestVersion} available. Open Settings to download.");
         }
     }
 }

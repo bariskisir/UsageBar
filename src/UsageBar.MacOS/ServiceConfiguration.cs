@@ -4,6 +4,7 @@ using UsageBar.Core.Application;
 using UsageBar.Core.Infrastructure;
 using UsageBar.Core.Providers;
 using UsageBar.MacOS.Infrastructure;
+using UsageBar.MacOS.Settings;
 using UsageBar.MacOS.Tooltip;
 using UsageBar.MacOS.Tray;
 
@@ -23,6 +24,7 @@ internal static class ServiceConfiguration
 
         services.AddSingleton<NativeTray>();
         services.AddSingleton<NativeTooltip>();
+        services.AddSingleton<SettingsPanel>();
         services.AddSingleton<IUsageView, UsageView>();
         services.AddSingleton<TrayApplication>();
 

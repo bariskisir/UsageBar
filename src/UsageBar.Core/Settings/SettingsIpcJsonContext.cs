@@ -13,7 +13,7 @@ internal sealed record SettingsInboundMessage(
 internal sealed record SettingsStateMessage(
     [property: JsonPropertyName("type")] string Type,
     [property: JsonPropertyName("settings")] AppSettings Settings,
-    [property: JsonPropertyName("envApiKeys")] Dictionary<string, string> EnvironmentApiKeys,
+    [property: JsonPropertyName("envApiKeys")] Dictionary<string, bool> EnvironmentApiKeys,
     [property: JsonPropertyName("iconLayoutKeys")] IReadOnlyList<string> IconLayoutKeys,
     [property: JsonPropertyName("version")] string Version);
 
@@ -26,4 +26,3 @@ internal sealed record SettingsStatusMessage(
 [JsonSerializable(typeof(SettingsStateMessage))]
 [JsonSerializable(typeof(SettingsStatusMessage))]
 internal sealed partial class SettingsIpcJsonContext : JsonSerializerContext;
-

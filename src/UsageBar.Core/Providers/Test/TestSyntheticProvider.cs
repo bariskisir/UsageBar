@@ -3,7 +3,7 @@ using UsageBar.Core.Domain;
 namespace UsageBar.Core.Providers;
 
 /// <summary>Test provider for Synthetic — returns mock rolling-5h, weekly, and search-hourly windows.</summary>
-public sealed class TestSyntheticProvider : IUsageProvider
+public sealed class TestSyntheticProvider : ISingleResultUsageProvider
 {
     public ProviderDescriptor Descriptor { get; } = new("Synthetic", DisplayOrder: 15);
 

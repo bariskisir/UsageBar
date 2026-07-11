@@ -15,4 +15,3 @@ namespace UsageBar.Core.Infrastructure;
 [JsonSerializable(typeof(DiscordSettings))]
 [JsonSerializable(typeof(TrayIconLayoutSettings))]
 internal sealed partial class SettingsJsonContext : JsonSerializerContext;
-

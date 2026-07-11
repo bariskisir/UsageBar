@@ -8,6 +8,9 @@ namespace UsageBar.Tests;
 
 public sealed class UsageAggregatorTests
 {
+    private static UsageAggregator Aggregator() =>
+        new(UsageRefreshOptions.Default, NullLogger<UsageAggregator>.Instance);
+
     [Fact]
     public async Task Merges_windows_and_skips_nulls()
     {
@@ -21,7 +24,7 @@ public sealed class UsageAggregatorTests
             new StubProvider("DeepSeek", () => balance, 100),
         ];
 
-        var snapshot = await UsageAggregator.RefreshAsync(providers, TestData.Context(), NullLogger.Instance, CancellationToken.None);
+        var snapshot = await Aggregator().RefreshAsync(providers, TestData.Context(), CancellationToken.None);
 
         Assert.Equal(2, snapshot.Results.Count);
         Assert.Single(snapshot.Windows);
@@ -42,7 +45,7 @@ public sealed class UsageAggregatorTests
             new StubProvider("Codex", () => codex, 0),
         ];
 
-        var snapshot = await UsageAggregator.RefreshAsync(providers, TestData.Context(), NullLogger.Instance, CancellationToken.None);
+        var snapshot = await Aggregator().RefreshAsync(providers, TestData.Context(), CancellationToken.None);
 
         Assert.Equal(["Codex", "Claude", "DeepSeek"], snapshot.Results.Select(r => r.ProviderName));
     }
@@ -56,7 +59,7 @@ public sealed class UsageAggregatorTests
         ProviderResult kiloMetric = new MetricResult("Kilo", "Pro", [TestData.Window("Kilo", "Pass", 30)]);
         ProviderResult kiloBalance = new BalanceResult("Kilo", "$12.50");
 
-        var metricSnapshot = await UsageAggregator.RefreshAsync(
+        var metricSnapshot = await Aggregator().RefreshAsync(
             [
                 new StubProvider("Claude", () => claude, 10),
                 new StubProvider("ElevenLabs", () => elevenLabs, 20),
@@ -64,13 +67,12 @@ public sealed class UsageAggregatorTests
                 new StubProvider("Moonshot (Kimi)", () => kimi, 115),
             ],
             TestData.Context(),
-            NullLogger.Instance,
             CancellationToken.None);
 
         Assert.Equal(["Claude", "Kilo", "ElevenLabs", "Moonshot (Kimi)"], metricSnapshot.Results.Select(r => r.ProviderName));
         Assert.Equal(["Claude", "Kilo", "ElevenLabs"], metricSnapshot.Windows.Select(w => w.ProviderName));
 
-        var balanceSnapshot = await UsageAggregator.RefreshAsync(
+        var balanceSnapshot = await Aggregator().RefreshAsync(
             [
                 new StubProvider("Claude", () => claude, 10),
                 new StubProvider("ElevenLabs", () => elevenLabs, 20),
@@ -78,7 +80,6 @@ public sealed class UsageAggregatorTests
                 new DynamicOrderProvider("Kilo", () => kiloBalance, metricOrder: 15, balanceOrder: 116),
             ],
             TestData.Context(),
-            NullLogger.Instance,
             CancellationToken.None);
 
         Assert.Equal(["Claude", "ElevenLabs", "Moonshot (Kimi)", "Kilo"], balanceSnapshot.Results.Select(r => r.ProviderName));
@@ -94,7 +95,7 @@ public sealed class UsageAggregatorTests
             new StubProvider("DeepSeek", () => good, 100),
         ];
 
-        var snapshot = await UsageAggregator.RefreshAsync(providers, TestData.Context(), NullLogger.Instance, CancellationToken.None);
+        var snapshot = await Aggregator().RefreshAsync(providers, TestData.Context(), CancellationToken.None);
 
         var result = Assert.Single(snapshot.Results);
         Assert.Equal("DeepSeek", result.ProviderName);

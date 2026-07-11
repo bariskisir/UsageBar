@@ -86,7 +86,11 @@ internal sealed class WebViewPopupLifecycle(ILogger logger, string surfaceName) 
 
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+        {
+            return;
+        }
+
         _disposed = true;
         Interlocked.Increment(ref _suspendVersion);
         _controller?.Close();

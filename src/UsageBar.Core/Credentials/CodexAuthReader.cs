@@ -3,9 +3,8 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace UsageBar.Core.Providers;
-
 /// <summary>
-/// Default <see cref="ICodexAuthReader"/> that reads
+/// Default <see cref = "ICodexAuthReader"/> that reads
 /// <c>%USERPROFILE%\.codex\auth.json</c>. The access token and account id are read but
 /// never logged.
 /// </summary>
@@ -13,14 +12,11 @@ public sealed class CodexAuthReader : ICodexAuthReader
 {
     private readonly string _authFilePath;
     private readonly Lock _gate = new();
-
-    public CodexAuthReader()
-        : this(DefaultAuthFilePath())
+    public CodexAuthReader() : this(DefaultAuthFilePath())
     {
     }
 
     public CodexAuthReader(string authFilePath) => _authFilePath = authFilePath;
-
     /// <summary>The conventional Codex CLI auth file location for the current user.</summary>
     public static string DefaultAuthFilePath()
     {
@@ -37,22 +33,22 @@ public sealed class CodexAuthReader : ICodexAuthReader
                 return null;
             }
 
-            using var document = JsonDocument.Parse(File.ReadAllText(_authFilePath));
-            var root = document.RootElement;
-
-            var tokenSource = ProviderJson.TryGetProperty(root, "tokens", out var tokens) ? tokens : root;
-            var accessToken = ProviderJson.GetString(tokenSource, "access_token");
-            var accountId = ProviderJson.GetString(tokenSource, "account_id");
-            var refreshToken = ProviderJson.GetString(tokenSource, "refresh_token");
-            var idToken = ProviderJson.GetString(tokenSource, "id_token");
-            var lastRefresh = ParseDateTimeOffset(ProviderJson.GetString(root, "last_refresh"));
-
-            if (string.IsNullOrWhiteSpace(accessToken))
+            using (var document = JsonDocument.Parse(File.ReadAllText(_authFilePath)))
             {
-                return null;
-            }
+                var root = document.RootElement;
+                var tokenSource = ProviderJson.TryGetProperty(root, "tokens", out var tokens) ? tokens : root;
+                var accessToken = ProviderJson.GetString(tokenSource, "access_token");
+                var accountId = ProviderJson.GetString(tokenSource, "account_id");
+                var refreshToken = ProviderJson.GetString(tokenSource, "refresh_token");
+                var idToken = ProviderJson.GetString(tokenSource, "id_token");
+                var lastRefresh = ParseDateTimeOffset(ProviderJson.GetString(root, "last_refresh"));
+                if (string.IsNullOrWhiteSpace(accessToken))
+                {
+                    return null;
+                }
 
-            return new CodexAuth(accessToken, accountId, refreshToken, idToken, lastRefresh);
+                return new CodexAuth(accessToken, accountId, refreshToken, idToken, lastRefresh);
+            }
         }
     }
 
@@ -68,7 +64,6 @@ public sealed class CodexAuthReader : ICodexAuthReader
             var root = LoadRootObject();
             var tokens = root["tokens"] as JsonObject ?? [];
             tokens["access_token"] = auth.AccessToken;
-
             if (!string.IsNullOrWhiteSpace(auth.RefreshToken))
             {
                 tokens["refresh_token"] = auth.RefreshToken;
@@ -94,7 +89,7 @@ public sealed class CodexAuthReader : ICodexAuthReader
     {
         if (!File.Exists(_authFilePath))
         {
-            return [];
+            return[];
         }
 
         try
@@ -103,7 +98,7 @@ public sealed class CodexAuthReader : ICodexAuthReader
         }
         catch (JsonException)
         {
-            return [];
+            return[];
         }
     }
 
@@ -123,19 +118,13 @@ public sealed class CodexAuthReader : ICodexAuthReader
 
     private static DateTimeOffset? ParseDateTimeOffset(string? value)
     {
-        return DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed)
-            ? parsed
-            : null;
+        return DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed) ? parsed : null;
     }
 
     private static string FormatLastRefresh(DateTimeOffset value)
     {
         var utc = value.UtcDateTime;
         var fractionalTicks = utc.Ticks % TimeSpan.TicksPerSecond;
-        return string.Format(
-            CultureInfo.InvariantCulture,
-            "{0:yyyy-MM-dd'T'HH:mm:ss}.{1:D7}Z",
-            utc,
-            fractionalTicks);
+        return string.Format(CultureInfo.InvariantCulture, "{0:yyyy-MM-dd'T'HH:mm:ss}.{1:D7}Z", utc, fractionalTicks);
     }
 }

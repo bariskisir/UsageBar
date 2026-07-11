@@ -28,10 +28,35 @@ jobs:
 
       - run: dotnet test src/UsageBar.Tests/UsageBar.Tests.csproj -c Release
 
+  validate-platforms:
+    name: Validate ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+            project: src/UsageBar.Windows/UsageBar.Windows.csproj
+          - name: Linux
+            os: ubuntu-latest
+            project: src/UsageBar.Linux/UsageBar.Linux.csproj
+          - name: macOS
+            os: macos-latest
+            project: src/UsageBar.MacOS/UsageBar.MacOS.csproj
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - run: dotnet build ${{ matrix.project }} -c Release
+
   build-windows:
     name: Build Windows ${{ matrix.arch }}
     runs-on: windows-latest
-    needs: test
+    needs: [test, validate-platforms]
     strategy:
       fail-fast: false
       matrix:

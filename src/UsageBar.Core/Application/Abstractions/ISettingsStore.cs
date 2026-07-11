@@ -11,9 +11,4 @@ public interface ISettingsStore
     /// <summary>Atomically persists settings.</summary>
     Task WriteAsync(AppSettings settings, CancellationToken cancellationToken = default);
 
-    /// <summary>Reads and normalises settings synchronously (used by the UI thread).</summary>
-    AppSettings Read();
-
-    /// <summary>Persists settings (used by the context-menu UI thread).</summary>
-    void Write(AppSettings settings);
 }

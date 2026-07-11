@@ -51,6 +51,10 @@ public sealed class ProviderQueryContext
             foreach (var p in settings.Providers)
             {
                 refreshTokenMap[p.Name] = p.RefreshToken;
+                if (!string.IsNullOrWhiteSpace(p.Id))
+                {
+                    refreshTokenMap[p.Id] = p.RefreshToken;
+                }
 
                 if (p.Type != ProviderSettings.TypeApiKey || string.IsNullOrEmpty(p.Credential))
                 {

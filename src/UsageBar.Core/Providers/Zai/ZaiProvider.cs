@@ -1,18 +1,13 @@
 using UsageBar.Core.Domain;
 
 namespace UsageBar.Core.Providers;
-
 /// <summary>Reports Zai (z.ai) usage across token and time limit windows.</summary>
-public sealed class ZaiProvider(HttpClient httpClient) : IUsageProvider
+public sealed class ZaiProvider(HttpClient httpClient) : ISingleResultUsageProvider
 {
     private const string QuotaEndpoint = "https://api.z.ai/api/monitor/usage/quota/limit";
+    public ProviderDescriptor Descriptor { get; } = new("Zai", 19, ProviderAuthenticationKind.ApiKey, CredentialNames.Zai, 16, "zai", ["zai_*"]);
 
-    public ProviderDescriptor Descriptor { get; } = new(
-        "Zai", 19, ProviderAuthenticationKind.ApiKey, CredentialNames.Zai, 16, "zai", ["zai_*"]);
-
-    public bool IsConfigured(ProviderQueryContext context) =>
-        !string.IsNullOrEmpty(context.GetApiKey(CredentialNames.Zai));
-
+    public bool IsConfigured(ProviderQueryContext context) => !string.IsNullOrEmpty(context.GetApiKey(CredentialNames.Zai));
     public async Task<ProviderResult?> GetUsageAsync(ProviderQueryContext context, CancellationToken cancellationToken)
     {
         var apiKey = context.GetApiKey(CredentialNames.Zai);
@@ -21,34 +16,13 @@ public sealed class ZaiProvider(HttpClient httpClient) : IUsageProvider
             return null;
         }
 
-        using var document = await ProviderHttp.GetJsonWithBearerAsync(httpClient, QuotaEndpoint, apiKey, cancellationToken).ConfigureAwait(false);
-        var root = document.RootElement;
-
-        var windows = new List<UsageWindow>();
-
-        if (root.ValueKind == System.Text.Json.JsonValueKind.Array)
+        using (var document = await ProviderHttp.GetJsonWithBearerAsync(httpClient, QuotaEndpoint, apiKey, cancellationToken).ConfigureAwait(false))
         {
-            foreach (var entry in root.EnumerateArray())
+            var root = document.RootElement;
+            var windows = new List<UsageWindow>();
+            if (root.ValueKind == System.Text.Json.JsonValueKind.Array)
             {
-                var window = ReadLimitEntry(entry, Descriptor.Name, context.Now);
-                if (window is not null)
-                {
-                    windows.Add(window);
-                }
-            }
-        }
-        else if (root.ValueKind == System.Text.Json.JsonValueKind.Object)
-        {
-            // Try common wrapper shapes.
-            var data = root;
-            if (ProviderJson.TryGetProperty(root, "data", out var dataProp))
-            {
-                data = dataProp;
-            }
-
-            if (data.ValueKind == System.Text.Json.JsonValueKind.Array)
-            {
-                foreach (var entry in data.EnumerateArray())
+                foreach (var entry in root.EnumerateArray())
                 {
                     var window = ReadLimitEntry(entry, Descriptor.Name, context.Now);
                     if (window is not null)
@@ -57,28 +31,44 @@ public sealed class ZaiProvider(HttpClient httpClient) : IUsageProvider
                     }
                 }
             }
-        }
+            else if (root.ValueKind == System.Text.Json.JsonValueKind.Object)
+            {
+                // Try common wrapper shapes.
+                var data = root;
+                if (ProviderJson.TryGetProperty(root, "data", out var dataProp))
+                {
+                    data = dataProp;
+                }
 
-        if (windows.Count == 0)
-        {
-            throw new ProviderException("Zai response did not contain usable limit entries.");
-        }
+                if (data.ValueKind == System.Text.Json.JsonValueKind.Array)
+                {
+                    foreach (var entry in data.EnumerateArray())
+                    {
+                        var window = ReadLimitEntry(entry, Descriptor.Name, context.Now);
+                        if (window is not null)
+                        {
+                            windows.Add(window);
+                        }
+                    }
+                }
+            }
 
-        return new MetricResult(Descriptor.Name, null, windows);
+            if (windows.Count == 0)
+            {
+                throw new ProviderException("Zai response did not contain usable limit entries.");
+            }
+
+            return new MetricResult(Descriptor.Name, null, windows);
+        }
     }
 
     private static UsageWindow? ReadLimitEntry(System.Text.Json.JsonElement entry, string providerName, DateTimeOffset now)
     {
         var type = ProviderJson.GetString(entry, "type") ?? "Limit";
         var unit = ProviderJson.GetString(entry, "unit");
-
-        var label = !string.IsNullOrWhiteSpace(unit)
-            ? $"{type} ({unit})"
-            : type;
-
+        var label = !string.IsNullOrWhiteSpace(unit) ? $"{type} ({unit})" : type;
         // Prefer explicit percentage, fall back to usage/number calculation.
-        var percentage = ProviderJson.GetDouble(entry, "percentage") ??
-            ProviderJson.GetDouble(entry, "remaining_percentage");
+        var percentage = ProviderJson.GetDouble(entry, "percentage") ?? ProviderJson.GetDouble(entry, "remaining_percentage");
         double? usedPercent = null;
         if (percentage is not null)
         {
@@ -101,8 +91,7 @@ public sealed class ZaiProvider(HttpClient httpClient) : IUsageProvider
 
         var nextResetTime = ProviderJson.GetString(entry, "nextResetTime");
         string? resetText = null;
-        if (nextResetTime is not null &&
-            DateTimeOffset.TryParse(nextResetTime, null, System.Globalization.DateTimeStyles.AssumeUniversal, out var parsed))
+        if (nextResetTime is not null && DateTimeOffset.TryParse(nextResetTime, null, System.Globalization.DateTimeStyles.AssumeUniversal, out var parsed))
         {
             resetText = UsageFormatting.ResetDuration(parsed - now);
         }

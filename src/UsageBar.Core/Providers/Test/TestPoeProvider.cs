@@ -3,7 +3,7 @@ using UsageBar.Core.Domain;
 namespace UsageBar.Core.Providers;
 
 /// <summary>Test provider for Poe — returns a mock point balance.</summary>
-public sealed class TestPoeProvider : IUsageProvider
+public sealed class TestPoeProvider : ISingleResultUsageProvider
 {
     public ProviderDescriptor Descriptor { get; } = new("Poe", DisplayOrder: 118);
 

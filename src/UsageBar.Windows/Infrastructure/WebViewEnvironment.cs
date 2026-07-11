@@ -25,10 +25,18 @@ internal sealed class WebViewEnvironment : IDisposable
 
     public Task<CoreWebView2Environment> GetAsync()
     {
-        if (_envTask is not null) return _envTask;
+        if (_envTask is not null)
+        {
+            return _envTask;
+        }
+
         lock (_lock)
         {
-            if (_envTask is not null) return _envTask;
+            if (_envTask is not null)
+            {
+                return _envTask;
+            }
+
             _envTask = CreateAsync();
         }
         return _envTask;
@@ -52,7 +60,11 @@ internal sealed class WebViewEnvironment : IDisposable
 
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+        {
+            return;
+        }
+
         _disposed = true;
         lock (_lock)
         {

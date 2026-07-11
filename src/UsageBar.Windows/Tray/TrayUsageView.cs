@@ -13,9 +13,9 @@ internal sealed class TrayUsageView(ITrayIconWindow window, IWebViewTooltip tool
 {
     public void ShowIcon(IReadOnlyList<IconLayout.Bar> bars) => window.UpdateIcon(bars);
 
-    public void ShowCards(IReadOnlyList<TooltipCard> cards)
+    public void ShowCards(IReadOnlyList<TooltipCard> cards, int scale)
     {
-        tooltip.SetContent(cards);
+        tooltip.SetContent(cards, scale);
 
         // ShowCards is the tail of every refresh; return the transient HTTP/JSON churn to the OS.
         NativeMethods.TrimWorkingSet();

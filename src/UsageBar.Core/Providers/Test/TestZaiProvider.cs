@@ -3,7 +3,7 @@ using UsageBar.Core.Domain;
 namespace UsageBar.Core.Providers;
 
 /// <summary>Test provider for Zai — returns a mock Token limit window with random usage.</summary>
-public sealed class TestZaiProvider : IUsageProvider
+public sealed class TestZaiProvider : ISingleResultUsageProvider
 {
     public ProviderDescriptor Descriptor { get; } = new("Zai", DisplayOrder: 19);
 

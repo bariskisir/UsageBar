@@ -128,18 +128,19 @@
         var envVal = _envApiKeys[pr.credential] || "";
         var settingsVal = pr.apiKey || "";
         var fromEnv = !!envVal && !settingsVal;
-        var displayVal = fromEnv ? envVal : settingsVal;
-
         var keyInput = document.createElement("input");
         keyInput.type = "text";
-        keyInput.placeholder = "API key";
-        keyInput.value = displayVal;
+        keyInput.placeholder = fromEnv ? "Provided by environment" : "API key";
+        keyInput.value = settingsVal;
         keyInput.dataset.credential = pr.credential;
         if (fromEnv) {
           keyInput.dataset.fromEnv = "1";
           _originalEnvSourced[pr.credential] = true;
         }
-        keyInput.addEventListener("input", function () { markDirty(); });
+        keyInput.addEventListener("input", function () {
+          if (keyInput.value) delete keyInput.dataset.fromEnv;
+          markDirty();
+        });
         row.appendChild(keyInput);
 
         if (fromEnv) {
@@ -421,20 +422,32 @@
     setTimeout(function () { document.getElementById("saveHint").textContent = ""; }, 2000);
   };
 
+  window.__settingsError = function (data) {
+    var saveBtn = document.getElementById("saveBtn");
+    saveBtn.textContent = "Save";
+    saveBtn.disabled = false;
+    document.getElementById("saveHint").textContent = data.text || "The command could not be completed.";
+  };
+
   window.__updateResult = function (data) {
     var hint = document.getElementById("saveHint");
     hint.textContent = data.text || "";
     setTimeout(function () { hint.textContent = ""; }, 4000);
   };
 
-  window.chrome.webview.addEventListener("message", function (event) {
-    var message = event.data || {};
+  function onNativeMessage(message) {
+    message = message || {};
     switch (message.type) {
       case "settings-state": window.__loadSettings(message); break;
       case "settings-saved": window.__settingsSaved(); break;
+      case "settings-error": window.__settingsError(message); break;
       case "update-result": window.__updateResult(message); break;
     }
-  });
+  }
+
+  if (window.ipc && window.ipc.addMessageListener) {
+    window.ipc.addMessageListener(onNativeMessage);
+  }
 
   function signalReady() {
     if (window.ipc) window.ipc.postMessage(JSON.stringify({ type: "ready" }));

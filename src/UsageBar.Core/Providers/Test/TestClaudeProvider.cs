@@ -3,7 +3,7 @@ using UsageBar.Core.Domain;
 namespace UsageBar.Core.Providers;
 
 /// <summary>Test provider for Claude — returns mock Session + Weekly windows with random 25–100% usage.</summary>
-public sealed class TestClaudeProvider : IUsageProvider
+public sealed class TestClaudeProvider : ISingleResultUsageProvider
 {
     private static readonly string[] Plans = ["Max", "Pro", "Team", "Enterprise", "Free", "Claude AI"];
 

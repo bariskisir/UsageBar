@@ -6,31 +6,28 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 
 namespace UsageBar.Core.Infrastructure.Logging;
-
 internal static class SensitiveDataRedactor
 {
     private const int MaxSnapshotCharacters = 4096;
     private const int MaxDepth = 6;
     private const int MaxArrayItems = 5;
     private const string Redacted = "<redacted>";
-
-    private static readonly string[] SensitiveNameFragments =
-    [
-        "authorization", "api-key", "apikey", "api_key", "token", "secret", "password",
-        "credential", "cookie", "webhook", "account", "project", "organization", "user_id",
-        "userid", "email", "chat_id", "chatid", "fingerprint",
-    ];
-
+    private static readonly string[] SensitiveNameFragments = ["authorization", "api-key", "apikey", "api_key", "token", "secret", "password", "credential", "cookie", "webhook", "account", "project", "organization", "user_id", "userid", "email", "chat_id", "chatid", "fingerprint", ];
     private static readonly HashSet<string> SafeStringProperties = new(StringComparer.OrdinalIgnoreCase)
     {
-        "type", "unit", "currency", "status", "state", "window", "grant_type", "operationName",
+        "type",
+        "unit",
+        "currency",
+        "status",
+        "state",
+        "window",
+        "grant_type",
+        "operationName",
     };
-
     private static readonly JsonSerializerOptions LogJsonOptions = new()
     {
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
-
     public static string SafeUri(Uri? uri)
     {
         if (uri is null)
@@ -55,10 +52,7 @@ internal static class SensitiveDataRedactor
 
     public static string HeaderNames(HttpHeaders headers, HttpHeaders? contentHeaders = null)
     {
-        var names = headers.Select(header => header.Key)
-            .Concat(contentHeaders?.Select(header => header.Key) ?? [])
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Order(StringComparer.OrdinalIgnoreCase);
+        var names = headers.Select(header => header.Key).Concat(contentHeaders?.Select(header => header.Key) ?? []).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase);
         return string.Join(',', names);
     }
 
@@ -79,10 +73,12 @@ internal static class SensitiveDataRedactor
         {
             if (mediaType?.Contains("json", StringComparison.OrdinalIgnoreCase) == true || LooksLikeJson(body))
             {
-                using var document = JsonDocument.Parse(body);
-                var builder = new StringBuilder(Math.Min(body.Length, MaxSnapshotCharacters));
-                AppendJson(builder, document.RootElement, propertyName: null, depth: 0);
-                return Truncate(builder.ToString());
+                using (var document = JsonDocument.Parse(body))
+                {
+                    var builder = new StringBuilder(Math.Min(body.Length, MaxSnapshotCharacters));
+                    AppendJson(builder, document.RootElement, propertyName: null, depth: 0);
+                    return Truncate(builder.ToString());
+                }
             }
 
             if (mediaType?.Contains("x-www-form-urlencoded", StringComparison.OrdinalIgnoreCase) == true)
@@ -92,7 +88,7 @@ internal static class SensitiveDataRedactor
         }
         catch (JsonException)
         {
-            // Invalid JSON is described by metadata and fingerprint only.
+        // Invalid JSON is described by metadata and fingerprint only.
         }
 
         return $"<non-json:{body.Length.ToString(CultureInfo.InvariantCulture)} chars>";
@@ -113,7 +109,11 @@ internal static class SensitiveDataRedactor
                 var firstProperty = true;
                 foreach (var property in element.EnumerateObject())
                 {
-                    if (!firstProperty) builder.Append(',');
+                    if (!firstProperty)
+                    {
+                        builder.Append(',');
+                    }
+
                     firstProperty = false;
                     AppendQuoted(builder, property.Name);
                     builder.Append(':');
@@ -126,17 +126,24 @@ internal static class SensitiveDataRedactor
                         AppendJson(builder, property.Value, property.Name, depth + 1);
                     }
 
-                    if (builder.Length >= MaxSnapshotCharacters) break;
+                    if (builder.Length >= MaxSnapshotCharacters)
+                    {
+                        break;
+                    }
                 }
+
                 builder.Append('}');
                 break;
-
             case JsonValueKind.Array:
                 builder.Append('[');
                 var index = 0;
                 foreach (var item in element.EnumerateArray())
                 {
-                    if (index > 0) builder.Append(',');
+                    if (index > 0)
+                    {
+                        builder.Append(',');
+                    }
+
                     if (index == MaxArrayItems)
                     {
                         AppendQuoted(builder, "<truncated-array>");
@@ -145,25 +152,25 @@ internal static class SensitiveDataRedactor
 
                     AppendJson(builder, item, propertyName, depth + 1);
                     index++;
-                    if (builder.Length >= MaxSnapshotCharacters) break;
+                    if (builder.Length >= MaxSnapshotCharacters)
+                    {
+                        break;
+                    }
                 }
+
                 builder.Append(']');
                 break;
-
             case JsonValueKind.Null:
                 builder.Append("null");
                 break;
-
             case JsonValueKind.True:
             case JsonValueKind.False:
             case JsonValueKind.Number:
                 AppendQuoted(builder, Redacted);
                 break;
-
             case JsonValueKind.String when propertyName is not null && SafeStringProperties.Contains(propertyName):
                 AppendQuoted(builder, element.GetString() ?? string.Empty);
                 break;
-
             default:
                 AppendQuoted(builder, Redacted);
                 break;
@@ -188,9 +195,7 @@ internal static class SensitiveDataRedactor
         }));
     }
 
-    private static bool IsSensitive(string name) =>
-        SensitiveNameFragments.Any(fragment => name.Contains(fragment, StringComparison.OrdinalIgnoreCase));
-
+    private static bool IsSensitive(string name) => SensitiveNameFragments.Any(fragment => name.Contains(fragment, StringComparison.OrdinalIgnoreCase));
     private static string QueryNames(string query)
     {
         if (string.IsNullOrEmpty(query) || query == "?")
@@ -198,11 +203,7 @@ internal static class SensitiveDataRedactor
             return string.Empty;
         }
 
-        var names = query[1..]
-            .Split('&', StringSplitOptions.RemoveEmptyEntries)
-            .Select(part => part.Split('=', 2)[0])
-            .Select(Uri.UnescapeDataString)
-            .Distinct(StringComparer.OrdinalIgnoreCase);
+        var names = query[1..].Split('&', StringSplitOptions.RemoveEmptyEntries).Select(part => part.Split('=', 2)[0]).Select(Uri.UnescapeDataString).Distinct(StringComparer.OrdinalIgnoreCase);
         return $"?{string.Join('&', names.Select(name => name + "=<redacted>"))}";
     }
 
@@ -217,7 +218,5 @@ internal static class SensitiveDataRedactor
         builder.Append(JsonSerializer.Serialize(value, LogJsonOptions));
     }
 
-    private static string Truncate(string value) => value.Length <= MaxSnapshotCharacters
-        ? value
-        : value[..MaxSnapshotCharacters] + "<truncated>";
+    private static string Truncate(string value) => value.Length <= MaxSnapshotCharacters ? value : value[..MaxSnapshotCharacters] + "<truncated>";
 }

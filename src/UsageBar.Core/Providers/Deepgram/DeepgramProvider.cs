@@ -2,16 +2,13 @@ using System.Text.Json;
 using UsageBar.Core.Domain;
 
 namespace UsageBar.Core.Providers;
-
 /// <summary>
 /// Reports the Deepgram USD balance. Deepgram exposes balances per project, so this
 /// resolves the first project and sums its USD balances.
 /// </summary>
 public sealed class DeepgramProvider(HttpClient httpClient) : BalanceUsageProvider(httpClient)
 {
-    public override ProviderDescriptor Descriptor { get; } = new(
-        "Deepgram", 120, ProviderAuthenticationKind.ApiKey, CredentialNames.Deepgram, SettingsOrder: 7);
-
+    public override ProviderDescriptor Descriptor { get; } = new("Deepgram", 120, ProviderAuthenticationKind.ApiKey, CredentialNames.Deepgram, SettingsOrder: 7);
     protected override string CredentialName => CredentialNames.Deepgram;
 
     protected override async Task<BalanceFetchResult> FetchBalanceAsync(HttpClient httpClient, string apiKey, CancellationToken cancellationToken)
@@ -23,62 +20,60 @@ public sealed class DeepgramProvider(HttpClient httpClient) : BalanceUsageProvid
 
     private static async Task<string> GetFirstProjectIdAsync(HttpClient httpClient, string apiKey, CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, "https://api.deepgram.com/v1/projects");
-        AddHeaders(request, apiKey);
-
-        using var document = await ProviderHttp.GetJsonAsync(httpClient, request, cancellationToken).ConfigureAwait(false);
-
-        foreach (var project in EnumerateProjects(document.RootElement))
+        using (var request = new HttpRequestMessage(HttpMethod.Get, "https://api.deepgram.com/v1/projects"))
         {
-            var projectId = ProviderJson.GetString(project, "project_id", "projectId", "id");
-            if (!string.IsNullOrWhiteSpace(projectId))
+            AddHeaders(request, apiKey);
+            using (var document = await ProviderHttp.GetJsonAsync(httpClient, request, cancellationToken).ConfigureAwait(false))
             {
-                return projectId;
+                foreach (var project in EnumerateProjects(document.RootElement))
+                {
+                    var projectId = ProviderJson.GetString(project, "project_id", "projectId", "id");
+                    if (!string.IsNullOrWhiteSpace(projectId))
+                    {
+                        return projectId;
+                    }
+                }
+
+                throw new ProviderException("Deepgram response did not contain a project_id.");
             }
         }
-
-        throw new ProviderException("Deepgram response did not contain a project_id.");
     }
 
     private static async Task<decimal> GetBalanceAsync(HttpClient httpClient, string apiKey, string projectId, CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(
-            HttpMethod.Get,
-            $"https://api.deepgram.com/v1/projects/{Uri.EscapeDataString(projectId)}/balances");
-        AddHeaders(request, apiKey);
-
-        using var document = await ProviderHttp.GetJsonAsync(httpClient, request, cancellationToken).ConfigureAwait(false);
-
-        var total = 0m;
-        var found = false;
-
-        foreach (var balance in EnumerateBalances(document.RootElement))
+        using (var request = new HttpRequestMessage(HttpMethod.Get, $"https://api.deepgram.com/v1/projects/{Uri.EscapeDataString(projectId)}/balances"))
         {
-            var amount = ProviderJson.GetDecimal(balance, "amount") ??
-                ProviderJson.GetDecimal(balance, "balance") ??
-                ProviderJson.GetDecimal(balance, "total_balance");
-
-            if (amount is null)
+            AddHeaders(request, apiKey);
+            using (var document = await ProviderHttp.GetJsonAsync(httpClient, request, cancellationToken).ConfigureAwait(false))
             {
-                continue;
+                var total = 0m;
+                var found = false;
+                foreach (var balance in EnumerateBalances(document.RootElement))
+                {
+                    var amount = ProviderJson.GetDecimal(balance, "amount") ?? ProviderJson.GetDecimal(balance, "balance") ?? ProviderJson.GetDecimal(balance, "total_balance");
+                    if (amount is null)
+                    {
+                        continue;
+                    }
+
+                    var units = ProviderJson.GetString(balance, "units", "currency");
+                    if (!string.IsNullOrWhiteSpace(units) && !string.Equals(units, "usd", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    total += amount.Value;
+                    found = true;
+                }
+
+                if (!found)
+                {
+                    throw new ProviderException("Deepgram response did not contain a balance amount.");
+                }
+
+                return total;
             }
-
-            var units = ProviderJson.GetString(balance, "units", "currency");
-            if (!string.IsNullOrWhiteSpace(units) && !string.Equals(units, "usd", StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            total += amount.Value;
-            found = true;
         }
-
-        if (!found)
-        {
-            throw new ProviderException("Deepgram response did not contain a balance amount.");
-        }
-
-        return total;
     }
 
     private static IEnumerable<JsonElement> EnumerateProjects(JsonElement root)

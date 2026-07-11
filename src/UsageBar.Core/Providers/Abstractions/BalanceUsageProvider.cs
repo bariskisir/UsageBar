@@ -23,7 +23,7 @@ public sealed record BalanceFetchResult(string DisplayText, decimal? UsdAmount =
 /// <see cref="FetchBalanceAsync"/> (use <see cref="UsageFormatting"/> for currency formatting),
 /// and register it as <see cref="IUsageProvider"/>.
 /// </remarks>
-public abstract class BalanceUsageProvider : IUsageProvider
+public abstract class BalanceUsageProvider : ISingleResultUsageProvider
 {
     private readonly HttpClient _httpClient;
 

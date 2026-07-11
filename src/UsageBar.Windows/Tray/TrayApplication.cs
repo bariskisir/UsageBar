@@ -1,12 +1,12 @@
-using System.Diagnostics;
 using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 using UsageBar.Core.Application;
 using UsageBar.Core.Configuration;
 using UsageBar.Core.Domain;
 using UsageBar.Core.Infrastructure;
 using UsageBar.Windows.Infrastructure;
-using UsageBar.Windows.Tooltip;
 using UsageBar.Windows.Settings;
+using UsageBar.Windows.Tooltip;
 
 namespace UsageBar.Windows.Tray;
 
@@ -26,11 +26,9 @@ internal sealed class TrayApplication(
     IWebViewTooltip tooltip,
     ITrayContextMenu contextMenu,
     IUsageRefreshService refresh,
-    IStartupRegistrationService startupRegistration,
+    DesktopApplicationCoordinator coordinator,
     IUpdateService updateService,
-    ISettingsStore settingsStore,
     SettingsPanel settingsPanel,
-    ProviderInitializer providerInitializer,
     ILogger<TrayApplication> logger)
 {
     private readonly CancellationTokenSource _lifetime = new();
@@ -38,11 +36,9 @@ internal sealed class TrayApplication(
     public void Run()
     {
         logger.LogInformation("Tray application initialising.");
-        providerInitializer.EnsureProviders();
         WireEvents();
 
-        var currentSettings = settingsStore.Read();
-        ApplyStartup(currentSettings);
+        var currentSettings = coordinator.InitializeAsync(_lifetime.Token).GetAwaiter().GetResult();
 
         // Install a SynchronizationContext that pumps continuations on this STA message-loop
         // thread; required for WebView2 async continuations.
@@ -147,18 +143,6 @@ internal sealed class TrayApplication(
             {
                 window.ShowBalloon(NotificationLevel.Reset, $"Usage Bar is up to date ({result.LatestVersion}).");
             }
-        }
-    }
-
-    private void ApplyStartup(AppSettings settings)
-    {
-        if (settings.StartWithSystem ?? true)
-        {
-            startupRegistration.Register();
-        }
-        else
-        {
-            startupRegistration.Unregister();
         }
     }
 

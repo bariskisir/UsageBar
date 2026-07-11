@@ -29,7 +29,7 @@ public sealed class TestKiloProvider : IUsageProvider, IResultDisplayOrderProvid
             new MetricResult("Kilo", plan, [pass]));
     }
 
-    public Task<IReadOnlyList<ProviderResult>> GetUsageResultsAsync(ProviderQueryContext context, CancellationToken cancellationToken)
+    public Task<IReadOnlyList<ProviderResult>> QueryAsync(ProviderQueryContext context, CancellationToken cancellationToken)
     {
         var results = new List<ProviderResult>();
         var mode = Random.Shared.Next(3);
@@ -38,28 +38,28 @@ public sealed class TestKiloProvider : IUsageProvider, IResultDisplayOrderProvid
         {
             // 1 — plan mode (MetricResult with Pass window, no balance)
             case 0:
-            {
-                var pass = TestData.RandomWindow("Kilo", "Pass");
-                var plan = Plans[Random.Shared.Next(Plans.Length)];
-                results.Add(new MetricResult("Kilo", plan, [pass]));
-                break;
-            }
+                {
+                    var pass = TestData.RandomWindow("Kilo", "Pass");
+                    var plan = Plans[Random.Shared.Next(Plans.Length)];
+                    results.Add(new MetricResult("Kilo", plan, [pass]));
+                    break;
+                }
             // 2 — balance mode (BalanceResult only)
             case 1:
-            {
-                results.Add(TestData.RandomBalance("Kilo"));
-                break;
-            }
+                {
+                    results.Add(TestData.RandomBalance("Kilo"));
+                    break;
+                }
             // 3 — both: MetricResult with plan + balance in the plan line
             default:
-            {
-                var pass = TestData.RandomWindow("Kilo", "Pass");
-                var plan = Plans[Random.Shared.Next(Plans.Length)];
-                var balance = TestData.RandomBalance("Kilo");
-                var planLine = $"{plan} - {balance.BalanceText}";
-                results.Add(new MetricResult("Kilo", planLine, [pass]));
-                break;
-            }
+                {
+                    var pass = TestData.RandomWindow("Kilo", "Pass");
+                    var plan = Plans[Random.Shared.Next(Plans.Length)];
+                    var balance = TestData.RandomBalance("Kilo");
+                    var planLine = $"{plan} - {balance.BalanceText}";
+                    results.Add(new MetricResult("Kilo", planLine, [pass]));
+                    break;
+                }
         }
 
         return Task.FromResult<IReadOnlyList<ProviderResult>>(results);

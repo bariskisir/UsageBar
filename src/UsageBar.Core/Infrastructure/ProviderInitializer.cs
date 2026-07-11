@@ -18,14 +18,18 @@ internal sealed class ProviderInitializer(
         .ThenBy(provider => provider.Descriptor.DisplayOrder)
         .ToArray();
 
-    public void EnsureProviders()
+    public async Task EnsureProvidersAsync(CancellationToken cancellationToken = default)
     {
-        var settings = settingsStore.Read();
+        var settings = await settingsStore.ReadAsync(cancellationToken).ConfigureAwait(false);
         var existingProviders = settings.Providers ?? [];
         var byName = new Dictionary<string, ProviderSettings>(StringComparer.OrdinalIgnoreCase);
         foreach (var providerSettings in existingProviders)
         {
             byName[providerSettings.Name] = providerSettings;
+            if (!string.IsNullOrWhiteSpace(providerSettings.Id))
+            {
+                byName[providerSettings.Id] = providerSettings;
+            }
         }
 
         var merged = settings.Initialized == true
@@ -36,8 +40,18 @@ internal sealed class ProviderInitializer(
         foreach (var provider in _providers)
         {
             var descriptor = provider.Descriptor;
-            if (byName.ContainsKey(descriptor.Name))
+            if (byName.TryGetValue(descriptor.Id, out var existing) ||
+                byName.TryGetValue(descriptor.Name, out existing))
             {
+                if (!string.Equals(existing.Id, descriptor.Id, StringComparison.Ordinal))
+                {
+                    var index = merged.FindIndex(item => ReferenceEquals(item, existing) || item == existing);
+                    if (index >= 0)
+                    {
+                        merged[index] = existing with { Id = descriptor.Id };
+                        changed = true;
+                    }
+                }
                 continue;
             }
 
@@ -46,13 +60,16 @@ internal sealed class ProviderInitializer(
                 Type: SettingsType(descriptor.AuthenticationKind),
                 Credential: descriptor.CredentialName,
                 ApiKey: null,
-                Enabled: HasCredential(provider)));
+                Enabled: HasCredential(provider),
+                Id: descriptor.Id));
             changed = true;
         }
 
         if (changed)
         {
-            settingsStore.Write(settings with { Providers = merged, Initialized = true });
+            await settingsStore.WriteAsync(
+                settings with { Providers = merged, Initialized = true },
+                cancellationToken).ConfigureAwait(false);
         }
     }
 
