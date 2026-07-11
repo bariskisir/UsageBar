@@ -94,7 +94,7 @@ public sealed class AntigravityProvider(HttpClient httpClient, IAntigravityAuthR
 
     private MetricResult ParseQuotaResponse(JsonDocument document, ProviderQueryContext context)
     {
-        var windows = new List<UsageWindow>();
+        var windows = new List<(int GroupIndex, UsageWindow Window)>();
 
         if (!ProviderJson.TryGetProperty(document.RootElement, "groups", out var groupsArray) ||
             groupsArray.ValueKind != JsonValueKind.Array)
@@ -102,6 +102,7 @@ public sealed class AntigravityProvider(HttpClient httpClient, IAntigravityAuthR
             throw new ProviderException("Antigravity quota response did not contain groups.");
         }
 
+        var groupIndex = 0;
         foreach (var group in groupsArray.EnumerateArray())
         {
             var groupName = ProviderJson.GetString(group, "displayName") ?? string.Empty;
@@ -110,6 +111,7 @@ public sealed class AntigravityProvider(HttpClient httpClient, IAntigravityAuthR
             if (!ProviderJson.TryGetProperty(group, "buckets", out var bucketsArray) ||
                 bucketsArray.ValueKind != JsonValueKind.Array)
             {
+                groupIndex++;
                 continue;
             }
 
@@ -121,7 +123,8 @@ public sealed class AntigravityProvider(HttpClient httpClient, IAntigravityAuthR
                     continue;
                 }
 
-                var window = UsageFormatting.Capitalize(ProviderJson.GetString(bucket, "window") ?? string.Empty);
+                var rawWindow = ProviderJson.GetString(bucket, "window") ?? string.Empty;
+                var window = MapWindowLabel(UsageFormatting.Capitalize(rawWindow));
                 var usedPercent = (1.0 - remainingFraction.Value) * 100.0;
                 var resetTimeStr = ProviderJson.GetString(bucket, "resetTime");
 
@@ -134,9 +137,11 @@ public sealed class AntigravityProvider(HttpClient httpClient, IAntigravityAuthR
 
                 var label = !string.IsNullOrWhiteSpace(window) ? window : groupName;
 
-                windows.Add(new UsageWindow(Descriptor.Name, label, Math.Clamp(usedPercent, 0, 100), resetText,
-                    subLabel: !string.IsNullOrWhiteSpace(window) && !string.IsNullOrWhiteSpace(groupName) ? groupName : null));
+                windows.Add((groupIndex, new UsageWindow(Descriptor.Name, label, Math.Clamp(usedPercent, 0, 100), resetText,
+                    subLabel: !string.IsNullOrWhiteSpace(window) && !string.IsNullOrWhiteSpace(groupName) ? groupName : null)));
             }
+
+            groupIndex++;
         }
 
         if (windows.Count == 0)
@@ -144,7 +149,37 @@ public sealed class AntigravityProvider(HttpClient httpClient, IAntigravityAuthR
             throw new ProviderException("Antigravity quota response did not contain usable buckets.");
         }
 
-        return new MetricResult(Descriptor.Name, PlanLabel(_cachedTierId), windows);
+        windows.Sort((a, b) =>
+        {
+            var groupCmp = a.GroupIndex.CompareTo(b.GroupIndex);
+            if (groupCmp != 0) return groupCmp;
+            return WindowRank(a.Window.Label).CompareTo(WindowRank(b.Window.Label));
+        });
+
+        var ordered = windows.Select(w => w.Window).ToList();
+
+        return new MetricResult(Descriptor.Name, PlanLabel(_cachedTierId), ordered);
+    }
+
+    private static string MapWindowLabel(string label)
+    {
+        return label switch
+        {
+            "5h" => "Session",
+            _ => label,
+        };
+    }
+
+    private static int WindowRank(string label)
+    {
+        return label switch
+        {
+            "Session" => 0,
+            "Daily" => 1,
+            "Weekly" => 2,
+            "Monthly" => 3,
+            _ => 4,
+        };
     }
 
     private async Task<(string ProjectId, string? TierId)> FetchProjectAsync(AntigravityAuth auth, CancellationToken cancellationToken)
