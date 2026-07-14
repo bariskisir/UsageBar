@@ -22,4 +22,5 @@ public sealed record TooltipCard(
     [property: JsonPropertyName("metrics")] IReadOnlyList<TooltipMetric> Metrics,
     [property: JsonPropertyName("lines")] IReadOnlyList<string> Lines,
     [property: JsonPropertyName("hide")] bool Hide = false,
-    [property: JsonPropertyName("icon"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? IconKey = null);
+    [property: JsonPropertyName("icon"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? IconKey = null,
+    [property: JsonPropertyName("notice"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Notice = null);

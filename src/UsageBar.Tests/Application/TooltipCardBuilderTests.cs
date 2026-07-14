@@ -49,6 +49,20 @@ public sealed class TooltipCardBuilderTests
     }
 
     [Fact]
+    public void Metric_card_carries_card_level_notice()
+    {
+        IReadOnlyList<ProviderResult> results =
+        [
+            new MetricResult("Codex", "Pro", [TestData.Window("Codex", "Session", 10)], "1 reset"),
+        ];
+
+        var card = Assert.Single(TooltipCardBuilder.Build(new UsageSnapshot(results, [])));
+
+        Assert.Equal("1 reset", card.Notice);
+        Assert.Null(Assert.Single(card.Metrics).SubLabel);
+    }
+
+    [Fact]
     public void Balance_card_has_a_single_line_and_no_plan()
     {
         IReadOnlyList<ProviderResult> results = [new BalanceResult("DeepSeek", "$9.99")];

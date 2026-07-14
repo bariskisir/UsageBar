@@ -29,7 +29,8 @@ internal static class TooltipCardBuilder
                         metric.Plan,
                         metrics,
                         [],
-                        IconKey: IconKeyFor(metric.ProviderName, iconKeys)));
+                        IconKey: IconKeyFor(metric.ProviderName, iconKeys),
+                        Notice: metric.Notice));
                     break;
 
                 case BalanceResult balance:

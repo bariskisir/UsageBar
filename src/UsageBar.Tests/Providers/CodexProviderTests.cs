@@ -21,6 +21,7 @@ public sealed class CodexProviderTests
         var json = $$"""
         {
           "plan_type": "pro",
+          "rate_limit_reset_credits": { "available_count": 1 },
           "rate_limit": {
             "primary_window": { "used_percent": 53.0, "reset_at": {{primaryReset}} },
             "secondary_window": { "used_percent": 12.5, "reset_at": {{secondaryReset}} }
@@ -32,6 +33,7 @@ public sealed class CodexProviderTests
 
         var metric = Assert.IsType<MetricResult>(result);
         Assert.Equal("Pro", metric.Plan);
+        Assert.Equal("1 reset", metric.Notice);
         Assert.Collection(
             metric.Windows,
             session =>
@@ -39,13 +41,54 @@ public sealed class CodexProviderTests
                 Assert.Equal("Session", session.Label);
                 Assert.Equal(53.0, session.UsedPercent);
                 Assert.Equal("2h 10m", session.ResetText);
+                Assert.Null(session.SubLabel);
             },
             weekly =>
             {
                 Assert.Equal("Weekly", weekly.Label);
                 Assert.Equal(12.5, weekly.UsedPercent);
                 Assert.Equal("3d", weekly.ResetText);
+                Assert.Null(weekly.SubLabel);
             });
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("null")]
+    public async Task Omits_available_reset_label_when_count_is_not_positive(string availableCount)
+    {
+        var reset = TestData.FixedNow.AddMinutes(30).ToUnixTimeSeconds();
+        var json = $$"""
+        {
+          "rate_limit_reset_credits": { "available_count": {{availableCount}} },
+          "rate_limit": {
+            "primary_window": { "used_percent": 20.0, "reset_at": {{reset}} }
+          }
+        }
+        """;
+
+        var result = await Create(json, new CodexAuth("token", "account")).GetUsageAsync(TestData.Context(), CancellationToken.None);
+
+        var metric = Assert.IsType<MetricResult>(result);
+        Assert.Null(metric.Notice);
+    }
+
+    [Fact]
+    public async Task Omits_available_reset_label_when_credits_are_absent()
+    {
+        var reset = TestData.FixedNow.AddMinutes(30).ToUnixTimeSeconds();
+        var json = $$"""
+        {
+          "rate_limit": {
+            "primary_window": { "used_percent": 20.0, "reset_at": {{reset}} }
+          }
+        }
+        """;
+
+        var result = await Create(json, new CodexAuth("token", "account")).GetUsageAsync(TestData.Context(), CancellationToken.None);
+
+        var metric = Assert.IsType<MetricResult>(result);
+        Assert.Null(metric.Notice);
     }
 
     [Fact]

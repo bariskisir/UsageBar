@@ -300,6 +300,11 @@ body {
   color: var(--text-secondary);
 }
 
+.card__notice {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 .metric__bar {
   width: 100%;
   max-width: 100%;

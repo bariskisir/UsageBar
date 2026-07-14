@@ -14,10 +14,12 @@ public abstract record ProviderResult(string ProviderName);
 /// <param name="ProviderName">Display name of the provider that produced this result.</param>
 /// <param name="Plan">Plan/tier label (e.g. "Pro", "Max", "Free"), or <see langword="null"/>.</param>
 /// <param name="Windows">Usage windows for the tooltip and threshold checks.</param>
+/// <param name="Notice">Optional card-level notice shown once above the usage windows.</param>
 public sealed record MetricResult(
     string ProviderName,
     string? Plan,
-    IReadOnlyList<UsageWindow> Windows) : ProviderResult(ProviderName);
+    IReadOnlyList<UsageWindow> Windows,
+    string? Notice = null) : ProviderResult(ProviderName);
 
 /// <summary>A balance provider's result: a pre-formatted balance string (e.g. "$12.34").</summary>
 /// <param name="ProviderName">Display name of the provider that produced this result.</param>

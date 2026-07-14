@@ -100,6 +100,7 @@ function renderCard(card) {
     nameGroup.appendChild(el("span", "card__plan", card.plan));
   }
   titleRow.appendChild(nameGroup);
+  if (card.notice) titleRow.appendChild(el("span", "card__plan card__notice", card.notice));
   var icon = hasMetrics ? providerIcon(card.icon, card.title) : null;
   if (icon) titleRow.appendChild(icon);
   header.appendChild(titleRow);
