@@ -48,12 +48,14 @@
 
     providers.forEach(function (pr) {
       var isOAuth = pr.type === "oauth";
+      var providerKey = String(pr.id || pr.name || "").toLowerCase();
+      var supportsWindowStart = providerKey === "codex" || providerKey === "claude" || providerKey === "antigravity";
       var row = document.createElement("div");
       row.className = "provider-row";
 
       var nameEl = document.createElement("span");
       nameEl.className = isOAuth ? "provider-row__name provider-row__name--oauth" : "provider-row__name";
-      nameEl.textContent = pr.name + (isOAuth ? " (OAuth)" : "");
+      nameEl.textContent = pr.name;
       nameEl.title = pr.name;
       row.appendChild(nameEl);
 
@@ -107,6 +109,33 @@
         refreshGroup.appendChild(refreshText);
         refreshGroup.appendChild(refreshLabel);
         row.appendChild(refreshGroup);
+
+        if (supportsWindowStart) {
+          var startDivider = document.createElement("span");
+          startDivider.className = "provider-row__divider";
+          row.appendChild(startDivider);
+
+          var startGroup = document.createElement("span");
+          startGroup.className = "provider-row__toggle-group";
+          var startLabel = document.createElement("label");
+          startLabel.className = "toggle";
+          startLabel.title = "Send a one-token prompt after the session window resets";
+          var startCb = document.createElement("input");
+          startCb.type = "checkbox";
+          startCb.className = "provider-window-start-toggle";
+          startCb.checked = pr.startWindowAfterReset === true;
+          startCb.addEventListener("change", function () { markDirty(); });
+          startLabel.appendChild(startCb);
+          var startSlider = document.createElement("span");
+          startSlider.className = "toggle__slider";
+          startLabel.appendChild(startSlider);
+          var startText = document.createElement("span");
+          startText.className = "toggle-inline-label";
+          startText.textContent = "Warm Window";
+          startGroup.appendChild(startText);
+          startGroup.appendChild(startLabel);
+          row.appendChild(startGroup);
+        }
       } else {
         // Enabled toggle for non-OAuth providers
         var toggleLabel = document.createElement("label");
@@ -130,6 +159,7 @@
         var fromEnv = !!envVal && !settingsVal;
         var keyInput = document.createElement("input");
         keyInput.type = "text";
+        keyInput.className = "provider-api-key";
         keyInput.placeholder = fromEnv ? "Provided by environment" : "API key";
         keyInput.value = settingsVal;
         keyInput.dataset.credential = pr.credential;
@@ -241,6 +271,9 @@
     document.getElementById("checkUpdates").checked = update.onStartup !== false;
     document.getElementById("startWithSystem").checked = settings.startWithSystem !== false;
 
+    var models = settings.models || {};
+    document.getElementById("smallModelSelector").value = models.smallModelSelector || "nano,mini,haiku,flash,lite";
+
     var tg = notif.telegram || {};
     document.getElementById("tgEnabled").checked = tg.enabled === true;
     document.getElementById("tgToken").value = tg.token || "";
@@ -296,6 +329,10 @@
       onStartup: document.getElementById("checkUpdates").checked
     };
 
+    settings.models = {
+      smallModelSelector: document.getElementById("smallModelSelector").value.trim() || "nano,mini,haiku,flash,lite"
+    };
+
     settings.visual = {
       scale: parseInt(document.getElementById("uiScale").value) || 100,
       iconLayout: { mode: mode, bars: makeBars() }
@@ -307,8 +344,8 @@
     rows.forEach(function (row) {
       var nameEl = row.querySelector(".provider-row__name");
       var toggleCb = row.querySelector(".provider-toggle");
-      var keyInput = row.querySelector("input[type=text]");
-      var name = nameEl ? nameEl.textContent.replace(" (OAuth)", "").trim() : "";
+      var keyInput = row.querySelector(".provider-api-key");
+      var name = nameEl ? nameEl.textContent.trim() : "";
       var isOAuth = nameEl ? nameEl.className.indexOf("provider-row__name--oauth") >= 0 : false;
       var enabled = toggleCb ? toggleCb.checked : false;
       var apiKey = (keyInput && !isOAuth) ? (keyInput.value || null) : null;
@@ -324,10 +361,12 @@
 
       var refreshCb = row.querySelector(".provider-refresh-toggle");
       var refreshToken = refreshCb ? refreshCb.checked : true;
+      var startCb = row.querySelector(".provider-window-start-toggle");
+      var startWindowAfterReset = startCb ? startCb.checked : false;
 
       providers.push(refreshCb
-        ? { name: name, type: isOAuth ? "oauth" : "apiKey", credential: credential, apiKey: apiKey, enabled: enabled, refreshToken: refreshToken }
-        : { name: name, type: isOAuth ? "oauth" : "apiKey", credential: credential, apiKey: apiKey, enabled: enabled });
+        ? { name: name, id: orig ? orig.id || null : null, type: isOAuth ? "oauth" : "apiKey", credential: credential, apiKey: apiKey, enabled: enabled, refreshToken: refreshToken, startWindowAfterReset: startWindowAfterReset }
+        : { name: name, id: orig ? orig.id || null : null, type: isOAuth ? "oauth" : "apiKey", credential: credential, apiKey: apiKey, enabled: enabled, startWindowAfterReset: false });
     });
     settings.providers = providers;
     settings.startWithSystem = document.getElementById("startWithSystem").checked;
@@ -381,9 +420,20 @@
     if (window.ipc) window.ipc.postMessage(JSON.stringify({ type: "test-notification" }));
   }
 
+  function doTestStartWindow() {
+    var button = document.getElementById("testStartWindow");
+    button.disabled = true;
+    button.textContent = "Testing...";
+    document.getElementById("startWindowTestResult").textContent = "";
+    if (window.ipc) {
+      window.ipc.postMessage(JSON.stringify({ type: "test-start-window", settings: collectSettings() }));
+    }
+  }
+
   document.getElementById("saveBtn").addEventListener("click", doSave);
   document.getElementById("closeBtn").addEventListener("click", doClose);
   document.getElementById("testNotify").addEventListener("click", doTestNotification);
+  document.getElementById("testStartWindow").addEventListener("click", doTestStartWindow);
 
   document.getElementById("iconLayoutMode").addEventListener("change", function () {
     var settings = collectSettings();
@@ -435,6 +485,13 @@
     setTimeout(function () { hint.textContent = ""; }, 4000);
   };
 
+  window.__startWindowTestResult = function (data) {
+    var button = document.getElementById("testStartWindow");
+    button.disabled = false;
+    button.textContent = "Test Warm Window";
+    document.getElementById("startWindowTestResult").textContent = data.text || "Test completed.";
+  };
+
   function onNativeMessage(message) {
     message = message || {};
     switch (message.type) {
@@ -442,6 +499,7 @@
       case "settings-saved": window.__settingsSaved(); break;
       case "settings-error": window.__settingsError(message); break;
       case "update-result": window.__updateResult(message); break;
+      case "start-window-test-result": window.__startWindowTestResult(message); break;
     }
   }
 

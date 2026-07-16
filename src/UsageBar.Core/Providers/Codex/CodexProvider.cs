@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using UsageBar.Core.Domain;
@@ -11,6 +12,7 @@ namespace UsageBar.Core.Providers;
 public sealed class CodexProvider(HttpClient httpClient, ICodexAuthReader authReader) : ISingleResultUsageProvider
 {
     private const string UsageEndpoint = "https://chatgpt.com/backend-api/wham/usage";
+    private const string ResetCreditsEndpoint = "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits";
     private const string RefreshEndpoint = "https://auth.openai.com/oauth/token";
     private const string OAuthClientId = "app_EMoamEEZ73f0CkXaXp7hrann";
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromDays(8);
@@ -35,6 +37,22 @@ public sealed class CodexProvider(HttpClient httpClient, ICodexAuthReader authRe
             var session = ReadWindow(rateLimit, "primary_window", "Session", Descriptor.Name, context.Now);
             var weekly = ReadWindow(rateLimit, "secondary_window", "Weekly", Descriptor.Name, context.Now);
             var windows = MetricWindows.Require(Descriptor.Name, session, weekly);
+
+            try
+            {
+                using var resetCreditsDocument = await GetResetCreditsDocumentAsync(execution.Auth, cancellationToken).ConfigureAwait(false);
+                availableResetLabel = ReadAvailableResetLabel(resetCreditsDocument.RootElement);
+            }
+            catch (HttpRequestException)
+            {
+                // Reset credits are supplemental. Keep the count from the usage response
+                // when the dedicated endpoint is temporarily unavailable.
+            }
+            catch (JsonException)
+            {
+                // Preserve the usage result if the supplemental response is malformed.
+            }
+
             return new MetricResult(Descriptor.Name, plan, windows, availableResetLabel);
         }
     }
@@ -43,14 +61,7 @@ public sealed class CodexProvider(HttpClient httpClient, ICodexAuthReader authRe
     {
         using (var request = new HttpRequestMessage(HttpMethod.Get, UsageEndpoint))
         {
-            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", auth.AccessToken);
-            request.Headers.TryAddWithoutValidation("User-Agent", "UsageBar");
-            request.Headers.TryAddWithoutValidation("originator", "codex_cli_rs");
-            if (!string.IsNullOrWhiteSpace(auth.AccountId))
-            {
-                request.Headers.TryAddWithoutValidation("ChatGPT-Account-Id", auth.AccountId);
-            }
+            AddRequestHeaders(request, auth);
 
             using (var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false))
             {
@@ -64,6 +75,32 @@ public sealed class CodexProvider(HttpClient httpClient, ICodexAuthReader authRe
                     return await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
                 }
             }
+        }
+    }
+
+    private async Task<JsonDocument> GetResetCreditsDocumentAsync(CodexAuth auth, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, ResetCreditsEndpoint);
+        AddRequestHeaders(request, auth);
+        using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new HttpRequestException($"Codex reset credits request failed with HTTP {(int)response.StatusCode}.", inner: null, response.StatusCode);
+        }
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        return await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    private static void AddRequestHeaders(HttpRequestMessage request, CodexAuth auth)
+    {
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", auth.AccessToken);
+        request.Headers.TryAddWithoutValidation("User-Agent", "UsageBar");
+        request.Headers.TryAddWithoutValidation("originator", "codex_cli_rs");
+        if (!string.IsNullOrWhiteSpace(auth.AccountId))
+        {
+            request.Headers.TryAddWithoutValidation("ChatGPT-Account-Id", auth.AccountId);
         }
     }
 
@@ -171,8 +208,13 @@ public sealed class CodexProvider(HttpClient httpClient, ICodexAuthReader authRe
 
     private static string? ReadAvailableResetLabel(JsonElement root)
     {
-        if (!ProviderJson.TryGetProperty(root, "rate_limit_reset_credits", out var resetCredits)
-            || resetCredits.ValueKind != JsonValueKind.Object)
+        var resetCredits = root;
+        if (ProviderJson.TryGetProperty(root, "rate_limit_reset_credits", out var nestedResetCredits))
+        {
+            resetCredits = nestedResetCredits;
+        }
+
+        if (resetCredits.ValueKind != JsonValueKind.Object)
         {
             return null;
         }
@@ -183,9 +225,42 @@ public sealed class CodexProvider(HttpClient httpClient, ICodexAuthReader authRe
             return null;
         }
 
-        return availableCount == 1
+        var countLabel = availableCount == 1
             ? "1 reset"
             : $"{availableCount:0} resets";
+
+        var nearestExpiry = ReadNearestAvailableExpiry(resetCredits);
+        return nearestExpiry is null
+            ? countLabel
+            : $"{countLabel} exp {nearestExpiry.Value.UtcDateTime.ToString("dd.MM", CultureInfo.InvariantCulture)}";
+    }
+
+    private static DateTimeOffset? ReadNearestAvailableExpiry(JsonElement resetCredits)
+    {
+        if (!ProviderJson.TryGetProperty(resetCredits, "credits", out var credits)
+            || credits.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        DateTimeOffset? nearest = null;
+        foreach (var credit in credits.EnumerateArray())
+        {
+            if (!string.Equals(ProviderJson.GetString(credit, "status"), "available", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var expiresAt = ProviderJson.GetString(credit, "expires_at");
+            if (expiresAt is not null
+                && DateTimeOffset.TryParse(expiresAt, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed)
+                && (nearest is null || parsed < nearest.Value))
+            {
+                nearest = parsed;
+            }
+        }
+
+        return nearest;
     }
 
     private static UsageWindow? ReadWindow(JsonElement rateLimit, string propertyName, string label, string providerName, DateTimeOffset now)
@@ -202,8 +277,10 @@ public sealed class CodexProvider(HttpClient httpClient, ICodexAuthReader authRe
             return null;
         }
 
-        var resetText = UsageFormatting.ResetDuration(FromEpoch(resetAt.Value) - now);
-        return new UsageWindow(providerName, label, Math.Clamp(usedPercent.Value, 0, 100), resetText);
+        var resetTime = FromEpoch(resetAt.Value);
+        var resetAfter = resetTime - now;
+        var resetText = UsageFormatting.ResetDuration(resetAfter);
+        return new UsageWindow(providerName, label, Math.Clamp(usedPercent.Value, 0, 100), resetText, resetAt: resetTime);
     }
 
     private static DateTimeOffset FromEpoch(double epoch)

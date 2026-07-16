@@ -104,13 +104,15 @@ public sealed class AntigravityProvider(HttpClient httpClient, IAntigravityAuthR
                 var usedPercent = (1.0 - remainingFraction.Value) * 100.0;
                 var resetTimeStr = ProviderJson.GetString(bucket, "resetTime");
                 var resetText = (string? )null;
+                var resetAt = (DateTimeOffset?)null;
                 if (!string.IsNullOrWhiteSpace(resetTimeStr) && DateTimeOffset.TryParse(resetTimeStr, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var resetTime))
                 {
+                    resetAt = resetTime;
                     resetText = UsageFormatting.ResetDuration(resetTime - context.Now);
                 }
 
                 var label = !string.IsNullOrWhiteSpace(window) ? window : groupName;
-                windows.Add((groupIndex, new UsageWindow(Descriptor.Name, label, Math.Clamp(usedPercent, 0, 100), resetText, subLabel: !string.IsNullOrWhiteSpace(window) && !string.IsNullOrWhiteSpace(groupName) ? groupName : null)));
+                windows.Add((groupIndex, new UsageWindow(Descriptor.Name, label, Math.Clamp(usedPercent, 0, 100), resetText, subLabel: !string.IsNullOrWhiteSpace(window) && !string.IsNullOrWhiteSpace(groupName) ? groupName : null, resetAt: resetAt)));
             }
 
             groupIndex++;

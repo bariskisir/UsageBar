@@ -39,9 +39,9 @@ internal sealed class SettingsPanel : IDisposable
             new NSString("window.ipc={_listener:null,postMessage:(m)=>window.webkit.messageHandlers.ipc.postMessage(typeof m==='string'?m:JSON.stringify(m)),addMessageListener:function(cb){this._listener=cb},_dispatch:function(m){if(this._listener)this._listener(m)}};"),
             WKUserScriptInjectionTime.AtDocumentStart,
             true));
-        _webView = new WKWebView(new CGRect(0, 0, 460, 540), configuration);
+        _webView = new WKWebView(new CGRect(0, 0, 506, 540), configuration);
         _window = new NSWindow(
-            new CGRect(0, 0, 460, 540),
+            new CGRect(0, 0, 506, 540),
             NSWindowStyle.Titled | NSWindowStyle.Closable | NSWindowStyle.Resizable,
             NSBackingStore.Buffered,
             false)
@@ -92,6 +92,10 @@ internal sealed class SettingsPanel : IDisposable
                     break;
                 case "test-notification":
                     await _controller.SendTestNotificationAsync().ConfigureAwait(true);
+                    break;
+                case "test-start-window" when message.Settings is not null:
+                    var testResult = await _controller.TestStartWindowAsync(message.Settings).ConfigureAwait(true);
+                    Post(new SettingsStatusMessage("start-window-test-result", testResult), SettingsIpcJsonContext.Default.SettingsStatusMessage);
                     break;
                 case "check-update":
                     var result = await _controller.CheckForUpdatesAsync().ConfigureAwait(true);

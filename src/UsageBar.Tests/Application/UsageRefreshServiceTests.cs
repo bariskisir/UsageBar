@@ -176,8 +176,13 @@ public sealed class UsageRefreshServiceTests
         var resolvedClock = clock ?? new StubClock(TestData.FixedNow);
         var resolvedDispatcher = dispatcher ?? new GateDispatcher();
         var options = UsageRefreshOptions.Default;
-        var cycleRunner = new RefreshCycleRunner(resolvedProviders, resolvedSettings, resolvedView, resolvedClock, new StubProviderQueryContextFactory(), options, new UsageAggregator(options, NullLogger<UsageAggregator>.Instance), resolvedDispatcher, NullLogger<RefreshCycleRunner>.Instance);
+        var cycleRunner = new RefreshCycleRunner(resolvedProviders, resolvedSettings, resolvedView, resolvedClock, new StubProviderQueryContextFactory(), options, new UsageAggregator(options, NullLogger<UsageAggregator>.Instance), resolvedDispatcher, new StubWindowStartService(), NullLogger<RefreshCycleRunner>.Instance);
         return new UsageRefreshService(cycleRunner, resolvedClock, NullLogger<UsageRefreshService>.Instance);
+    }
+
+    private sealed class StubWindowStartService : IUsageWindowStartService
+    {
+        public Task ObserveAsync(IReadOnlyList<UsageWindow> windows, AppSettings settings, CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
     private sealed class StubClock : IClock

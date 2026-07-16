@@ -9,7 +9,8 @@ public sealed record ProviderSettings(
     [property: JsonPropertyName("apiKey")] string? ApiKey,
     [property: JsonPropertyName("enabled")] bool Enabled,
     [property: JsonPropertyName("refreshToken")] bool RefreshToken = true,
-    [property: JsonPropertyName("id")] string? Id = null)
+    [property: JsonPropertyName("id")] string? Id = null,
+    [property: JsonPropertyName("startWindowAfterReset")] bool? StartWindowAfterReset = null)
 {
     public const string TypeOAuth = "oauth";
     public const string TypeApiKey = "apiKey";

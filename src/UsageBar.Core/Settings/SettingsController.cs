@@ -13,6 +13,7 @@ internal sealed class SettingsController(
     IUsageRefreshService refreshService,
     IStartupRegistrationService startupRegistration,
     IUpdateService updateService,
+    IWindowStartRequestSender windowStartSender,
     IEnumerable<IUsageProvider> providers,
     ILogger<SettingsController> logger)
 {
@@ -72,6 +73,44 @@ internal sealed class SettingsController(
     public Task<UpdateCheckResult> CheckForUpdatesAsync(CancellationToken cancellationToken = default) =>
         updateService.CheckAsync(cancellationToken);
 
+    public async Task<string> TestStartWindowAsync(
+        AppSettings settings,
+        CancellationToken cancellationToken = default)
+    {
+        var normalized = settings.Normalize();
+        var selector = normalized.Models!.SmallModelSelector;
+        var supportedProviders = (normalized.Providers ?? [])
+            .Where(provider => provider.Enabled && IsWindowStartProvider(provider))
+            .GroupBy(provider => provider.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.Last().Name)
+            .ToArray();
+        if (supportedProviders.Length == 0)
+        {
+            return "No enabled Codex, Claude, or Antigravity provider.";
+        }
+
+        var results = new List<string>(supportedProviders.Length);
+        foreach (var providerName in supportedProviders)
+        {
+            try
+            {
+                await windowStartSender.StartAsync(providerName, selector, cancellationToken).ConfigureAwait(false);
+                results.Add($"{providerName}: OK");
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                logger.LogWarning(exception, "{Provider} test start-window request failed.", providerName);
+                results.Add($"{providerName}: failed");
+            }
+        }
+
+        return string.Join(" · ", results);
+    }
+
     private static AppSettings PreserveEnvironmentKeys(
         AppSettings settings,
         IReadOnlyList<string>? environmentSourcedKeys)
@@ -97,6 +136,14 @@ internal sealed class SettingsController(
                     : provider)
                 .ToList(),
         };
+    }
+
+    private static bool IsWindowStartProvider(ProviderSettings provider)
+    {
+        var key = provider.Id ?? provider.Name;
+        return key.Equals("codex", StringComparison.OrdinalIgnoreCase)
+            || key.Equals("claude", StringComparison.OrdinalIgnoreCase)
+            || key.Equals("antigravity", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string ReadVersion()

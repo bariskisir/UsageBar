@@ -72,6 +72,21 @@
         </div>
 
         <div class="settings__section">
+          <div class="settings__section-title">Models</div>
+          <div class="settings__row settings__row--stacked">
+            <span class="settings__label">Small Model Selector</span>
+            <input type="text" id="smallModelSelector" placeholder="nano,mini,haiku,flash,lite" title="Comma-separated model name fragments, checked from left to right" />
+          </div>
+          <div class="settings__row">
+            <span class="settings__label">Warm Window</span>
+            <div class="settings__value">
+              <button class="btn btn--secondary btn--sm" id="testStartWindow">Test Warm Window</button>
+              <span class="settings__inline-result" id="startWindowTestResult"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings__section">
           <div class="settings__section-title">Telegram</div>
           <div class="settings__row">
             <span class="settings__label">Enabled</span>

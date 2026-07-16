@@ -20,7 +20,7 @@ internal sealed class SettingsPanel : IDisposable
         _controller = controller;
         _logger = logger;
         _window = new Window("Usage Bar Settings");
-        _window.SetDefaultSize(460, 540);
+        _window.SetDefaultSize(506, 540);
         _window.DeleteEvent += (_, args) =>
         {
             args.RetVal = true;
@@ -84,6 +84,10 @@ internal sealed class SettingsPanel : IDisposable
                     break;
                 case "test-notification":
                     await _controller.SendTestNotificationAsync().ConfigureAwait(true);
+                    break;
+                case "test-start-window" when message.Settings is not null:
+                    var testResult = await _controller.TestStartWindowAsync(message.Settings).ConfigureAwait(true);
+                    Post(new SettingsStatusMessage("start-window-test-result", testResult), SettingsIpcJsonContext.Default.SettingsStatusMessage);
                     break;
                 case "check-update":
                     var result = await _controller.CheckForUpdatesAsync().ConfigureAwait(true);

@@ -16,6 +16,7 @@ public sealed class AppSettingsTests
         Assert.Equal(90, defaults.Notification!.Critical);
         Assert.Equal(100, defaults.Visual!.Scale);
         Assert.Equal(TrayIconLayoutSettings.AutoMode, defaults.Visual!.IconLayout!.Mode);
+        Assert.Equal(ModelSettings.DefaultSmallModelSelector, defaults.Models!.SmallModelSelector);
         Assert.Null(defaults.Providers);
         Assert.False(defaults.Initialized);
         Assert.Equal(AppSettings.CurrentSchemaVersion, defaults.SchemaVersion);
@@ -135,5 +136,35 @@ public sealed class AppSettingsTests
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
         Assert.Contains("\"providers\"", json);
         Assert.Contains("\"Codex\"", json);
+    }
+
+    [Fact]
+    public void Normalize_repairs_blank_small_model_selector()
+    {
+        var settings = AppSettings.Default with
+        {
+            Models = new ModelSettings("  "),
+        };
+
+        Assert.Equal(ModelSettings.DefaultSmallModelSelector, settings.Normalize().Models!.SmallModelSelector);
+    }
+
+    [Fact]
+    public void Normalize_defaults_window_start_on_only_for_codex()
+    {
+        var settings = AppSettings.Default with
+        {
+            Providers =
+            [
+                new ProviderSettings("Codex", ProviderSettings.TypeOAuth, null, null, Enabled: true, Id: "codex"),
+                new ProviderSettings("Claude", ProviderSettings.TypeOAuth, null, null, Enabled: true, Id: "claude"),
+                new ProviderSettings("Antigravity", ProviderSettings.TypeOAuth, null, null, Enabled: true, Id: "antigravity"),
+            ],
+        };
+
+        var providers = settings.Normalize().Providers!;
+        Assert.True(providers.Single(provider => provider.Name == "Codex").StartWindowAfterReset);
+        Assert.False(providers.Single(provider => provider.Name == "Claude").StartWindowAfterReset);
+        Assert.False(providers.Single(provider => provider.Name == "Antigravity").StartWindowAfterReset);
     }
 }

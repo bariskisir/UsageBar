@@ -41,6 +41,11 @@ UsageBar is a minimal Windows notification-area app for showing LLM or API usage
 - Poe API
 - Alibaba API
 
+## Features
+
+- **Refresh token** — automatically refreshes supported OAuth credentials when they expire.
+- **Warm Window** — optionally sends a minimal request to Codex, Claude, and Antigravity after a session reset. Models are discovered dynamically and selected with the shared Small Model Selector preference.
+
 ## Install
 
 1. Download the latest release for your platform from [Releases](https://github.com/bariskisir/usagebar/releases/latest).

@@ -5,7 +5,7 @@ using UsageBar.Core.Domain;
 using UsageBar.Core.Providers;
 
 namespace UsageBar.Core.Application;
-internal sealed class RefreshCycleRunner(IEnumerable<IUsageProvider> providers, ISettingsStore settingsStore, IUsageView view, IClock clock, IProviderQueryContextFactory contextFactory, UsageRefreshOptions options, IUsageAggregator aggregator, IThresholdNotificationDispatcher notifications, ILogger<RefreshCycleRunner> logger) : IRefreshCycleRunner
+internal sealed class RefreshCycleRunner(IEnumerable<IUsageProvider> providers, ISettingsStore settingsStore, IUsageView view, IClock clock, IProviderQueryContextFactory contextFactory, UsageRefreshOptions options, IUsageAggregator aggregator, IThresholdNotificationDispatcher notifications, IUsageWindowStartService windowStarter, ILogger<RefreshCycleRunner> logger) : IRefreshCycleRunner
 {
     private readonly IReadOnlyList<IUsageProvider> _providers = providers.ToArray();
     public async Task<RefreshOutcome> RunAsync(string trigger, CancellationToken cancellationToken)
@@ -26,6 +26,7 @@ internal sealed class RefreshCycleRunner(IEnumerable<IUsageProvider> providers, 
                 var iconKeys = _providers.Where(provider => !string.IsNullOrWhiteSpace(provider.Descriptor.IconKey)).ToDictionary(provider => provider.Descriptor.Name, provider => provider.Descriptor.IconKey, StringComparer.OrdinalIgnoreCase);
                 view.ShowCards(TooltipCardBuilder.Build(snapshot, iconKeys), settings.Visual?.Scale ?? 100);
                 await notifications.EmitAsync(snapshot.Windows, settings, cancellationToken).ConfigureAwait(false);
+                await windowStarter.ObserveAsync(snapshot.Windows, settings, cancellationToken).ConfigureAwait(false);
                 logger.LogInformation("Refresh completed: results={ResultCount}; windows={WindowCount}; durationMs={DurationMs:F1}.", snapshot.Results.Count, snapshot.Windows.Count, Stopwatch.GetElapsedTime(started).TotalMilliseconds);
             }
             catch (OperationCanceledException)when (cancellationToken.IsCancellationRequested)

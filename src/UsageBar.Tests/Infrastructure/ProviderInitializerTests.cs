@@ -37,6 +37,7 @@ public sealed class ProviderInitializerTests
                 Assert.Equal(ProviderSettings.TypeOAuth, oauth.Type);
                 Assert.Null(oauth.Credential);
                 Assert.True(oauth.Enabled);
+                Assert.False(oauth.StartWindowAfterReset);
             },
             apiKey =>
             {

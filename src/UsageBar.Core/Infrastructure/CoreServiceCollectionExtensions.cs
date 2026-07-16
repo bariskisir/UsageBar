@@ -40,6 +40,8 @@ internal static class CoreServiceCollectionExtensions
 
         services.AddSingleton<ProviderInitializer>();
         services.AddSingleton<IUsageAggregator, UsageAggregator>();
+        services.AddSingleton<IWindowStartRequestSender, WindowStartRequestSender>();
+        services.AddSingleton<IUsageWindowStartService, UsageWindowStartService>();
         services.AddSingleton<IThresholdNotificationDispatcher>(sp => new ThresholdNotificationDispatcher(
             sp.GetRequiredService<IUsageView>(),
             sp.GetServices<IRemoteNotificationService>()));

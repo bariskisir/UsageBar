@@ -14,7 +14,7 @@ namespace UsageBar.Windows.Settings;
 
 internal sealed class SettingsPanel : IDisposable
 {
-    private const int DefaultWidth = 460;
+    private const int DefaultWidth = 506;
     private const int DefaultHeight = 540;
     private const int CornerRadius = 10;
 
@@ -189,6 +189,10 @@ internal sealed class SettingsPanel : IDisposable
             case "close": Hide(); break;
             case "drag": HandleDrag(message); break;
             case "test-notification": await _controllerService.SendTestNotificationAsync().ConfigureAwait(true); break;
+            case "test-start-window" when message.Settings is not null:
+                var testResult = await _controllerService.TestStartWindowAsync(message.Settings).ConfigureAwait(true);
+                PostStatus(new SettingsStatusMessage("start-window-test-result", testResult));
+                break;
             case "check-update": _ = HandleCheckUpdate(); break;
         }
     }

@@ -52,6 +52,39 @@ public sealed class CodexProviderTests
             });
     }
 
+    [Fact]
+    public async Task Shows_nearest_available_reset_credit_expiry()
+    {
+        var reset = TestData.FixedNow.AddMinutes(30).ToUnixTimeSeconds();
+        var usageJson = $$"""
+        {
+          "rate_limit": {
+            "primary_window": { "used_percent": 20.0, "reset_at": {{reset}} }
+          }
+        }
+        """;
+        var creditsJson = """
+        {
+          "available_count": 2,
+          "credits": [
+            { "status": "available", "expires_at": "2026-12-31T17:38:16Z" },
+            { "status": "redeemed", "expires_at": "2026-07-20T17:38:16Z" },
+            { "status": "available", "expires_at": "2026-08-12T17:38:16Z" }
+          ]
+        }
+        """;
+        var handler = FakeHttpMessageHandler.Sequence(
+            (usageJson, HttpStatusCode.OK),
+            (creditsJson, HttpStatusCode.OK));
+        var provider = new CodexProvider(new HttpClient(handler), new StubCodexAuthReader(new CodexAuth("token", "account")));
+
+        var result = await provider.GetUsageAsync(TestData.Context(), CancellationToken.None);
+
+        var metric = Assert.IsType<MetricResult>(result);
+        Assert.Equal("2 resets exp 12.08", metric.Notice);
+        Assert.Equal("https://chatgpt.com/backend-api/wham/rate-limit-reset-credits", handler.Requests[1].RequestUri!.AbsoluteUri);
+    }
+
     [Theory]
     [InlineData("0")]
     [InlineData("null")]
@@ -200,7 +233,8 @@ public sealed class CodexProviderTests
         """;
         var handler = FakeHttpMessageHandler.Sequence(
             ("""{ "access_token": "new-token", "refresh_token": "new-refresh", "id_token": "new-id" }""", HttpStatusCode.OK),
-            (usageJson, HttpStatusCode.OK));
+            (usageJson, HttpStatusCode.OK),
+            ("""{ "available_count": 0, "credits": [] }""", HttpStatusCode.OK));
         var authReader = new StubCodexAuthReader(new CodexAuth(
             "old-token",
             "account",
@@ -211,7 +245,7 @@ public sealed class CodexProviderTests
         var result = await provider.GetUsageAsync(TestData.Context(), CancellationToken.None);
 
         Assert.IsType<MetricResult>(result);
-        Assert.Equal(2, handler.Requests.Count);
+        Assert.Equal(3, handler.Requests.Count);
         Assert.Equal("new-token", authReader.Saved?.AccessToken);
         Assert.Equal("new-refresh", authReader.Saved?.RefreshToken);
         Assert.Equal("new-id", authReader.Saved?.IdToken);
@@ -232,7 +266,8 @@ public sealed class CodexProviderTests
         var handler = FakeHttpMessageHandler.Sequence(
             ("{}", HttpStatusCode.Unauthorized),
             ("""{ "access_token": "new-token", "refresh_token": "new-refresh" }""", HttpStatusCode.OK),
-            (usageJson, HttpStatusCode.OK));
+            (usageJson, HttpStatusCode.OK),
+            ("""{ "available_count": 0, "credits": [] }""", HttpStatusCode.OK));
         var authReader = new StubCodexAuthReader(new CodexAuth(
             "old-token",
             "account",
@@ -243,7 +278,7 @@ public sealed class CodexProviderTests
         var result = await provider.GetUsageAsync(TestData.Context(), CancellationToken.None);
 
         Assert.IsType<MetricResult>(result);
-        Assert.Equal(3, handler.Requests.Count);
+        Assert.Equal(4, handler.Requests.Count);
         Assert.Equal("new-token", authReader.Saved?.AccessToken);
     }
 

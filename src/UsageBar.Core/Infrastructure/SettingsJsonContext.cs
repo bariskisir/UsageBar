@@ -10,6 +10,7 @@ namespace UsageBar.Core.Infrastructure;
 [JsonSerializable(typeof(NotificationSettings))]
 [JsonSerializable(typeof(VisualSettings))]
 [JsonSerializable(typeof(UpdateSettings))]
+[JsonSerializable(typeof(ModelSettings))]
 [JsonSerializable(typeof(ProviderSettings))]
 [JsonSerializable(typeof(TelegramSettings))]
 [JsonSerializable(typeof(DiscordSettings))]

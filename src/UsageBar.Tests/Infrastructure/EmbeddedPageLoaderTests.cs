@@ -41,5 +41,7 @@ public sealed class EmbeddedPageLoaderTests
         Assert.DoesNotContain("{{SETTINGS_JS}}", document, StringComparison.Ordinal);
         Assert.Contains(".settings", document, StringComparison.Ordinal);
         Assert.Contains("window.__loadSettings", document, StringComparison.Ordinal);
+        Assert.Contains("Small Model Selector", document, StringComparison.Ordinal);
+        Assert.Contains("Test Warm Window", document, StringComparison.Ordinal);
     }
 }

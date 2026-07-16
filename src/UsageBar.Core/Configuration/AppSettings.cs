@@ -11,7 +11,8 @@ public sealed record AppSettings(
     [property: JsonPropertyName("providers")] List<ProviderSettings>? Providers,
     [property: JsonPropertyName("initialized")] bool? Initialized,
     [property: JsonPropertyName("startWithSystem")] bool? StartWithSystem,
-    [property: JsonPropertyName("schemaVersion")] int? SchemaVersion = 3)
+    [property: JsonPropertyName("schemaVersion")] int? SchemaVersion = 3,
+    [property: JsonPropertyName("models")] ModelSettings? Models = null)
 {
     public const int CurrentSchemaVersion = 3;
 
@@ -24,7 +25,8 @@ public sealed record AppSettings(
             Providers: null,
             Initialized: false,
             StartWithSystem: true,
-            SchemaVersion: CurrentSchemaVersion);
+            SchemaVersion: CurrentSchemaVersion,
+            Models: ModelSettings.Default);
 
     public AppSettings Normalize()
     {
@@ -32,6 +34,7 @@ public sealed record AppSettings(
         var notification = Notification ?? NotificationSettings.Default;
         var visual = Visual ?? VisualSettings.Default;
         var update = Update ?? UpdateSettings.Default;
+        var models = (Models ?? ModelSettings.Default).Normalize();
 
         refresh = refresh with
         {
@@ -75,12 +78,20 @@ public sealed record AppSettings(
             OnStartup = update.OnStartup ?? true,
         };
 
+        var providers = Providers?.Select(provider => provider with
+        {
+            StartWindowAfterReset = provider.StartWindowAfterReset
+                ?? string.Equals(provider.Id ?? provider.Name, "codex", StringComparison.OrdinalIgnoreCase),
+        }).ToList();
+
         return this with
         {
             Refresh = refresh,
             Notification = notification,
             Visual = visual,
             Update = update,
+            Models = models,
+            Providers = providers,
             Initialized = Initialized ?? (Providers is { Count: > 0 } ? true : false),
             StartWithSystem = StartWithSystem ?? true,
             SchemaVersion = CurrentSchemaVersion,

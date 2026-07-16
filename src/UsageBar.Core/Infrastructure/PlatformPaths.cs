@@ -7,7 +7,10 @@ public static class PlatformPaths
 
     public static string SettingsFilePath { get; } = Path.Combine(AppDataDirectory, "settings.json");
 
-    public static string LogFilePath { get; } = Path.Combine(AppDataDirectory, "app.log");
+    public static string LogDirectoryPath { get; } = Path.Combine(AppDataDirectory, "logs");
+
+    // With Serilog's daily rolling enabled, an empty base name produces YYYYMMDD.log.
+    public static string LogFilePath { get; } = Path.Combine(LogDirectoryPath, ".log");
 
     public static string AntigravityCredentialsFilePath { get; } = Path.Combine(
         AppDataDirectory,

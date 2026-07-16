@@ -170,8 +170,9 @@ public sealed class ClaudeProvider(HttpClient httpClient, IClaudeAuthReader auth
         }
 
         var resetTime = ParseResetTime(ProviderJson.GetString(window, "resets_at"));
-        var resetText = resetTime is { } reset ? UsageFormatting.ResetDuration(reset - now) : null;
-        return new UsageWindow(providerName, label, Math.Clamp(utilization.Value, 0, 100), resetText);
+        var resetAfter = resetTime is { } reset ? reset - now : (TimeSpan?)null;
+        var resetText = resetAfter is { } duration ? UsageFormatting.ResetDuration(duration) : null;
+        return new UsageWindow(providerName, label, Math.Clamp(utilization.Value, 0, 100), resetText, resetAt: resetTime);
     }
 
     private static DateTimeOffset? ParseResetTime(string? iso8601)

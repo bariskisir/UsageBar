@@ -61,7 +61,8 @@ internal sealed class ProviderInitializer(
                 Credential: descriptor.CredentialName,
                 ApiKey: null,
                 Enabled: HasCredential(provider),
-                Id: descriptor.Id));
+                Id: descriptor.Id,
+                StartWindowAfterReset: string.Equals(descriptor.Id, "codex", StringComparison.OrdinalIgnoreCase)));
             changed = true;
         }
 
