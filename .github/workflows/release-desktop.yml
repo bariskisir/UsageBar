@@ -37,12 +37,6 @@ jobs:
           - name: Windows
             os: windows-latest
             project: src/UsageBar.Windows/UsageBar.Windows.csproj
-          - name: Linux
-            os: ubuntu-latest
-            project: src/UsageBar.Linux/UsageBar.Linux.csproj
-          - name: macOS
-            os: macos-latest
-            project: src/UsageBar.MacOS/UsageBar.MacOS.csproj
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
