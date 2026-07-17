@@ -25,6 +25,7 @@ internal static class NativeMethods
 
     // ── ShowWindow ──────────────────────────────────────────
     public const int SW_HIDE = 0;
+    public const int SW_SHOW = 5;
     public const int SW_SHOWNOACTIVATE = 4;
 
     // ── SystemParametersInfo ────────────────────────────────

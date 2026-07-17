@@ -58,8 +58,6 @@ internal sealed class UsageWindowStartService(
                     continue;
                 }
 
-                var resetObserved = false;
-                var movingResetObserved = false;
                 foreach (var current in currentWindows)
                 {
                     if (!state.Windows.TryGetValue(current.Key, out var observation))
@@ -69,7 +67,6 @@ internal sealed class UsageWindowStartService(
                     }
 
                     var usageReset = current.Value.UsedPercent < observation.UsedPercent;
-                    resetObserved |= usageReset;
                     if (usageReset && current.Value.UsedPercent < 5)
                     {
                         // The regular reset path already warms this low-usage window.
@@ -87,31 +84,43 @@ internal sealed class UsageWindowStartService(
                         if (!observation.LowUsageWarmTriggered)
                         {
                             observation.LowUsageWarmTriggered = true;
-                            movingResetObserved = true;
+                            observation.IsMovingReset = true;
                         }
+                    }
+
+                    if (usageReset || observation.IsMovingReset)
+                    {
+                        observation.PendingStart = true;
                     }
                 }
 
-                state.PendingStart |= resetObserved || movingResetObserved;
-                if (state.PendingStart)
+                foreach (var current in currentWindows)
                 {
-                    try
+                    var observation = state.Windows[current.Key];
+                    if (observation.PendingStart)
                     {
-                        await sender.StartAsync(providerName, smallModelSelector, cancellationToken).ConfigureAwait(false);
-                        state.PendingStart = false;
-                        logger.LogInformation(
-                            movingResetObserved && !resetObserved
-                                ? "{Provider} session window was warmed after its low-usage reset timestamp moved later."
-                                : "{Provider} session window was warmed after reset with a minimal request.",
-                            providerName);
-                    }
-                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                    {
-                        throw;
-                    }
-                    catch (Exception exception)
-                    {
-                        logger.LogWarning(exception, "{Provider} session-window start request failed; it will be retried on the next refresh.", providerName);
+                        var bucketLabel = current.Value.SubLabel ?? current.Value.Label;
+                        var isMovingReset = observation.IsMovingReset;
+                        try
+                        {
+                            await sender.StartAsync(providerName, smallModelSelector, cancellationToken).ConfigureAwait(false);
+                            observation.PendingStart = false;
+                            observation.IsMovingReset = false;
+                            logger.LogInformation(
+                                isMovingReset
+                                    ? "{Provider} session window ({Bucket}) was warmed after its low-usage reset timestamp moved later."
+                                    : "{Provider} session window ({Bucket}) was warmed after reset with a minimal request.",
+                                providerName,
+                                bucketLabel);
+                        }
+                        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                        {
+                            throw;
+                        }
+                        catch (Exception exception)
+                        {
+                            logger.LogWarning(exception, "{Provider} session-window ({Bucket}) start request failed; it will be retried on the next refresh.", providerName, bucketLabel);
+                        }
                     }
                 }
 
@@ -137,8 +146,6 @@ internal sealed class UsageWindowStartService(
             pair => pair.Key,
             pair => new WindowObservation(pair.Value),
             StringComparer.OrdinalIgnoreCase);
-
-        public bool PendingStart { get; set; }
     }
 
     private sealed class WindowObservation(UsageWindow window)
@@ -148,5 +155,9 @@ internal sealed class UsageWindowStartService(
         public DateTimeOffset? ResetAt { get; set; } = window.ResetAt;
 
         public bool LowUsageWarmTriggered { get; set; }
+
+        public bool PendingStart { get; set; }
+
+        public bool IsMovingReset { get; set; }
     }
 }

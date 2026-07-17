@@ -101,8 +101,9 @@ internal sealed class SettingsPanel : IDisposable
         _ = PushSettingsPayloadAsync();
         CenterWindow();
         NativeMethods.SetWindowPos(_hwnd, 0, 0, 0, 0, 0,
-            NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE);
-        NativeMethods.ShowWindow(_hwnd, NativeMethods.SW_SHOWNOACTIVATE);
+            NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOZORDER);
+        NativeMethods.ShowWindow(_hwnd, NativeMethods.SW_SHOW);
+        NativeMethods.SetForegroundWindow(_hwnd);
     }
 
     public void Hide()
@@ -139,7 +140,6 @@ internal sealed class SettingsPanel : IDisposable
         switch (msg)
         {
             case NativeMethods.WmRunDelegate: TrayUiSyncContext.DrainCurrent(); return 0;
-            case 0x0006: return 0;
             case NativeMethods.WmDestroy: return 0;
         }
         return NativeMethods.DefWindowProc(hWnd, msg, wParam, lParam);
@@ -324,7 +324,7 @@ internal sealed class SettingsPanel : IDisposable
         var x = rect.Left + (rect.Right - rect.Left - width) / 2;
         var y = rect.Top + (rect.Bottom - rect.Top - height) / 2;
 
-        NativeMethods.SetWindowPos(_hwnd, 0, x, y, width, height, NativeMethods.SWP_NOZORDER | NativeMethods.SWP_NOACTIVATE);
+        NativeMethods.SetWindowPos(_hwnd, 0, x, y, width, height, NativeMethods.SWP_NOZORDER);
         if (_controller is not null)
         {
             _controller.Bounds = new System.Drawing.Rectangle(0, 0, width, height);
@@ -344,7 +344,7 @@ internal sealed class SettingsPanel : IDisposable
         }
 
         return NativeMethods.CreateWindowEx(
-            NativeMethods.WS_EX_TOOLWINDOW | NativeMethods.WS_EX_NOACTIVATE,
+            NativeMethods.WS_EX_TOOLWINDOW,
             className, "UsageBarSettings", NativeMethods.WS_POPUP,
             0, 0, DefaultWidth, DefaultHeight, 0, 0, instance, 0);
     }

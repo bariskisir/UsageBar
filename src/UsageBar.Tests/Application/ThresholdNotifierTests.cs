@@ -133,4 +133,38 @@ public sealed class ThresholdNotifierTests
         Assert.Equal(NotificationLevel.High, notification.Level);
         Assert.Contains("Codex Session", notification.Message, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void Different_sublabels_tracked_independently()
+    {
+        var notifier = new ThresholdNotifier();
+        IReadOnlyList<UsageWindow> baseline =
+        [
+            TestData.Window("Antigravity", "Session", 60, null, "Gemini"),
+            TestData.Window("Antigravity", "Session", 60, null, "Claude and GPT"),
+        ];
+        notifier.Evaluate(baseline, Settings);
+
+        // Only Gemini crosses high — Claude and GPT stays low.
+        IReadOnlyList<UsageWindow> mixed =
+        [
+            TestData.Window("Antigravity", "Session", 80, null, "Gemini"),
+            TestData.Window("Antigravity", "Session", 61, null, "Claude and GPT"),
+        ];
+        var crossed = notifier.Evaluate(mixed, Settings);
+        var notification = Assert.Single(crossed);
+        Assert.Equal(NotificationLevel.High, notification.Level);
+        Assert.Contains("Gemini", notification.Message, StringComparison.Ordinal);
+
+        // Gemini resets, Claude and GPT crosses high — both fire independently.
+        IReadOnlyList<UsageWindow> swapped =
+        [
+            TestData.Window("Antigravity", "Session", 30, null, "Gemini"),
+            TestData.Window("Antigravity", "Session", 80, null, "Claude and GPT"),
+        ];
+        var result = notifier.Evaluate(swapped, Settings);
+        Assert.Equal(2, result.Count);
+        Assert.Contains(result, n => n.Level == NotificationLevel.Reset && n.Message.Contains("Gemini", StringComparison.Ordinal));
+        Assert.Contains(result, n => n.Level == NotificationLevel.High && n.Message.Contains("Claude and GPT", StringComparison.Ordinal));
+    }
 }

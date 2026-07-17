@@ -160,15 +160,19 @@
         var keyInput = document.createElement("input");
         keyInput.type = "text";
         keyInput.className = "provider-api-key";
-        keyInput.placeholder = fromEnv ? "Provided by environment" : "API key";
-        keyInput.value = settingsVal;
+        keyInput.placeholder = "API key";
+        keyInput.value = fromEnv ? envVal : settingsVal;
         keyInput.dataset.credential = pr.credential;
         if (fromEnv) {
           keyInput.dataset.fromEnv = "1";
           _originalEnvSourced[pr.credential] = true;
         }
         keyInput.addEventListener("input", function () {
-          if (keyInput.value) delete keyInput.dataset.fromEnv;
+          if (envVal && keyInput.value === envVal) {
+            keyInput.dataset.fromEnv = "1";
+          } else {
+            delete keyInput.dataset.fromEnv;
+          }
           markDirty();
         });
         row.appendChild(keyInput);
@@ -272,7 +276,7 @@
     document.getElementById("startWithSystem").checked = settings.startWithSystem !== false;
 
     var models = settings.models || {};
-    document.getElementById("smallModelSelector").value = models.smallModelSelector || "nano,mini,haiku,flash,lite";
+    document.getElementById("smallModelSelector").value = models.smallModelSelector || "nano,mini,haiku,lite,flash,oss";
 
     var tg = notif.telegram || {};
     document.getElementById("tgEnabled").checked = tg.enabled === true;
@@ -330,7 +334,7 @@
     };
 
     settings.models = {
-      smallModelSelector: document.getElementById("smallModelSelector").value.trim() || "nano,mini,haiku,flash,lite"
+      smallModelSelector: document.getElementById("smallModelSelector").value.trim() || "nano,mini,haiku,lite,flash,oss"
     };
 
     settings.visual = {

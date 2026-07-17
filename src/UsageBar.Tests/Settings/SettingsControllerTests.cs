@@ -11,7 +11,7 @@ namespace UsageBar.Tests;
 public sealed class SettingsControllerTests
 {
     [Fact]
-    public async Task State_exposes_environment_presence_without_the_secret()
+    public async Task State_exposes_environment_value_for_display()
     {
         const string credential = "USAGEBAR_SETTINGS_CONTROLLER_TEST_KEY";
         var previous = Environment.GetEnvironmentVariable(credential);
@@ -26,8 +26,7 @@ public sealed class SettingsControllerTests
 
             var state = await controller.GetStateAsync();
 
-            Assert.True(state.EnvironmentApiKeys[credential]);
-            Assert.DoesNotContain("super-secret", System.Text.Json.JsonSerializer.Serialize(state));
+            Assert.Equal("super-secret", state.EnvironmentApiKeys[credential]);
         }
         finally
         {

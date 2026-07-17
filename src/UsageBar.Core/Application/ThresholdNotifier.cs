@@ -33,17 +33,21 @@ internal sealed class ThresholdNotifier
             // has a genuine previous value for threshold comparison. Without this, a fresh
             // launch with e.g. 80% usage would fire a spurious high notification because
             // the synthetic 0% baseline makes it look like a sudden jump.
-            var previous = FindWindow(_previousWindows, current.ProviderName, current.Label);
+            var previous = FindWindow(_previousWindows, current.ProviderName, current.Label, current.SubLabel);
             if (previous is null)
             {
                 continue;
             }
 
-            var key = $"{current.ProviderName}|{current.Label}";
+            var key = $"{current.ProviderName}|{current.Label}|{current.SubLabel}";
             var fired = _firedLevel.GetValueOrDefault(key, NoneFired);
 
             var currentFraction = current.UsedPercent / 100.0;
             var previousFraction = previous.UsedPercent / 100.0;
+
+            var windowLabel = string.IsNullOrEmpty(current.SubLabel)
+                ? current.Label
+                : $"{current.Label} ({current.SubLabel})";
 
             if (currentFraction < previousFraction)
             {
@@ -54,7 +58,7 @@ internal sealed class ThresholdNotifier
                 {
                     notifications.Add(new ThresholdNotification(
                         NotificationLevel.Reset,
-                        $"{current.ProviderName} {current.Label} reset to {DisplayPercent(currentFraction)}%"));
+                        $"{current.ProviderName} {windowLabel} reset to {DisplayPercent(currentFraction)}%"));
                 }
 
                 continue;
@@ -64,21 +68,21 @@ internal sealed class ThresholdNotifier
             {
                 notifications.Add(new ThresholdNotification(
                     NotificationLevel.Critical,
-                    $"{current.ProviderName} {current.Label} at 100% — limit reached!"));
+                    $"{current.ProviderName} {windowLabel} at 100% — limit reached!"));
                 _firedLevel[key] = LimitFired;
             }
             else if (fired < CriticalFired && previousFraction < critical && currentFraction >= critical)
             {
                 notifications.Add(new ThresholdNotification(
                     NotificationLevel.Critical,
-                    $"{current.ProviderName} {current.Label} at {DisplayPercent(currentFraction)}% — critically high!"));
+                    $"{current.ProviderName} {windowLabel} at {DisplayPercent(currentFraction)}% — critically high!"));
                 _firedLevel[key] = CriticalFired;
             }
             else if (fired < HighFired && previousFraction < high && currentFraction >= high)
             {
                 notifications.Add(new ThresholdNotification(
                     NotificationLevel.High,
-                    $"{current.ProviderName} {current.Label} at {DisplayPercent(currentFraction)}% — approaching limit"));
+                    $"{current.ProviderName} {windowLabel} at {DisplayPercent(currentFraction)}% — approaching limit"));
                 _firedLevel[key] = HighFired;
             }
         }
@@ -90,11 +94,11 @@ internal sealed class ThresholdNotifier
 
     private static int DisplayPercent(double fraction) => (int)Math.Round(fraction * 100);
 
-    private static UsageWindow? FindWindow(IReadOnlyList<UsageWindow> windows, string provider, string label)
+    private static UsageWindow? FindWindow(IReadOnlyList<UsageWindow> windows, string provider, string label, string? subLabel)
     {
         foreach (var window in windows)
         {
-            if (window.ProviderName == provider && window.Label == label)
+            if (window.ProviderName == provider && window.Label == label && window.SubLabel == subLabel)
             {
                 return window;
             }
@@ -108,7 +112,7 @@ internal sealed class ThresholdNotifier
         var active = new HashSet<string>(StringComparer.Ordinal);
         foreach (var window in currentWindows)
         {
-            active.Add($"{window.ProviderName}|{window.Label}");
+            active.Add($"{window.ProviderName}|{window.Label}|{window.SubLabel}");
         }
 
         var stale = new List<string>();

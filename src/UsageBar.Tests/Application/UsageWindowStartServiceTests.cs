@@ -107,6 +107,29 @@ public sealed class UsageWindowStartServiceTests
         Assert.Single(sender.Calls);
     }
 
+    [Fact]
+    public async Task Multiple_buckets_warm_independently()
+    {
+        var sender = new RecordingSender();
+        var service = CreateService(sender);
+        var settings = AntigravitySettings(startWindow: true, selector: "flash,mini");
+
+        UsageWindow gemini(double pct) => new("Antigravity", "Session", pct, subLabel: "Gemini");
+        UsageWindow claude(double pct) => new("Antigravity", "Session", pct, subLabel: "Claude and GPT");
+
+        // First observation arms both buckets.
+        await service.ObserveAsync([gemini(80), claude(60)], settings, CancellationToken.None);
+        Assert.Empty(sender.Calls);
+
+        // Only Gemini resets — one warm call.
+        await service.ObserveAsync([gemini(2), claude(65)], settings, CancellationToken.None);
+        Assert.Single(sender.Calls);
+
+        // Claude resets — second warm call.
+        await service.ObserveAsync([gemini(5), claude(10)], settings, CancellationToken.None);
+        Assert.Equal(2, sender.Calls.Count);
+    }
+
     private static UsageWindowStartService CreateService(IWindowStartRequestSender sender) =>
         new(sender, NullLogger<UsageWindowStartService>.Instance);
 
@@ -120,6 +143,21 @@ public sealed class UsageWindowStartServiceTests
         [
             new ProviderSettings(
                 "Codex",
+                ProviderSettings.TypeOAuth,
+                null,
+                null,
+                Enabled: true,
+                StartWindowAfterReset: startWindow),
+        ],
+    };
+
+    private static AppSettings AntigravitySettings(bool startWindow, string selector) => AppSettings.Default with
+    {
+        Models = new ModelSettings(selector),
+        Providers =
+        [
+            new ProviderSettings(
+                "Antigravity",
                 ProviderSettings.TypeOAuth,
                 null,
                 null,

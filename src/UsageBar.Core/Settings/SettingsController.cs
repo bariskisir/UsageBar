@@ -26,15 +26,16 @@ internal sealed class SettingsController(
     public async Task<SettingsStateMessage> GetStateAsync(CancellationToken cancellationToken = default)
     {
         var settings = await settingsStore.ReadAsync(cancellationToken).ConfigureAwait(false);
-        var environmentApiKeys = new Dictionary<string, bool>(StringComparer.Ordinal);
+        var environmentApiKeys = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var provider in settings.Providers ?? [])
         {
             if (provider.Credential is not null &&
                 string.IsNullOrWhiteSpace(provider.ApiKey) &&
-                !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(provider.Credential)))
+                Environment.GetEnvironmentVariable(provider.Credential) is { } envValue &&
+                !string.IsNullOrWhiteSpace(envValue))
             {
-                environmentApiKeys[provider.Credential] = true;
+                environmentApiKeys[provider.Credential] = envValue;
             }
         }
 

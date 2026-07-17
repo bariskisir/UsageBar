@@ -92,4 +92,7 @@ internal static class TestData
 
     public static UsageWindow Window(string provider, string label, double percent, string? reset = null) =>
         new(provider, label, percent, reset);
+
+    public static UsageWindow Window(string provider, string label, double percent, string? reset, string? subLabel) =>
+        new(provider, label, percent, reset, subLabel);
 }

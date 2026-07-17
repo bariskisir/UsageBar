@@ -210,7 +210,7 @@ internal sealed class WebViewTooltip : IWebViewTooltip, IDisposable
 
     private void HandleSetData()
     {
-        if (_lifecycle.IsDisposed || !_lifecycle.IsReady || _core is null || _lifecycle.IsSuspended)
+        if (_lifecycle.IsDisposed || !_lifecycle.IsReady || _core is null)
         {
             return;
         }

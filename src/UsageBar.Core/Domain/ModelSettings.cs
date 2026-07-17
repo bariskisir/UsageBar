@@ -5,7 +5,7 @@ namespace UsageBar.Core.Domain;
 public sealed record ModelSettings(
     [property: JsonPropertyName("smallModelSelector")] string SmallModelSelector)
 {
-    public const string DefaultSmallModelSelector = "nano,mini,haiku,flash,lite";
+    public const string DefaultSmallModelSelector = "nano,mini,haiku,lite,flash,oss";
 
     public static ModelSettings Default { get; } = new(DefaultSmallModelSelector);
 
