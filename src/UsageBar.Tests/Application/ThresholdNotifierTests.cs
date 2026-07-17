@@ -27,7 +27,7 @@ public sealed class ThresholdNotifierTests
     }
 
     [Fact]
-    public void High_threshold_fires_once_then_stays_quiet()
+    public void High_threshold_fires_only_when_crossed_from_below()
     {
         var notifier = new ThresholdNotifier();
         notifier.Evaluate(Codex(60), Settings);
@@ -69,20 +69,26 @@ public sealed class ThresholdNotifierTests
     }
 
     [Fact]
-    public void Usage_drop_emits_reset_and_clears_state()
+    public void Usage_drop_emits_reset_independently_of_thresholds()
     {
         var notifier = new ThresholdNotifier();
-        notifier.Evaluate(Codex(60), Settings);
-        notifier.Evaluate(Codex(75), Settings); // high fired
+        notifier.Evaluate(Codex(10), Settings);
 
-        var reset = notifier.Evaluate(Codex(50), Settings);
+        var reset = notifier.Evaluate(Codex(5), Settings);
         var notification = Assert.Single(reset);
         Assert.Equal(NotificationLevel.Reset, notification.Level);
-        Assert.Contains("reset to 50%", notification.Message, StringComparison.Ordinal);
+        Assert.Contains("reset to 5%", notification.Message, StringComparison.Ordinal);
+    }
 
-        // State cleared: climbing past high fires again.
-        var again = notifier.Evaluate(Codex(75), Settings);
-        Assert.Equal(NotificationLevel.High, Assert.Single(again).Level);
+    [Fact]
+    public void Usage_drop_emits_reset_when_initial_baseline_was_already_above_thresholds()
+    {
+        var notifier = new ThresholdNotifier();
+        Assert.Empty(notifier.Evaluate(Codex(95), Settings));
+
+        var reset = Assert.Single(notifier.Evaluate(Codex(0), Settings));
+        Assert.Equal(NotificationLevel.Reset, reset.Level);
+        Assert.Contains("reset to 0%", reset.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -103,7 +109,7 @@ public sealed class ThresholdNotifierTests
     }
 
     [Fact]
-    public void Disappearing_window_clears_state_and_fires_fresh_when_reappears()
+    public void Reappearing_window_needs_a_fresh_baseline_before_crossing_threshold()
     {
         var notifier = new ThresholdNotifier();
         notifier.Evaluate(
@@ -124,7 +130,7 @@ public sealed class ThresholdNotifierTests
             [TestData.Window("Codex", "Session", 65)],
             Settings));
 
-        // Now crossing the threshold should fire again because stale state was purged.
+        // Now crossing the threshold should fire against the fresh baseline.
         crossed = notifier.Evaluate(
             [TestData.Window("Codex", "Session", 80)],
             Settings);

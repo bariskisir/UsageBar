@@ -1,12 +1,33 @@
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
 using System.Net;
 using System.Net.Http.Headers;
+using UsageBar.Core.Infrastructure;
 using UsageBar.Core.Infrastructure.Logging;
 using Xunit;
 
 namespace UsageBar.Tests;
 public sealed class UsageHttpTelemetryHandlerTests
 {
+    [Fact]
+    public void Production_http_client_removes_default_logger_that_scopes_raw_uris()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddCoreServices();
+
+        using (var provider = services.BuildServiceProvider())
+        {
+            var factory = provider.GetRequiredService<IHttpMessageHandlerFactory>();
+            var handler = factory.CreateHandler("usage");
+            var chain = EnumerateHandlerChain(handler).ToList();
+
+            Assert.Contains(chain, item => item is UsageHttpTelemetryHandler);
+            Assert.DoesNotContain(chain, item =>
+                item.GetType().Name.Contains("LoggingScopeHttpMessageHandler", StringComparison.Ordinal));
+        }
+    }
+
     [Fact]
     public async Task Logs_request_and_response_metadata_without_secrets()
     {
@@ -55,6 +76,14 @@ public sealed class UsageHttpTelemetryHandlerTests
             {
                 Content = new StringContent("{\"status\":\"ok\"}"),
             };
+        }
+    }
+
+    private static IEnumerable<HttpMessageHandler> EnumerateHandlerChain(HttpMessageHandler handler)
+    {
+        for (var current = handler; current is not null; current = (current as DelegatingHandler)?.InnerHandler)
+        {
+            yield return current;
         }
     }
 

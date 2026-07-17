@@ -17,6 +17,10 @@ internal static class CoreServiceCollectionExtensions
         services.AddTransient<UsageHttpTelemetryHandler>();
 
         services.AddHttpClient(UsageHttpClientName, client => client.Timeout = TimeSpan.FromSeconds(20))
+            // The factory's default logger adds the raw request URI to an outer scope. That
+            // leaks path credentials such as Telegram bot tokens even when our telemetry
+            // handler logs a redacted URI.
+            .RemoveAllLoggers()
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
             {
                 PooledConnectionLifetime = TimeSpan.FromMinutes(10),

@@ -4,18 +4,11 @@ using UsageBar.Core.Domain;
 namespace UsageBar.Core.Application;
 
 /// <summary>
-/// Tracks per-window usage between refreshes and emits one-shot high/critical/limit-reached
-/// notifications plus reset notifications. Each window fires at most once per milestone per
-/// episode; a usage drop resets that window's state.
+/// Compares per-window usage between refreshes and emits notifications for threshold crossings
+/// and usage resets.
 /// </summary>
 internal sealed class ThresholdNotifier
 {
-    private const byte NoneFired = 0;
-    private const byte HighFired = 1;
-    private const byte CriticalFired = 2;
-    private const byte LimitFired = 3;
-
-    private readonly Dictionary<string, byte> _firedLevel = new(StringComparer.Ordinal);
     private IReadOnlyList<UsageWindow> _previousWindows = [];
 
     public IReadOnlyList<ThresholdNotification> Evaluate(IReadOnlyList<UsageWindow> currentWindows, AppSettings settings)
@@ -39,9 +32,6 @@ internal sealed class ThresholdNotifier
                 continue;
             }
 
-            var key = $"{current.ProviderName}|{current.Label}|{current.SubLabel}";
-            var fired = _firedLevel.GetValueOrDefault(key, NoneFired);
-
             var currentFraction = current.UsedPercent / 100.0;
             var previousFraction = previous.UsedPercent / 100.0;
 
@@ -51,44 +41,34 @@ internal sealed class ThresholdNotifier
 
             if (currentFraction < previousFraction)
             {
-                // Only emit a reset notification when the window was previously in a
-                // warning state (high, critical, or limit). A minor fluctuation
-                // below an already-low level is noise, not a meaningful reset.
-                if (_firedLevel.Remove(key))
-                {
-                    notifications.Add(new ThresholdNotification(
-                        NotificationLevel.Reset,
-                        $"{current.ProviderName} {windowLabel} reset to {DisplayPercent(currentFraction)}%"));
-                }
+                notifications.Add(new ThresholdNotification(
+                    NotificationLevel.Reset,
+                    $"{current.ProviderName} {windowLabel} reset to {DisplayPercent(currentFraction)}%"));
 
                 continue;
             }
 
-            if (fired < LimitFired && previousFraction < 1.0 && currentFraction >= 1.0)
+            if (previousFraction < 1.0 && currentFraction >= 1.0)
             {
                 notifications.Add(new ThresholdNotification(
                     NotificationLevel.Critical,
                     $"{current.ProviderName} {windowLabel} at 100% — limit reached!"));
-                _firedLevel[key] = LimitFired;
             }
-            else if (fired < CriticalFired && previousFraction < critical && currentFraction >= critical)
+            else if (previousFraction < critical && currentFraction >= critical)
             {
                 notifications.Add(new ThresholdNotification(
                     NotificationLevel.Critical,
                     $"{current.ProviderName} {windowLabel} at {DisplayPercent(currentFraction)}% — critically high!"));
-                _firedLevel[key] = CriticalFired;
             }
-            else if (fired < HighFired && previousFraction < high && currentFraction >= high)
+            else if (previousFraction < high && currentFraction >= high)
             {
                 notifications.Add(new ThresholdNotification(
                     NotificationLevel.High,
                     $"{current.ProviderName} {windowLabel} at {DisplayPercent(currentFraction)}% — approaching limit"));
-                _firedLevel[key] = HighFired;
             }
         }
 
         _previousWindows = currentWindows;
-        PurgeStaleState(currentWindows);
         return notifications;
     }
 
@@ -105,28 +85,5 @@ internal sealed class ThresholdNotifier
         }
 
         return null;
-    }
-
-    private void PurgeStaleState(IReadOnlyList<UsageWindow> currentWindows)
-    {
-        var active = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var window in currentWindows)
-        {
-            active.Add($"{window.ProviderName}|{window.Label}|{window.SubLabel}");
-        }
-
-        var stale = new List<string>();
-        foreach (var key in _firedLevel.Keys)
-        {
-            if (!active.Contains(key))
-            {
-                stale.Add(key);
-            }
-        }
-
-        foreach (var key in stale)
-        {
-            _firedLevel.Remove(key);
-        }
     }
 }
