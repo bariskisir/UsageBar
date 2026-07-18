@@ -57,8 +57,11 @@ internal sealed class ThresholdNotificationDispatcher : IThresholdNotificationDi
             var message = NotificationMessageFormatter.Format(level, string.Join(Environment.NewLine, lines));
             _view.Notify(level, message);
 
-            await Task.WhenAll(_remoteServices.Select(service => service.SendAsync(message, settings, cancellationToken)))
-                .ConfigureAwait(false);
+            if (level != NotificationLevel.Reset)
+            {
+                await Task.WhenAll(_remoteServices.Select(service => service.SendAsync(message, settings, cancellationToken)))
+                    .ConfigureAwait(false);
+            }
         }
     }
 }

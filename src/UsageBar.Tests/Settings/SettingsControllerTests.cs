@@ -72,7 +72,22 @@ public sealed class SettingsControllerTests
 
         var result = await controller.TestStartWindowAsync(settings);
 
-        Assert.Equal([("Codex", "flash,mini"), ("Claude", "flash,mini")], sender.Calls);
+        Assert.Collection(
+            sender.Calls,
+            request =>
+            {
+                Assert.Equal("Codex", request.ProviderName);
+                Assert.Equal("flash,mini", request.SmallModelSelector);
+                Assert.Null(request.WindowLabel);
+                Assert.Null(request.WindowSubLabel);
+            },
+            request =>
+            {
+                Assert.Equal("Claude", request.ProviderName);
+                Assert.Equal("flash,mini", request.SmallModelSelector);
+                Assert.Null(request.WindowLabel);
+                Assert.Null(request.WindowSubLabel);
+            });
         Assert.Contains("Codex: OK", result, StringComparison.Ordinal);
         Assert.Contains("Claude: failed", result, StringComparison.Ordinal);
         Assert.DoesNotContain("Antigravity", result, StringComparison.Ordinal);
@@ -93,12 +108,12 @@ public sealed class SettingsControllerTests
 
     private sealed class RecordingWindowStartSender(string? failingProvider = null) : IWindowStartRequestSender
     {
-        public List<(string Provider, string Selector)> Calls { get; } = [];
+        public List<WindowStartRequest> Calls { get; } = [];
 
-        public Task StartAsync(string providerName, string smallModelSelector, CancellationToken cancellationToken)
+        public Task StartAsync(WindowStartRequest request, CancellationToken cancellationToken)
         {
-            Calls.Add((providerName, smallModelSelector));
-            return string.Equals(providerName, failingProvider, StringComparison.OrdinalIgnoreCase)
+            Calls.Add(request);
+            return string.Equals(request.ProviderName, failingProvider, StringComparison.OrdinalIgnoreCase)
                 ? Task.FromException(new HttpRequestException("test failure"))
                 : Task.CompletedTask;
         }

@@ -61,7 +61,7 @@ public sealed class ThresholdNotificationDispatcherTests
         var notification = Assert.Single(view.Notifications);
         Assert.Equal(NotificationLevel.Reset, notification.Level);
         Assert.Contains("Antigravity Session (Gemini) reset to 0%", notification.Message, StringComparison.Ordinal);
-        Assert.Equal([notification.Message], remote.Messages);
+        Assert.Empty(remote.Messages);
     }
 
     private sealed class RecordingUsageView : IUsageView

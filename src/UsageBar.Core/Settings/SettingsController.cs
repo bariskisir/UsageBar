@@ -95,7 +95,9 @@ internal sealed class SettingsController(
         {
             try
             {
-                await windowStartSender.StartAsync(providerName, selector, cancellationToken).ConfigureAwait(false);
+                await windowStartSender.StartAsync(
+                    new WindowStartRequest(providerName, selector),
+                    cancellationToken).ConfigureAwait(false);
                 results.Add($"{providerName}: OK");
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

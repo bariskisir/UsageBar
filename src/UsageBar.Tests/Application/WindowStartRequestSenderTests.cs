@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using UsageBar.Core.Application;
+using UsageBar.Core.Domain;
 using UsageBar.Core.Providers;
 using Xunit;
 
@@ -43,12 +44,12 @@ public sealed class WindowStartRequestSenderTests
         });
         var sender = CreateSender(handler, logger);
 
-        await sender.StartAsync("Codex", "flash,mini", CancellationToken.None);
+        await sender.StartAsync(new WindowStartRequest("Codex", "flash,mini"), CancellationToken.None);
 
         using var document = JsonDocument.Parse(responseBody!);
         Assert.Equal("model-flash", document.RootElement.GetProperty("model").GetString());
         Assert.False(document.RootElement.TryGetProperty("max_output_tokens", out _));
-        Assert.Equal(".", document.RootElement.GetProperty("input")[0].GetProperty("content")[0].GetProperty("text").GetString());
+        Assert.Equal("2+2", document.RootElement.GetProperty("input")[0].GetProperty("content")[0].GetProperty("text").GetString());
         Assert.Contains(logger.Messages, message => message.Contains("model=model-flash", StringComparison.Ordinal)
             && message.Contains("inputTokens=7", StringComparison.Ordinal)
             && message.Contains("outputTokens=1", StringComparison.Ordinal)
@@ -76,11 +77,11 @@ public sealed class WindowStartRequestSenderTests
         });
         var sender = CreateSender(handler);
 
-        await sender.StartAsync("Claude", "nano,haiku", CancellationToken.None);
+        await sender.StartAsync(new WindowStartRequest("Claude", "nano,haiku"), CancellationToken.None);
 
         using var document = JsonDocument.Parse(messageBody!);
         Assert.Equal("claude-haiku-current", document.RootElement.GetProperty("model").GetString());
-        Assert.Equal(1, document.RootElement.GetProperty("max_tokens").GetInt32());
+        Assert.Equal(128, document.RootElement.GetProperty("max_tokens").GetInt32());
     }
 
     [Fact]
@@ -116,12 +117,130 @@ public sealed class WindowStartRequestSenderTests
         });
         var sender = CreateSender(handler);
 
-        await sender.StartAsync("Antigravity", "mini,flash", CancellationToken.None);
+        await sender.StartAsync(
+            new WindowStartRequest("Antigravity", "mini,flash", "Session", "Gemini"),
+            CancellationToken.None);
 
         using var document = JsonDocument.Parse(generationBody!);
         Assert.Equal("gemini-3.5-flash-extra-low", document.RootElement.GetProperty("model").GetString());
-        Assert.Equal(1, document.RootElement.GetProperty("request").GetProperty("generationConfig").GetProperty("maxOutputTokens").GetInt32());
+        Assert.False(document.RootElement.GetProperty("request").GetProperty("generationConfig").TryGetProperty("maxOutputTokens", out _));
         Assert.Equal(0, document.RootElement.GetProperty("request").GetProperty("generationConfig").GetProperty("thinkingConfig").GetProperty("thinkingBudget").GetInt32());
+    }
+
+    [Fact]
+    public async Task Antigravity_uses_a_model_from_the_reset_bucket_family()
+    {
+        var generatedModels = new List<string>();
+        var handler = new FakeHttpMessageHandler(request =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (path.EndsWith(":loadCodeAssist", StringComparison.Ordinal))
+            {
+                return JsonResponse("""{ "cloudaicompanionProject": "dynamic-project" }""");
+            }
+
+            if (path.EndsWith(":fetchAvailableModels", StringComparison.Ordinal))
+            {
+                return JsonResponse("""
+                    { "models": {
+                      "gemini-3.5-flash-extra-low": { "displayName": "Gemini Flash Low", "recommended": true },
+                      "claude-haiku-current": { "displayName": "Claude Haiku", "recommended": true },
+                      "gpt-oss-mini": { "displayName": "GPT OSS Mini", "recommended": true }
+                    } }
+                    """);
+            }
+
+            var body = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+            using var document = JsonDocument.Parse(body);
+            generatedModels.Add(document.RootElement.GetProperty("model").GetString()!);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("data: [DONE]\n", Encoding.UTF8, "text/event-stream"),
+            };
+        });
+        var sender = CreateSender(handler);
+
+        await sender.StartAsync(
+            new WindowStartRequest("Antigravity", "flash,haiku,mini", "Session", "Gemini"),
+            CancellationToken.None);
+        await sender.StartAsync(
+            new WindowStartRequest("Antigravity", "flash,haiku,mini", "Session", "Claude and GPT"),
+            CancellationToken.None);
+
+        Assert.Equal(["gemini-3.5-flash-extra-low", "claude-haiku-current"], generatedModels);
+    }
+
+    [Fact]
+    public async Task Antigravity_future_bucket_matches_its_model_family()
+    {
+        string? generatedModel = null;
+        var handler = new FakeHttpMessageHandler(request =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (path.EndsWith(":loadCodeAssist", StringComparison.Ordinal))
+            {
+                return JsonResponse("""{ "cloudaicompanionProject": "dynamic-project" }""");
+            }
+
+            if (path.EndsWith(":fetchAvailableModels", StringComparison.Ordinal))
+            {
+                return JsonResponse("""
+                    { "models": {
+                      "gemini-3.5-flash-extra-low": { "displayName": "Gemini Flash Low", "recommended": true },
+                      "deepseek-lite": { "displayName": "DeepSeek Lite", "recommended": true }
+                    } }
+                    """);
+            }
+
+            var body = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+            using var document = JsonDocument.Parse(body);
+            generatedModel = document.RootElement.GetProperty("model").GetString();
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("data: [DONE]\n", Encoding.UTF8, "text/event-stream"),
+            };
+        });
+        var sender = CreateSender(handler);
+
+        await sender.StartAsync(
+            new WindowStartRequest("Antigravity", "flash,lite", "Session", "DeepSeek Models"),
+            CancellationToken.None);
+
+        Assert.Equal("deepseek-lite", generatedModel);
+    }
+
+    [Fact]
+    public async Task Antigravity_does_not_fall_back_to_another_bucket_model()
+    {
+        var generationRequested = false;
+        var handler = new FakeHttpMessageHandler(request =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (path.EndsWith(":loadCodeAssist", StringComparison.Ordinal))
+            {
+                return JsonResponse("""{ "cloudaicompanionProject": "dynamic-project" }""");
+            }
+
+            if (path.EndsWith(":fetchAvailableModels", StringComparison.Ordinal))
+            {
+                return JsonResponse("""
+                    { "models": {
+                      "gemini-3.5-flash-extra-low": { "displayName": "Gemini Flash Low", "recommended": true }
+                    } }
+                    """);
+            }
+
+            generationRequested = true;
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        });
+        var sender = CreateSender(handler);
+
+        var exception = await Assert.ThrowsAsync<ProviderException>(() => sender.StartAsync(
+            new WindowStartRequest("Antigravity", "flash", "Session", "Claude and GPT"),
+            CancellationToken.None));
+
+        Assert.Contains("Claude and GPT", exception.Message, StringComparison.Ordinal);
+        Assert.False(generationRequested);
     }
 
     private static WindowStartRequestSender CreateSender(

@@ -41,9 +41,15 @@ internal sealed class ThresholdNotifier
 
             if (currentFraction < previousFraction)
             {
-                notifications.Add(new ThresholdNotification(
-                    NotificationLevel.Reset,
-                    $"{current.ProviderName} {windowLabel} reset to {DisplayPercent(currentFraction)}%"));
+                // Only emit a reset notification when usage drops to a genuinely low
+                // level (< 5 %).  Partial decreases — such as a weekly bucket dropping
+                // from 66 % to 34 % — are not real resets and should not be announced.
+                if (currentFraction <= 0.05)
+                {
+                    notifications.Add(new ThresholdNotification(
+                        NotificationLevel.Reset,
+                        $"{current.ProviderName} {windowLabel} reset to {DisplayPercent(currentFraction)}%"));
+                }
 
                 continue;
             }

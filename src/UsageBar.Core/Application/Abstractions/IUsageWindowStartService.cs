@@ -11,7 +11,13 @@ internal interface IUsageWindowStartService
         CancellationToken cancellationToken);
 }
 
+internal sealed record WindowStartRequest(
+    string ProviderName,
+    string SmallModelSelector,
+    string? WindowLabel = null,
+    string? WindowSubLabel = null);
+
 internal interface IWindowStartRequestSender
 {
-    Task StartAsync(string providerName, string smallModelSelector, CancellationToken cancellationToken);
+    Task StartAsync(WindowStartRequest request, CancellationToken cancellationToken);
 }

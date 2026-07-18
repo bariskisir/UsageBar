@@ -20,8 +20,10 @@ public sealed class UsageWindowStartServiceTests
 
         await service.ObserveAsync([Session(2)], settings, CancellationToken.None);
         var call = Assert.Single(sender.Calls);
-        Assert.Equal("Codex", call.Provider);
-        Assert.Equal("flash,mini", call.Selector);
+        Assert.Equal("Codex", call.ProviderName);
+        Assert.Equal("flash,mini", call.SmallModelSelector);
+        Assert.Equal("Session", call.WindowLabel);
+        Assert.Null(call.WindowSubLabel);
 
         await service.ObserveAsync([Session(2)], settings, CancellationToken.None);
         Assert.Single(sender.Calls);
@@ -108,6 +110,52 @@ public sealed class UsageWindowStartServiceTests
     }
 
     [Fact]
+    public async Task Matching_session_bars_are_scoped_by_provider()
+    {
+        var sender = new RecordingSender();
+        var service = CreateService(sender);
+        var settings = AppSettings.Default with
+        {
+            Models = new ModelSettings("mini"),
+            Providers =
+            [
+                new ProviderSettings(
+                    "Codex",
+                    ProviderSettings.TypeOAuth,
+                    null,
+                    null,
+                    Enabled: true,
+                    StartWindowAfterReset: true),
+                new ProviderSettings(
+                    "Claude",
+                    ProviderSettings.TypeOAuth,
+                    null,
+                    null,
+                    Enabled: true,
+                    StartWindowAfterReset: true),
+            ],
+        };
+
+        await service.ObserveAsync(
+            [
+                new UsageWindow("Codex", "Session", 80),
+                new UsageWindow("Claude", "Session", 80),
+            ],
+            settings,
+            CancellationToken.None);
+        await service.ObserveAsync(
+            [
+                new UsageWindow("Codex", "Session", 2),
+                new UsageWindow("Claude", "Session", 80),
+            ],
+            settings,
+            CancellationToken.None);
+
+        var call = Assert.Single(sender.Calls);
+        Assert.Equal("Codex", call.ProviderName);
+    }
+
+    [Fact]
     public async Task Multiple_buckets_warm_independently()
     {
         var sender = new RecordingSender();
@@ -121,13 +169,51 @@ public sealed class UsageWindowStartServiceTests
         await service.ObserveAsync([gemini(80), claude(60)], settings, CancellationToken.None);
         Assert.Empty(sender.Calls);
 
-        // Only Gemini resets — one warm call.
+        // Only Gemini resets — one call targeted to Gemini's bucket.
         await service.ObserveAsync([gemini(2), claude(65)], settings, CancellationToken.None);
-        Assert.Single(sender.Calls);
+        var geminiCall = Assert.Single(sender.Calls);
+        Assert.Equal("Antigravity", geminiCall.ProviderName);
+        Assert.Equal("Session", geminiCall.WindowLabel);
+        Assert.Equal("Gemini", geminiCall.WindowSubLabel);
 
-        // Claude resets — second warm call.
+        // Claude resets — a separate call targeted to that bucket.
         await service.ObserveAsync([gemini(5), claude(10)], settings, CancellationToken.None);
         Assert.Equal(2, sender.Calls.Count);
+        var claudeCall = sender.Calls[1];
+        Assert.Equal("Antigravity", claudeCall.ProviderName);
+        Assert.Equal("Session", claudeCall.WindowLabel);
+        Assert.Equal("Claude and GPT", claudeCall.WindowSubLabel);
+    }
+
+    [Fact]
+    public async Task Simultaneous_bucket_resets_send_one_targeted_call_per_bucket()
+    {
+        var sender = new RecordingSender();
+        var service = CreateService(sender);
+        var settings = AntigravitySettings(startWindow: true, selector: "flash,mini");
+
+        await service.ObserveAsync(
+            [
+                new UsageWindow("Antigravity", "Session", 80, subLabel: "Gemini"),
+                new UsageWindow("Antigravity", "Session", 60, subLabel: "Claude and GPT"),
+                new UsageWindow("Antigravity", "Session", 70, subLabel: "Future Family"),
+            ],
+            settings,
+            CancellationToken.None);
+
+        await service.ObserveAsync(
+            [
+                new UsageWindow("Antigravity", "Session", 2, subLabel: "Gemini"),
+                new UsageWindow("Antigravity", "Session", 3, subLabel: "Claude and GPT"),
+                new UsageWindow("Antigravity", "Session", 1, subLabel: "Future Family"),
+            ],
+            settings,
+            CancellationToken.None);
+
+        Assert.Equal(3, sender.Calls.Count);
+        Assert.Contains(sender.Calls, request => request.WindowSubLabel == "Gemini");
+        Assert.Contains(sender.Calls, request => request.WindowSubLabel == "Claude and GPT");
+        Assert.Contains(sender.Calls, request => request.WindowSubLabel == "Future Family");
     }
 
     private static UsageWindowStartService CreateService(IWindowStartRequestSender sender) =>
@@ -170,11 +256,11 @@ public sealed class UsageWindowStartServiceTests
     {
         private int _remainingFailures = failures;
 
-        public List<(string Provider, string Selector)> Calls { get; } = [];
+        public List<WindowStartRequest> Calls { get; } = [];
 
-        public Task StartAsync(string providerName, string smallModelSelector, CancellationToken cancellationToken)
+        public Task StartAsync(WindowStartRequest request, CancellationToken cancellationToken)
         {
-            Calls.Add((providerName, smallModelSelector));
+            Calls.Add(request);
             if (_remainingFailures-- > 0)
             {
                 throw new HttpRequestException("transient");

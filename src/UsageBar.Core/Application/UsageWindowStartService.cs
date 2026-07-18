@@ -48,8 +48,8 @@ internal sealed class UsageWindowStartService(
                 var currentWindows = windows
                     .Where(window => string.Equals(window.ProviderName, providerName, StringComparison.OrdinalIgnoreCase)
                         && string.Equals(window.Label, "Session", StringComparison.OrdinalIgnoreCase))
-                    .GroupBy(WindowKey, StringComparer.OrdinalIgnoreCase)
-                    .ToDictionary(group => group.Key, group => group.Last(), StringComparer.OrdinalIgnoreCase);
+                    .GroupBy(WindowIdentity)
+                    .ToDictionary(group => group.Key, group => group.Last());
 
                 if (!_states.TryGetValue(providerName, out var state))
                 {
@@ -103,7 +103,12 @@ internal sealed class UsageWindowStartService(
                         var isMovingReset = observation.IsMovingReset;
                         try
                         {
-                            await sender.StartAsync(providerName, smallModelSelector, cancellationToken).ConfigureAwait(false);
+                            var request = new WindowStartRequest(
+                                providerName,
+                                smallModelSelector,
+                                current.Value.Label,
+                                current.Value.SubLabel);
+                            await sender.StartAsync(request, cancellationToken).ConfigureAwait(false);
                             observation.PendingStart = false;
                             observation.IsMovingReset = false;
                             logger.LogInformation(
@@ -138,15 +143,18 @@ internal sealed class UsageWindowStartService(
         }
     }
 
-    private static string WindowKey(UsageWindow window) => $"{window.Label}|{window.SubLabel}";
+    private static WindowKey WindowIdentity(UsageWindow window) => new(
+        window.Label.ToUpperInvariant(),
+        window.SubLabel?.ToUpperInvariant());
 
-    private sealed class ProviderResetState(IReadOnlyDictionary<string, UsageWindow> windows)
+    private sealed class ProviderResetState(IReadOnlyDictionary<WindowKey, UsageWindow> windows)
     {
-        public Dictionary<string, WindowObservation> Windows { get; } = windows.ToDictionary(
+        public Dictionary<WindowKey, WindowObservation> Windows { get; } = windows.ToDictionary(
             pair => pair.Key,
-            pair => new WindowObservation(pair.Value),
-            StringComparer.OrdinalIgnoreCase);
+            pair => new WindowObservation(pair.Value));
     }
+
+    private readonly record struct WindowKey(string Label, string? SubLabel);
 
     private sealed class WindowObservation(UsageWindow window)
     {

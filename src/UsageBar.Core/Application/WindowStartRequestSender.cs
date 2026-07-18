@@ -27,12 +27,12 @@ internal sealed class WindowStartRequestSender(
     private const string ClaudeSystemPrompt = "You are Claude Code, Anthropic's official CLI for Claude.";
     private const string AntigravityBaseEndpoint = "https://daily-cloudcode-pa.googleapis.com";
 
-    public Task StartAsync(string providerName, string smallModelSelector, CancellationToken cancellationToken) => providerName.ToLowerInvariant() switch
+    public Task StartAsync(WindowStartRequest request, CancellationToken cancellationToken) => request.ProviderName.ToLowerInvariant() switch
     {
-        "codex" => StartCodexAsync(smallModelSelector, cancellationToken),
-        "claude" => StartClaudeAsync(smallModelSelector, cancellationToken),
-        "antigravity" => StartAntigravityAsync(smallModelSelector, cancellationToken),
-        _ => throw new InvalidOperationException($"Window starting is not supported for {providerName}."),
+        "codex" => StartCodexAsync(request.SmallModelSelector, cancellationToken),
+        "claude" => StartClaudeAsync(request.SmallModelSelector, cancellationToken),
+        "antigravity" => StartAntigravityAsync(request, cancellationToken),
+        _ => throw new InvalidOperationException($"Window starting is not supported for {request.ProviderName}."),
     };
 
     private async Task StartCodexAsync(string smallModelSelector, CancellationToken cancellationToken)
@@ -60,7 +60,7 @@ internal sealed class WindowStartRequestSender(
                     ["role"] = "user",
                     ["content"] = new JsonArray
                     {
-                        new JsonObject { ["type"] = "input_text", ["text"] = "." },
+                        new JsonObject { ["type"] = "input_text", ["text"] = "2+2" },
                     },
                 },
             },
@@ -78,7 +78,7 @@ internal sealed class WindowStartRequestSender(
         using var request = JsonRequest(HttpMethod.Post, CodexResponsesEndpoint, payload);
         AddCodexHeaders(request, auth, "text/event-stream", jsonContent: true);
         var responseBody = await SendAndDrainAsync(request, "Codex window start", cancellationToken).ConfigureAwait(false);
-        LogCompletion("Codex", model.Id, responseBody, instructions: ".");
+        LogCompletion("Codex", model.Id, responseBody, instructions: "2+2");
     }
 
     private async Task StartClaudeAsync(string smallModelSelector, CancellationToken cancellationToken)
@@ -92,7 +92,7 @@ internal sealed class WindowStartRequestSender(
         var payload = new JsonObject
         {
             ["model"] = model.Id,
-            ["max_tokens"] = 1,
+            ["max_tokens"] = 128,
             ["stream"] = false,
             ["system"] = new JsonArray
             {
@@ -105,7 +105,7 @@ internal sealed class WindowStartRequestSender(
                     ["role"] = "user",
                     ["content"] = new JsonArray
                     {
-                        new JsonObject { ["type"] = "text", ["text"] = "." },
+                        new JsonObject { ["type"] = "text", ["text"] = "2+2" },
                     },
                 },
             },
@@ -117,7 +117,7 @@ internal sealed class WindowStartRequestSender(
         LogCompletion("Claude", model.Id, responseBody, instructions: ClaudeSystemPrompt);
     }
 
-    private async Task StartAntigravityAsync(string smallModelSelector, CancellationToken cancellationToken)
+    private async Task StartAntigravityAsync(WindowStartRequest windowStartRequest, CancellationToken cancellationToken)
     {
         var auth = antigravityAuthReader.Read() ?? throw new ProviderException("Antigravity credentials were not found.");
         var userAgent = AntigravityUserAgent();
@@ -135,7 +135,13 @@ internal sealed class WindowStartRequestSender(
         using var modelsRequest = JsonRequest(HttpMethod.Post, $"{AntigravityBaseEndpoint}/v1internal:fetchAvailableModels", modelsPayload);
         AddAntigravityHeaders(modelsRequest, auth.AccessToken, userAgent, "application/json");
         using var modelsDocument = await SendForJsonAsync(modelsRequest, "Antigravity model catalog", cancellationToken).ConfigureAwait(false);
-        var model = SelectLightest(ParseAntigravityModels(modelsDocument.RootElement), smallModelSelector);
+        var models = ParseAntigravityModels(modelsDocument.RootElement);
+        var model = string.IsNullOrWhiteSpace(windowStartRequest.WindowSubLabel)
+            ? SelectLightest(models, windowStartRequest.SmallModelSelector)
+            : SelectAntigravityModelForBucket(
+                models,
+                windowStartRequest.SmallModelSelector,
+                windowStartRequest.WindowSubLabel);
 
         var requestId = $"usagebar-{Guid.NewGuid():N}";
         var payload = new JsonObject
@@ -149,12 +155,11 @@ internal sealed class WindowStartRequestSender(
                     new JsonObject
                     {
                         ["role"] = "user",
-                        ["parts"] = new JsonArray { new JsonObject { ["text"] = "." } },
+                        ["parts"] = new JsonArray { new JsonObject { ["text"] = "2+2" } },
                     },
                 },
                 ["generationConfig"] = new JsonObject
                 {
-                    ["maxOutputTokens"] = 1,
                     ["thinkingConfig"] = new JsonObject
                     {
                         ["includeThoughts"] = false,
@@ -229,7 +234,7 @@ internal sealed class WindowStartRequestSender(
             "{Provider} warm-window request completed: model={Model}; prompt={Prompt}; instructions={Instructions}; inputTokens={InputTokens}; outputTokens={OutputTokens}; totalTokens={TotalTokens}.",
             provider,
             model,
-            ".",
+            "2+2",
             instructions,
             usage?.InputTokens,
             usage?.OutputTokens,
@@ -478,6 +483,43 @@ internal sealed class WindowStartRequestSender(
                 ReadBool(property.Value, "supportsThinking") ? ["low"] : [],
                 Recommended: ReadBool(property.Value, "recommended")))
             .ToArray();
+    }
+
+    private static DynamicModel SelectAntigravityModelForBucket(
+        IReadOnlyList<DynamicModel> models,
+        string smallModelSelector,
+        string bucketLabel)
+    {
+        var bucketFamilies = ModelFamilyWords(bucketLabel).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var candidates = models
+            .Where(model => model.Recommended)
+            .Where(model => bucketFamilies.Contains(ModelFamily(model.Id)))
+            .ToArray();
+        if (candidates.Length == 0)
+        {
+            throw new ProviderException($"Antigravity quota group '{bucketLabel}' did not contain a matching recommended quota-tracked model.");
+        }
+
+        return SelectLightest(candidates, smallModelSelector);
+    }
+
+    private static string ModelFamily(string modelId) => ModelFamilyWords(modelId).FirstOrDefault() ?? string.Empty;
+
+    private static IEnumerable<string> ModelFamilyWords(string value)
+    {
+        var ignored = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "and",
+            "model",
+            "models",
+            "quota",
+        };
+
+        return value
+            .Split(
+                value.Where(character => !char.IsLetterOrDigit(character)).Distinct().ToArray(),
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(word => word.Length >= 3 && !ignored.Contains(word));
     }
 
     private static DynamicModel SelectLightest(IReadOnlyList<DynamicModel> models, string smallModelSelector)

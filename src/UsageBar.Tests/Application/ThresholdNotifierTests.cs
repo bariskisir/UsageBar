@@ -96,11 +96,17 @@ public sealed class ThresholdNotifierTests
     {
         var notifier = new ThresholdNotifier();
         IReadOnlyList<UsageWindow> previous =
-            [TestData.Window("Codex", "Session", 60), TestData.Window("Claude", "Weekly", 60)];
+        [
+            TestData.Window("Codex", "Session", 60, null, "Shared"),
+            TestData.Window("Claude", "Session", 60, null, "Shared"),
+        ];
         notifier.Evaluate(previous, Settings);
 
         IReadOnlyList<UsageWindow> current =
-            [TestData.Window("Codex", "Session", 95), TestData.Window("Claude", "Weekly", 61)];
+        [
+            TestData.Window("Codex", "Session", 95, null, "Shared"),
+            TestData.Window("Claude", "Session", 61, null, "Shared"),
+        ];
         var crossed = notifier.Evaluate(current, Settings);
 
         var notification = Assert.Single(crossed);
@@ -141,6 +147,38 @@ public sealed class ThresholdNotifierTests
     }
 
     [Fact]
+    public void Matching_bar_names_are_scoped_by_provider_for_high_and_reset()
+    {
+        var notifier = new ThresholdNotifier();
+        notifier.Evaluate(
+            [
+                TestData.Window("Codex", "Session", 95, null, "Shared"),
+                TestData.Window("Claude", "Session", 10, null, "Shared"),
+            ],
+            Settings);
+
+        var notifications = notifier.Evaluate(
+            [
+                TestData.Window("Codex", "Session", 95, null, "Shared"),
+                TestData.Window("Claude", "Session", 75, null, "Shared"),
+            ],
+            Settings);
+        var high = Assert.Single(notifications);
+        Assert.Equal(NotificationLevel.High, high.Level);
+        Assert.Contains("Claude", high.Message, StringComparison.Ordinal);
+
+        notifications = notifier.Evaluate(
+            [
+                TestData.Window("Codex", "Session", 95, null, "Shared"),
+                TestData.Window("Claude", "Session", 2, null, "Shared"),
+            ],
+            Settings);
+        var reset = Assert.Single(notifications);
+        Assert.Equal(NotificationLevel.Reset, reset.Level);
+        Assert.Contains("Claude", reset.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Different_sublabels_tracked_independently()
     {
         var notifier = new ThresholdNotifier();
@@ -165,12 +203,23 @@ public sealed class ThresholdNotifierTests
         // Gemini resets, Claude and GPT crosses high — both fire independently.
         IReadOnlyList<UsageWindow> swapped =
         [
-            TestData.Window("Antigravity", "Session", 30, null, "Gemini"),
+            TestData.Window("Antigravity", "Session", 3, null, "Gemini"),
             TestData.Window("Antigravity", "Session", 80, null, "Claude and GPT"),
         ];
         var result = notifier.Evaluate(swapped, Settings);
         Assert.Equal(2, result.Count);
         Assert.Contains(result, n => n.Level == NotificationLevel.Reset && n.Message.Contains("Gemini", StringComparison.Ordinal));
         Assert.Contains(result, n => n.Level == NotificationLevel.High && n.Message.Contains("Claude and GPT", StringComparison.Ordinal));
+
+        // Only Gemini crosses critical — the other bucket remains unchanged.
+        result = notifier.Evaluate(
+            [
+                TestData.Window("Antigravity", "Session", 95, null, "Gemini"),
+                TestData.Window("Antigravity", "Session", 80, null, "Claude and GPT"),
+            ],
+            Settings);
+        var critical = Assert.Single(result);
+        Assert.Equal(NotificationLevel.Critical, critical.Level);
+        Assert.Contains("Gemini", critical.Message, StringComparison.Ordinal);
     }
 }
