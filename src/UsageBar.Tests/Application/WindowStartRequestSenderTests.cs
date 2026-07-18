@@ -100,7 +100,9 @@ public sealed class WindowStartRequestSenderTests
                 return JsonResponse("""
                     { "models": {
                       "gemini-pro-current": { "displayName": "Pro" },
-                      "gemini-flash-current": { "displayName": "Flash" },
+                      "gemini-2.5-flash": { "displayName": "Legacy Flash" },
+                      "gemini-3.5-flash-low": { "displayName": "Flash Medium", "supportsThinking": true, "recommended": true },
+                      "gemini-3.5-flash-extra-low": { "displayName": "Flash Low", "supportsThinking": true, "recommended": true },
                       "internal-mini": { "displayName": "Mini", "isInternal": true }
                     } }
                     """);
@@ -117,7 +119,7 @@ public sealed class WindowStartRequestSenderTests
         await sender.StartAsync("Antigravity", "mini,flash", CancellationToken.None);
 
         using var document = JsonDocument.Parse(generationBody!);
-        Assert.Equal("gemini-flash-current", document.RootElement.GetProperty("model").GetString());
+        Assert.Equal("gemini-3.5-flash-extra-low", document.RootElement.GetProperty("model").GetString());
         Assert.Equal(1, document.RootElement.GetProperty("request").GetProperty("generationConfig").GetProperty("maxOutputTokens").GetInt32());
         Assert.Equal(0, document.RootElement.GetProperty("request").GetProperty("generationConfig").GetProperty("thinkingConfig").GetProperty("thinkingBudget").GetInt32());
     }

@@ -475,7 +475,8 @@ internal sealed class WindowStartRequestSender(
                 ReadString(property.Value, "displayName") ?? property.Name,
                 string.Empty,
                 false,
-                ReadBool(property.Value, "supportsThinking") ? ["low"] : []))
+                ReadBool(property.Value, "supportsThinking") ? ["low"] : [],
+                Recommended: ReadBool(property.Value, "recommended")))
             .ToArray();
     }
 
@@ -492,10 +493,8 @@ internal sealed class WindowStartRequestSender(
             .Where(selector => !string.IsNullOrWhiteSpace(selector));
         foreach (var selector in selectors)
         {
-            var match = visible
-                .Where(model => $"{model.Id} {model.DisplayName} {model.Description}".Contains(selector, StringComparison.OrdinalIgnoreCase))
-                .OrderBy(model => model.ReasoningLevels.Count > 0)
-                .ThenBy(model => model.Id, StringComparer.OrdinalIgnoreCase)
+            var match = OrderByPreference(visible
+                    .Where(model => $"{model.Id} {model.DisplayName} {model.Description}".Contains(selector, StringComparison.OrdinalIgnoreCase)))
                 .FirstOrDefault();
             if (match is not null)
             {
@@ -503,10 +502,35 @@ internal sealed class WindowStartRequestSender(
             }
         }
 
-        return visible
-            .OrderBy(model => model.ReasoningLevels.Count > 0)
-            .ThenBy(model => model.Id, StringComparer.OrdinalIgnoreCase)
-            .First();
+        return OrderByPreference(visible).First();
+    }
+
+    private static IOrderedEnumerable<DynamicModel> OrderByPreference(IEnumerable<DynamicModel> models) => models
+        // Antigravity keeps legacy aliases in its catalog that still return successful
+        // generations but do not debit the rolling quota. Its recommended models are the
+        // quota-tracked choices used by the official client.
+        .OrderByDescending(model => model.Recommended)
+        .ThenBy(ModelSizeScore)
+        .ThenBy(model => model.ReasoningLevels.Count > 0)
+        .ThenBy(model => model.Id, StringComparer.OrdinalIgnoreCase);
+
+    private static int ModelSizeScore(DynamicModel model)
+    {
+        var value = $"{model.Id} {model.DisplayName}";
+        if (value.Contains("extra-low", StringComparison.OrdinalIgnoreCase))
+        {
+            return 0;
+        }
+
+        if (value.Contains("nano", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("mini", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("haiku", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("lite", StringComparison.OrdinalIgnoreCase))
+        {
+            return 1;
+        }
+
+        return value.Contains("low", StringComparison.OrdinalIgnoreCase) ? 2 : 3;
     }
 
     private static int EffortScore(string value) => value.ToLowerInvariant() switch
@@ -559,7 +583,8 @@ internal sealed class WindowStartRequestSender(
         string DisplayName,
         string Description,
         bool Hidden,
-        IReadOnlyList<string> ReasoningLevels);
+        IReadOnlyList<string> ReasoningLevels,
+        bool Recommended = false);
 
     private sealed record TokenUsage(long? InputTokens, long? OutputTokens, long? TotalTokens);
 

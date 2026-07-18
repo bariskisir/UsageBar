@@ -43,6 +43,27 @@ public sealed class ThresholdNotificationDispatcherTests
         Assert.Equal([notification.Message], remote.Messages);
     }
 
+    [Fact]
+    public async Task Antigravity_low_usage_reset_notifies_without_a_prior_threshold_alert()
+    {
+        var view = new RecordingUsageView();
+        var remote = new RecordingRemoteNotificationService();
+        var dispatcher = new ThresholdNotificationDispatcher(view, [remote]);
+
+        await dispatcher.EmitAsync(
+            [TestData.Window("Antigravity", "Session", 2, null, "Gemini")],
+            AppSettings.Default);
+
+        await dispatcher.EmitAsync(
+            [TestData.Window("Antigravity", "Session", 0, null, "Gemini")],
+            AppSettings.Default);
+
+        var notification = Assert.Single(view.Notifications);
+        Assert.Equal(NotificationLevel.Reset, notification.Level);
+        Assert.Contains("Antigravity Session (Gemini) reset to 0%", notification.Message, StringComparison.Ordinal);
+        Assert.Equal([notification.Message], remote.Messages);
+    }
+
     private sealed class RecordingUsageView : IUsageView
     {
         public List<(NotificationLevel Level, string Message)> Notifications { get; } = [];
