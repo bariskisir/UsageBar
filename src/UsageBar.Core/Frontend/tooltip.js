@@ -159,14 +159,13 @@ window.__render = function (data) {
   panel.appendChild(body);
   app.appendChild(panel);
 
+  app.style.width = desiredWidth + "px";
   if (userScale !== 1) {
-    app.style.width = desiredWidth + "px";
     app.style.zoom = userScale;
     panel.style.setProperty("--panel-radius", (9 / userScale) + "px");
     panel.style.setProperty("--panel-stroke", (1 / userScale) + "px");
     panel.style.setProperty("--panel-stroke-inset", (1 / userScale) + "px");
   } else {
-    app.style.width = "";
     app.style.zoom = "";
     panel.style.removeProperty("--panel-radius");
     panel.style.removeProperty("--panel-stroke");
