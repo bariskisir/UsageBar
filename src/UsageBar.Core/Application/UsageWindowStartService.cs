@@ -13,6 +13,8 @@ internal sealed class UsageWindowStartService(
     IWindowStartRequestSender sender,
     ILogger<UsageWindowStartService> logger) : IUsageWindowStartService
 {
+    private static readonly TimeSpan ResetDeadlineDriftTolerance = TimeSpan.FromMinutes(1);
+
     private static readonly HashSet<string> SupportedProviders = new(StringComparer.OrdinalIgnoreCase)
     {
         "Codex",
@@ -66,6 +68,20 @@ internal sealed class UsageWindowStartService(
                         continue;
                     }
 
+                    // A successful low-usage warm normally pins the session deadline. Once
+                    // that warmed window expires, an unused bucket starts reporting a moving
+                    // "now + window length" deadline again. Re-arm for that new generation;
+                    // otherwise a minimal warm that stays below 5% suppresses every future
+                    // Claude/GPT reset for the lifetime of the process.
+                    if (observation.LowUsageWarmTriggered
+                        && observation.LowUsageWarmResetAt is { } warmedResetAt
+                        && current.Value.ResetAt is { } currentResetAt
+                        && currentResetAt > warmedResetAt + ResetDeadlineDriftTolerance)
+                    {
+                        observation.LowUsageWarmTriggered = false;
+                        observation.LowUsageWarmResetAt = null;
+                    }
+
                     var usageReset = current.Value.UsedPercent < observation.UsedPercent;
                     if (usageReset && current.Value.UsedPercent < 5)
                     {
@@ -76,6 +92,7 @@ internal sealed class UsageWindowStartService(
                     if (current.Value.UsedPercent >= 5)
                     {
                         observation.LowUsageWarmTriggered = false;
+                        observation.LowUsageWarmResetAt = null;
                     }
                     else if (current.Value.ResetAt is { } resetAt
                         && observation.ResetAt is { } previousResetAt
@@ -111,6 +128,11 @@ internal sealed class UsageWindowStartService(
                             await sender.StartAsync(request, cancellationToken).ConfigureAwait(false);
                             observation.PendingStart = false;
                             observation.IsMovingReset = false;
+                            if (observation.LowUsageWarmTriggered)
+                            {
+                                observation.LowUsageWarmResetAt = current.Value.ResetAt;
+                            }
+
                             logger.LogInformation(
                                 isMovingReset
                                     ? "{Provider} session window ({Bucket}) was warmed after its low-usage reset timestamp moved later."
@@ -163,6 +185,8 @@ internal sealed class UsageWindowStartService(
         public DateTimeOffset? ResetAt { get; set; } = window.ResetAt;
 
         public bool LowUsageWarmTriggered { get; set; }
+
+        public DateTimeOffset? LowUsageWarmResetAt { get; set; }
 
         public bool PendingStart { get; set; }
 

@@ -88,8 +88,14 @@ public sealed class WindowStartRequestSenderTests
     public async Task Antigravity_fetches_project_and_models_then_uses_first_selector_match()
     {
         string? generationBody = null;
+        string? generationUserAgent = null;
         var handler = new FakeHttpMessageHandler(request =>
         {
+            if (request.RequestUri!.Host.Equals("api.github.com", StringComparison.OrdinalIgnoreCase))
+            {
+                return JsonResponse("""{ "tag_name": "v9.8.7" }""");
+            }
+
             var path = request.RequestUri!.AbsolutePath;
             if (path.EndsWith(":loadCodeAssist", StringComparison.Ordinal))
             {
@@ -110,6 +116,7 @@ public sealed class WindowStartRequestSenderTests
             }
 
             generationBody = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+            generationUserAgent = request.Headers.UserAgent.ToString();
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent("data: [DONE]\n", Encoding.UTF8, "text/event-stream"),
@@ -123,6 +130,9 @@ public sealed class WindowStartRequestSenderTests
 
         using var document = JsonDocument.Parse(generationBody!);
         Assert.Equal("gemini-3.5-flash-extra-low", document.RootElement.GetProperty("model").GetString());
+        Assert.StartsWith("antigravity/cli/9.8.7 ", generationUserAgent, StringComparison.Ordinal);
+        Assert.Contains("aidev_client", generationUserAgent, StringComparison.Ordinal);
+        Assert.DoesNotContain("auth_method", generationUserAgent, StringComparison.Ordinal);
         Assert.False(document.RootElement.GetProperty("request").GetProperty("generationConfig").TryGetProperty("maxOutputTokens", out _));
         Assert.Equal(0, document.RootElement.GetProperty("request").GetProperty("generationConfig").GetProperty("thinkingConfig").GetProperty("thinkingBudget").GetInt32());
     }
@@ -215,6 +225,11 @@ public sealed class WindowStartRequestSenderTests
         var generationRequested = false;
         var handler = new FakeHttpMessageHandler(request =>
         {
+            if (request.RequestUri!.Host.Equals("api.github.com", StringComparison.OrdinalIgnoreCase))
+            {
+                return JsonResponse("""{ "tag_name": "v9.8.7" }""");
+            }
+
             var path = request.RequestUri!.AbsolutePath;
             if (path.EndsWith(":loadCodeAssist", StringComparison.Ordinal))
             {

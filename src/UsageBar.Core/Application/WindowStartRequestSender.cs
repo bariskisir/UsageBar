@@ -26,6 +26,9 @@ internal sealed class WindowStartRequestSender(
     private const string ClaudeChatBeta = "claude-code-20250219,oauth-2025-04-20";
     private const string ClaudeSystemPrompt = "You are Claude Code, Anthropic's official CLI for Claude.";
     private const string AntigravityBaseEndpoint = "https://daily-cloudcode-pa.googleapis.com";
+    private const string AntigravityReleasesEndpoint = "https://api.github.com/repos/google-antigravity/antigravity-cli/releases/latest";
+    private const string DefaultAntigravityCliVersion = "1.0.14";
+    private string? _cachedAntigravityCliVersion;
 
     public Task StartAsync(WindowStartRequest request, CancellationToken cancellationToken) => request.ProviderName.ToLowerInvariant() switch
     {
@@ -120,7 +123,8 @@ internal sealed class WindowStartRequestSender(
     private async Task StartAntigravityAsync(WindowStartRequest windowStartRequest, CancellationToken cancellationToken)
     {
         var auth = antigravityAuthReader.Read() ?? throw new ProviderException("Antigravity credentials were not found.");
-        var userAgent = AntigravityUserAgent();
+        var cliVersion = await GetAntigravityCliVersionAsync(cancellationToken).ConfigureAwait(false);
+        var userAgent = AntigravityUserAgent(cliVersion);
         var projectPayload = new JsonObject
         {
             ["metadata"] = new JsonObject { ["ideType"] = "ANTIGRAVITY" },
@@ -177,6 +181,39 @@ internal sealed class WindowStartRequestSender(
         AddAntigravityHeaders(request, auth.AccessToken, userAgent, "text/event-stream");
         var responseBody = await SendAndDrainAsync(request, "Antigravity window start", cancellationToken).ConfigureAwait(false);
         LogCompletion("Antigravity", model.Id, responseBody, instructions: null);
+    }
+
+    private async Task<string> GetAntigravityCliVersionAsync(CancellationToken cancellationToken)
+    {
+        if (_cachedAntigravityCliVersion is not null)
+        {
+            return _cachedAntigravityCliVersion;
+        }
+
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, AntigravityReleasesEndpoint);
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            request.Headers.TryAddWithoutValidation("User-Agent", "UsageBar");
+            using var document = await SendForJsonAsync(request, "Antigravity CLI version lookup", cancellationToken).ConfigureAwait(false);
+            var tagName = ReadString(document.RootElement, "tag_name");
+            if (!string.IsNullOrWhiteSpace(tagName))
+            {
+                _cachedAntigravityCliVersion = tagName.StartsWith('v') ? tagName[1..] : tagName;
+                return _cachedAntigravityCliVersion;
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            // Version discovery is optional; match AntigravityProvider's compatible fallback.
+        }
+
+        _cachedAntigravityCliVersion = DefaultAntigravityCliVersion;
+        return _cachedAntigravityCliVersion;
     }
 
     private async Task<string?> TryGetCodexVersionAsync(CancellationToken cancellationToken)
@@ -606,7 +643,7 @@ internal sealed class WindowStartRequestSender(
     private static bool ReadBool(JsonElement element, string name) =>
         TryGetProperty(element, name, out var value) && value.ValueKind is JsonValueKind.True or JsonValueKind.False && value.GetBoolean();
 
-    private static string AntigravityUserAgent()
+    private static string AntigravityUserAgent(string cliVersion)
     {
         var os = OperatingSystem.IsWindows() ? "windows" : OperatingSystem.IsMacOS() ? "darwin" : "linux";
         var architecture = RuntimeInformation.ProcessArchitecture switch
@@ -617,7 +654,7 @@ internal sealed class WindowStartRequestSender(
             Architecture.Arm => "arm",
             var value => value.ToString().ToLowerInvariant(),
         };
-        return $"antigravity/cli/UsageBar (aidev_client; os_type={os}; arch={architecture}; auth_method=consumer)";
+        return $"antigravity/cli/{cliVersion} (aidev_client; os_type={os}; arch={architecture})";
     }
 
     private sealed record DynamicModel(
