@@ -92,6 +92,39 @@ public sealed class ThresholdNotifierTests
     }
 
     [Fact]
+    public void Reset_timestamp_advance_confirms_reset_above_low_usage_cutoff()
+    {
+        var notifier = new ThresholdNotifier();
+        var previousResetAt = new DateTimeOffset(2026, 7, 19, 12, 0, 0, TimeSpan.Zero);
+        notifier.Evaluate(
+            [new UsageWindow("Antigravity", "Session", 80, subLabel: "Gemini", resetAt: previousResetAt)],
+            Settings);
+
+        var reset = Assert.Single(notifier.Evaluate(
+            [new UsageWindow("Antigravity", "Session", 8, subLabel: "Gemini", resetAt: previousResetAt.AddHours(5))],
+            Settings));
+
+        Assert.Equal(NotificationLevel.Reset, reset.Level);
+        Assert.Contains("Antigravity Session (Gemini) reset to 8%", reset.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Partial_usage_drop_without_reset_evidence_is_ignored()
+    {
+        var notifier = new ThresholdNotifier();
+        var resetAt = new DateTimeOffset(2026, 7, 19, 12, 0, 0, TimeSpan.Zero);
+        notifier.Evaluate(
+            [new UsageWindow("Antigravity", "Weekly", 66, resetAt: resetAt)],
+            Settings);
+
+        var notifications = notifier.Evaluate(
+            [new UsageWindow("Antigravity", "Weekly", 34, resetAt: resetAt)],
+            Settings);
+
+        Assert.Empty(notifications);
+    }
+
+    [Fact]
     public void Windows_are_tracked_independently()
     {
         var notifier = new ThresholdNotifier();

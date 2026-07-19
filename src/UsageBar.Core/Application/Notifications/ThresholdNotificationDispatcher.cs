@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using UsageBar.Core.Configuration;
 using UsageBar.Core.Domain;
 
@@ -10,14 +11,17 @@ internal sealed class ThresholdNotificationDispatcher : IThresholdNotificationDi
 
     private readonly IUsageView _view;
     private readonly IReadOnlyList<IRemoteNotificationService> _remoteServices;
+    private readonly ILogger<ThresholdNotificationDispatcher> _logger;
     private readonly ThresholdNotifier _thresholds = new();
 
     public ThresholdNotificationDispatcher(
         IUsageView view,
-        IEnumerable<IRemoteNotificationService> remoteServices)
+        IEnumerable<IRemoteNotificationService> remoteServices,
+        ILogger<ThresholdNotificationDispatcher> logger)
     {
         _view = view;
         _remoteServices = remoteServices.ToArray();
+        _logger = logger;
     }
 
     public async Task SendTestNotificationAsync(AppSettings settings, CancellationToken cancellationToken = default)
@@ -55,13 +59,15 @@ internal sealed class ThresholdNotificationDispatcher : IThresholdNotificationDi
             }
 
             var message = NotificationMessageFormatter.Format(level, string.Join(Environment.NewLine, lines));
+            _logger.LogInformation(
+                "Usage notification detected: level={NotificationLevel}; itemCount={ItemCount}; registeredRemoteServiceCount={RemoteServiceCount}.",
+                level,
+                lines.Count,
+                _remoteServices.Count);
             _view.Notify(level, message);
 
-            if (level != NotificationLevel.Reset)
-            {
-                await Task.WhenAll(_remoteServices.Select(service => service.SendAsync(message, settings, cancellationToken)))
-                    .ConfigureAwait(false);
-            }
+            await Task.WhenAll(_remoteServices.Select(service => service.SendAsync(message, settings, cancellationToken)))
+                .ConfigureAwait(false);
         }
     }
 }

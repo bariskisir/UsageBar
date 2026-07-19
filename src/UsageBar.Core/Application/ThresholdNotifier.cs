@@ -42,9 +42,13 @@ internal sealed class ThresholdNotifier
             if (currentFraction < previousFraction)
             {
                 // Only emit a reset notification when usage drops to a genuinely low
-                // level (< 5 %).  Partial decreases — such as a weekly bucket dropping
-                // from 66 % to 34 % — are not real resets and should not be announced.
-                if (currentFraction <= 0.05)
+                // level (<= 5%), or when the provider confirms a new window by advancing
+                // its reset timestamp. Partial decreases with the same window deadline
+                // are not real resets and should not be announced.
+                var resetTimestampAdvanced = current.ResetAt is { } currentResetAt
+                    && previous.ResetAt is { } previousResetAt
+                    && currentResetAt > previousResetAt;
+                if (currentFraction <= 0.05 || resetTimestampAdvanced)
                 {
                     notifications.Add(new ThresholdNotification(
                         NotificationLevel.Reset,

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using UsageBar.Core.Application;
 using UsageBar.Core.Configuration;
 using UsageBar.Core.Domain;
@@ -12,7 +13,7 @@ public sealed class ThresholdNotificationDispatcherTests
     {
         var view = new RecordingUsageView();
         var remote = new RecordingRemoteNotificationService();
-        var dispatcher = new ThresholdNotificationDispatcher(view, [remote]);
+        var dispatcher = CreateDispatcher(view, remote);
 
         await dispatcher.EmitAsync(
             [TestData.Window("Codex", "Session", 60), TestData.Window("Claude", "Weekly", 60)],
@@ -33,7 +34,7 @@ public sealed class ThresholdNotificationDispatcherTests
     {
         var view = new RecordingUsageView();
         var remote = new RecordingRemoteNotificationService();
-        var dispatcher = new ThresholdNotificationDispatcher(view, [remote]);
+        var dispatcher = CreateDispatcher(view, remote);
 
         await dispatcher.SendTestNotificationAsync(AppSettings.Default);
 
@@ -44,11 +45,11 @@ public sealed class ThresholdNotificationDispatcherTests
     }
 
     [Fact]
-    public async Task Antigravity_low_usage_reset_notifies_without_a_prior_threshold_alert()
+    public async Task Antigravity_low_usage_reset_notifies_local_and_remote_channels()
     {
         var view = new RecordingUsageView();
         var remote = new RecordingRemoteNotificationService();
-        var dispatcher = new ThresholdNotificationDispatcher(view, [remote]);
+        var dispatcher = CreateDispatcher(view, remote);
 
         await dispatcher.EmitAsync(
             [TestData.Window("Antigravity", "Session", 2, null, "Gemini")],
@@ -61,8 +62,13 @@ public sealed class ThresholdNotificationDispatcherTests
         var notification = Assert.Single(view.Notifications);
         Assert.Equal(NotificationLevel.Reset, notification.Level);
         Assert.Contains("Antigravity Session (Gemini) reset to 0%", notification.Message, StringComparison.Ordinal);
-        Assert.Empty(remote.Messages);
+        Assert.Equal([notification.Message], remote.Messages);
     }
+
+    private static ThresholdNotificationDispatcher CreateDispatcher(
+        IUsageView view,
+        IRemoteNotificationService remote) =>
+        new(view, [remote], NullLogger<ThresholdNotificationDispatcher>.Instance);
 
     private sealed class RecordingUsageView : IUsageView
     {
