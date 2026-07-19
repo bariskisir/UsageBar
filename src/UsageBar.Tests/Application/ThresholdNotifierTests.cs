@@ -255,4 +255,41 @@ public sealed class ThresholdNotifierTests
         Assert.Equal(NotificationLevel.Critical, critical.Level);
         Assert.Contains("Gemini", critical.Message, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void Antigravity_bucket_and_window_combinations_are_tracked_independently()
+    {
+        var notifier = new ThresholdNotifier();
+        IReadOnlyList<UsageWindow> baseline =
+        [
+            new("Antigravity", "Session", 80, subLabel: "Gemini"),
+            new("Antigravity", "Weekly", 80, subLabel: "Gemini"),
+            new("Antigravity", "Session", 80, subLabel: "Claude and GPT"),
+            new("Antigravity", "Weekly", 80, subLabel: "Claude and GPT"),
+        ];
+        notifier.Evaluate(baseline, Settings);
+
+        var notifications = notifier.Evaluate(
+            [
+                new UsageWindow("Antigravity", "Session", 0, subLabel: "Gemini"),
+                new UsageWindow("Antigravity", "Weekly", 80, subLabel: "Gemini"),
+                new UsageWindow("Antigravity", "Session", 80, subLabel: "Claude and GPT"),
+                new UsageWindow("Antigravity", "Weekly", 0, subLabel: "Claude and GPT"),
+            ],
+            Settings);
+
+        Assert.Equal(2, notifications.Count);
+        Assert.Contains(
+            notifications,
+            item => item.Level == NotificationLevel.Reset
+                && item.Message.Contains("Session (Gemini)", StringComparison.Ordinal));
+        Assert.Contains(
+            notifications,
+            item => item.Level == NotificationLevel.Reset
+                && item.Message.Contains("Weekly (Claude and GPT)", StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            notifications,
+            item => item.Message.Contains("Weekly (Gemini)", StringComparison.Ordinal)
+                || item.Message.Contains("Session (Claude and GPT)", StringComparison.Ordinal));
+    }
 }

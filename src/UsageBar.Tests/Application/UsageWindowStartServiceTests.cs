@@ -57,7 +57,7 @@ public sealed class UsageWindowStartServiceTests
     }
 
     [Fact]
-    public async Task Low_usage_and_later_reset_timestamp_across_two_observations_warm_once()
+    public async Task Low_usage_reset_timestamp_move_warms_once_and_ignores_small_deadline_drift()
     {
         var sender = new RecordingSender();
         var service = CreateService(sender);
@@ -68,8 +68,41 @@ public sealed class UsageWindowStartServiceTests
         await service.ObserveAsync([Session(2, resetAt.AddMinutes(5))], settings, CancellationToken.None);
         Assert.Single(sender.Calls);
 
-        await service.ObserveAsync([Session(2, resetAt.AddMinutes(10))], settings, CancellationToken.None);
+        await service.ObserveAsync([Session(2, resetAt.AddMinutes(5).AddSeconds(30))], settings, CancellationToken.None);
         Assert.Single(sender.Calls);
+    }
+
+    [Fact]
+    public async Task Moving_low_usage_deadline_rearms_after_the_previous_warm_window_expires()
+    {
+        var sender = new RecordingSender();
+        var service = CreateService(sender);
+        var settings = AntigravitySettings(startWindow: true, selector: "oss,haiku");
+        var firstResetAt = new DateTimeOffset(2026, 7, 19, 10, 0, 0, TimeSpan.Zero);
+        UsageWindow claudeAndGpt(DateTimeOffset resetAt) =>
+            new("Antigravity", "Session", 0, subLabel: "Claude and GPT", resetAt: resetAt);
+
+        await service.ObserveAsync([claudeAndGpt(firstResetAt)], settings, CancellationToken.None);
+        await service.ObserveAsync([claudeAndGpt(firstResetAt.AddMinutes(5))], settings, CancellationToken.None);
+        Assert.Single(sender.Calls);
+
+        // The successful warm pins approximately the observed deadline. A small server-side
+        // adjustment belongs to the same window and must not send a duplicate request.
+        await service.ObserveAsync(
+            [claudeAndGpt(firstResetAt.AddMinutes(5).AddSeconds(30))],
+            settings,
+            CancellationToken.None);
+        Assert.Single(sender.Calls);
+
+        // After that window expires, an unused bucket resumes moving its reset deadline.
+        // This is a new generation and must be warmed even though usage stayed below 5%.
+        await service.ObserveAsync(
+            [claudeAndGpt(firstResetAt.AddHours(5).AddMinutes(10))],
+            settings,
+            CancellationToken.None);
+
+        Assert.Equal(2, sender.Calls.Count);
+        Assert.All(sender.Calls, call => Assert.Equal("Claude and GPT", call.WindowSubLabel));
     }
 
     [Fact]
@@ -214,6 +247,40 @@ public sealed class UsageWindowStartServiceTests
         Assert.Contains(sender.Calls, request => request.WindowSubLabel == "Gemini");
         Assert.Contains(sender.Calls, request => request.WindowSubLabel == "Claude and GPT");
         Assert.Contains(sender.Calls, request => request.WindowSubLabel == "Future Family");
+    }
+
+    [Fact]
+    public async Task Antigravity_warms_each_session_bucket_but_never_weekly_windows()
+    {
+        var sender = new RecordingSender();
+        var service = CreateService(sender);
+        var settings = AntigravitySettings(startWindow: true, selector: "flash,oss");
+        var resetAt = new DateTimeOffset(2026, 7, 19, 10, 0, 0, TimeSpan.Zero);
+
+        await service.ObserveAsync(
+            [
+                new UsageWindow("Antigravity", "Session", 0, subLabel: "Gemini", resetAt: resetAt),
+                new UsageWindow("Antigravity", "Weekly", 60, subLabel: "Gemini", resetAt: resetAt.AddDays(5)),
+                new UsageWindow("Antigravity", "Session", 0, subLabel: "Claude and GPT", resetAt: resetAt),
+                new UsageWindow("Antigravity", "Weekly", 70, subLabel: "Claude and GPT", resetAt: resetAt.AddDays(5)),
+            ],
+            settings,
+            CancellationToken.None);
+
+        await service.ObserveAsync(
+            [
+                new UsageWindow("Antigravity", "Session", 0, subLabel: "Gemini", resetAt: resetAt.AddMinutes(5)),
+                new UsageWindow("Antigravity", "Weekly", 0, subLabel: "Gemini", resetAt: resetAt.AddDays(12)),
+                new UsageWindow("Antigravity", "Session", 0, subLabel: "Claude and GPT", resetAt: resetAt.AddMinutes(5)),
+                new UsageWindow("Antigravity", "Weekly", 0, subLabel: "Claude and GPT", resetAt: resetAt.AddDays(12)),
+            ],
+            settings,
+            CancellationToken.None);
+
+        Assert.Equal(2, sender.Calls.Count);
+        Assert.All(sender.Calls, call => Assert.Equal("Session", call.WindowLabel));
+        Assert.Contains(sender.Calls, call => call.WindowSubLabel == "Gemini");
+        Assert.Contains(sender.Calls, call => call.WindowSubLabel == "Claude and GPT");
     }
 
     private static UsageWindowStartService CreateService(IWindowStartRequestSender sender) =>
