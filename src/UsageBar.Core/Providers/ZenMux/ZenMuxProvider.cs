@@ -4,7 +4,7 @@ namespace UsageBar.Core.Providers;
 /// <summary>Reports the ZenMux PAYG USD balance.</summary>
 public sealed class ZenMuxProvider(HttpClient httpClient) : BalanceUsageProvider(httpClient)
 {
-    public override ProviderDescriptor Descriptor { get; } = new("ZenMux", 111, ProviderAuthenticationKind.ApiKey, CredentialNames.ZenMux, SettingsOrder: 5);
+    public override ProviderDescriptor Descriptor { get; } = new("ZenMux", 111, ProviderAuthenticationKind.ApiKey, CredentialNames.ZenMux, SettingsOrder: 6);
     protected override string CredentialName => CredentialNames.ZenMux;
 
     protected override async Task<BalanceFetchResult> FetchBalanceAsync(HttpClient httpClient, string apiKey, CancellationToken cancellationToken)

@@ -87,6 +87,7 @@ internal static class CoreServiceCollectionExtensions
         RegisterProvider<PoeProvider, TestPoeProvider>(services, useDemoProviders);
         RegisterProvider<AlibabaProvider, TestAlibabaProvider>(services, useDemoProviders);
         RegisterProvider<AntigravityProvider, TestAntigravityProvider>(services, useDemoProviders);
+        RegisterProvider<CommandCodeProvider, TestCommandCodeProvider>(services, useDemoProviders);
     }
 
     private static void RegisterProvider<TProvider, TDemoProvider>(

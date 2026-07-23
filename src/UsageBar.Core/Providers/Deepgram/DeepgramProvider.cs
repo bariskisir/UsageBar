@@ -8,7 +8,7 @@ namespace UsageBar.Core.Providers;
 /// </summary>
 public sealed class DeepgramProvider(HttpClient httpClient) : BalanceUsageProvider(httpClient)
 {
-    public override ProviderDescriptor Descriptor { get; } = new("Deepgram", 120, ProviderAuthenticationKind.ApiKey, CredentialNames.Deepgram, SettingsOrder: 7);
+    public override ProviderDescriptor Descriptor { get; } = new("Deepgram", 120, ProviderAuthenticationKind.ApiKey, CredentialNames.Deepgram, SettingsOrder: 8);
     protected override string CredentialName => CredentialNames.Deepgram;
 
     protected override async Task<BalanceFetchResult> FetchBalanceAsync(HttpClient httpClient, string apiKey, CancellationToken cancellationToken)

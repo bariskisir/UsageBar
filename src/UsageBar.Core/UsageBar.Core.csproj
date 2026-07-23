@@ -42,6 +42,7 @@
     <EmbeddedResource Include="Providers\MiniMax\minimax.svg" />
     <EmbeddedResource Include="Providers\Codebuff\codebuff.svg" />
     <EmbeddedResource Include="Providers\Antigravity\antigravity.svg" />
+    <EmbeddedResource Include="Providers\CommandCode\commandcode.svg" />
   </ItemGroup>
 
 </Project>

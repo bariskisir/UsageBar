@@ -20,6 +20,7 @@ function providerIcon(iconKey, title) {
   if (name === "minimax") return iconImage("{{MINIMAX_ICON}}", "MiniMax");
   if (name === "codebuff") return iconImage("{{CODEBUFF_ICON}}", "Codebuff");
   if (name === "antigravity") return iconImage("{{ANTIGRAVITY_ICON}}", "Antigravity");
+  if (name === "commandcode") return iconImage("{{COMMANDCODE_ICON}}", "CommandCode");
   return null;
 }
 

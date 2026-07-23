@@ -18,6 +18,7 @@ UsageBar is a minimal Windows notification-area app for showing LLM or API usage
 - Codex OAuth
 - Claude OAuth
 - Antigravity OAuth
+- Command Code API
 - ElevenLabs API
 - DeepSeek API
 - OpenRouter API

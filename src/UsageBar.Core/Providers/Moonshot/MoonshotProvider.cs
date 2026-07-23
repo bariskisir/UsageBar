@@ -4,7 +4,7 @@ namespace UsageBar.Core.Providers;
 /// <summary>Reports the Moonshot account available USD balance.</summary>
 public sealed class MoonshotProvider(HttpClient httpClient) : BalanceUsageProvider(httpClient)
 {
-    public override ProviderDescriptor Descriptor { get; } = new("Moonshot (Kimi)", 115, ProviderAuthenticationKind.ApiKey, CredentialNames.Moonshot, SettingsOrder: 6);
+    public override ProviderDescriptor Descriptor { get; } = new("Moonshot (Kimi)", 115, ProviderAuthenticationKind.ApiKey, CredentialNames.Moonshot, SettingsOrder: 7);
     protected override string CredentialName => CredentialNames.Moonshot;
 
     protected override async Task<BalanceFetchResult> FetchBalanceAsync(HttpClient httpClient, string apiKey, CancellationToken cancellationToken)
