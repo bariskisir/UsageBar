@@ -48,8 +48,7 @@ internal sealed class UsageWindowStartService(
             foreach (var providerName in enabledProviders.Keys)
             {
                 var currentWindows = windows
-                    .Where(window => string.Equals(window.ProviderName, providerName, StringComparison.OrdinalIgnoreCase)
-                        && string.Equals(window.Label, "Session", StringComparison.OrdinalIgnoreCase))
+                    .Where(window => string.Equals(window.ProviderName, providerName, StringComparison.OrdinalIgnoreCase))
                     .GroupBy(WindowIdentity)
                     .ToDictionary(group => group.Key, group => group.Last());
 
@@ -103,6 +102,19 @@ internal sealed class UsageWindowStartService(
                             observation.LowUsageWarmTriggered = true;
                             observation.IsMovingReset = true;
                         }
+                    }
+
+                    // When usage was already effectively 0 at arm time and stays 0,
+                    // no reset-drop would ever fire because 0 < 0 is false, and a stable
+                    // deadline means the moving-deadline path is also silent. Warm once
+                    // so the session gets initialized.
+                    if (!observation.LowUsageWarmTriggered
+                        && !usageReset
+                        && current.Value.UsedPercent < 1
+                        && observation.UsedPercent < 1)
+                    {
+                        observation.LowUsageWarmTriggered = true;
+                        observation.IsMovingReset = true;
                     }
 
                     if (usageReset || observation.IsMovingReset)

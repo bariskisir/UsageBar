@@ -249,8 +249,8 @@ public sealed class UsageWindowStartServiceTests
         Assert.Contains(sender.Calls, request => request.WindowSubLabel == "Future Family");
     }
 
-    [Fact]
-    public async Task Antigravity_warms_each_session_bucket_but_never_weekly_windows()
+[Fact]
+    public async Task Antigravity_warms_each_bucket()
     {
         var sender = new RecordingSender();
         var service = CreateService(sender);
@@ -277,10 +277,11 @@ public sealed class UsageWindowStartServiceTests
             settings,
             CancellationToken.None);
 
-        Assert.Equal(2, sender.Calls.Count);
-        Assert.All(sender.Calls, call => Assert.Equal("Session", call.WindowLabel));
-        Assert.Contains(sender.Calls, call => call.WindowSubLabel == "Gemini");
-        Assert.Contains(sender.Calls, call => call.WindowSubLabel == "Claude and GPT");
+        Assert.Equal(4, sender.Calls.Count);
+        Assert.Contains(sender.Calls, call => call.WindowSubLabel == "Gemini" && call.WindowLabel == "Session");
+        Assert.Contains(sender.Calls, call => call.WindowSubLabel == "Claude and GPT" && call.WindowLabel == "Session");
+        Assert.Contains(sender.Calls, call => call.WindowSubLabel == "Gemini" && call.WindowLabel == "Weekly");
+        Assert.Contains(sender.Calls, call => call.WindowSubLabel == "Claude and GPT" && call.WindowLabel == "Weekly");
     }
 
     private static UsageWindowStartService CreateService(IWindowStartRequestSender sender) =>

@@ -148,39 +148,57 @@ internal sealed class WindowStartRequestSender(
                 windowStartRequest.WindowSubLabel);
 
         var requestId = $"usagebar-{Guid.NewGuid():N}";
-        var payload = new JsonObject
+
+        bool withThinking = model.ReasoningLevels.Count > 0;
+        while (true)
         {
-            ["project"] = projectId,
-            ["requestId"] = requestId,
-            ["request"] = new JsonObject
-            {
-                ["contents"] = new JsonArray
-                {
-                    new JsonObject
-                    {
-                        ["role"] = "user",
-                        ["parts"] = new JsonArray { new JsonObject { ["text"] = "2+2" } },
-                    },
-                },
-                ["generationConfig"] = new JsonObject
+            var generationConfig = withThinking
+                ? new JsonObject
                 {
                     ["thinkingConfig"] = new JsonObject
                     {
                         ["includeThoughts"] = false,
                         ["thinkingBudget"] = 0,
                     },
-                },
-                ["sessionId"] = $"-{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}",
-            },
-            ["model"] = model.Id,
-            ["userAgent"] = "antigravity",
-            ["requestType"] = "checkpoint",
-        };
+                }
+                : new JsonObject();
 
-        using var request = JsonRequest(HttpMethod.Post, $"{AntigravityBaseEndpoint}/v1internal:streamGenerateContent?alt=sse", payload);
-        AddAntigravityHeaders(request, auth.AccessToken, userAgent, "text/event-stream");
-        var responseBody = await SendAndDrainAsync(request, "Antigravity window start", cancellationToken).ConfigureAwait(false);
-        LogCompletion("Antigravity", model.Id, responseBody, instructions: null);
+            var payload = new JsonObject
+            {
+                ["project"] = projectId,
+                ["requestId"] = requestId,
+                ["request"] = new JsonObject
+                {
+                    ["contents"] = new JsonArray
+                    {
+                        new JsonObject
+                        {
+                            ["role"] = "user",
+                            ["parts"] = new JsonArray { new JsonObject { ["text"] = "2+2" } },
+                        },
+                    },
+                    ["generationConfig"] = generationConfig,
+                    ["sessionId"] = $"-{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}",
+                },
+                ["model"] = model.Id,
+                ["userAgent"] = "antigravity",
+                ["requestType"] = "checkpoint",
+            };
+
+            using var request = JsonRequest(HttpMethod.Post, $"{AntigravityBaseEndpoint}/v1internal:streamGenerateContent?alt=sse", payload);
+            AddAntigravityHeaders(request, auth.AccessToken, userAgent, "text/event-stream");
+
+            try
+            {
+                var responseBody = await SendAndDrainAsync(request, "Antigravity window start", cancellationToken).ConfigureAwait(false);
+                LogCompletion("Antigravity", model.Id, responseBody, instructions: null);
+                return;
+            }
+            catch (ProviderException pex) when (pex.Message.Contains("HTTP 400") && withThinking)
+            {
+                withThinking = false;
+            }
+        }
     }
 
     private async Task<string> GetAntigravityCliVersionAsync(CancellationToken cancellationToken)
