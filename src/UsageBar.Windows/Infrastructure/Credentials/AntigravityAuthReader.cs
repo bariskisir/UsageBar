@@ -15,13 +15,23 @@ public sealed class AntigravityAuthReader : IAntigravityAuthReader
             var credJson = WindowsCredentialManager.Read(CredentialTarget);
             if (!string.IsNullOrWhiteSpace(credJson))
             {
-                return ParseCredentialManagerJson(credJson);
+                var parsed = ParseCredentialManagerJson(credJson);
+                if (parsed is not null)
+                {
+                    return parsed;
+                }
             }
 
             var fileFallback = new FileAntigravityAuthReader(FallbackPath).Read();
             if (fileFallback is not null)
             {
-                Save(fileFallback);
+                try
+                {
+                    Save(fileFallback);
+                }
+                catch
+                {
+                }
             }
 
             return fileFallback;

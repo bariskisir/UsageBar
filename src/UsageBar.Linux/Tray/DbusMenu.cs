@@ -45,6 +45,7 @@ internal sealed class DbusMenu : IDbusMenu
 {
     private const int RootId = 0;
     private const int SettingsId = 3;
+    private const int RefreshId = 7;
     private const int QuitId = 5;
 
     private readonly NativeTray _tray;
@@ -74,7 +75,7 @@ internal sealed class DbusMenu : IDbusMenu
         string[] propertyNames)
     {
         var requestedIds = ids.Length == 0
-            ? [RootId, SettingsId, QuitId]
+            ? [RootId, SettingsId, RefreshId, QuitId]
             : ids;
         var result = requestedIds
             .Where(IsKnownId)
@@ -157,6 +158,7 @@ internal sealed class DbusMenu : IDbusMenu
             : new object[]
             {
                 CreateItemLayout(SettingsId),
+                CreateItemLayout(RefreshId),
                 CreateItemLayout(QuitId),
             };
 
@@ -173,6 +175,7 @@ internal sealed class DbusMenu : IDbusMenu
             ["children-display"] = "submenu",
         },
         SettingsId => CreateActionProperties("Settings"),
+        RefreshId => CreateActionProperties("Refresh"),
         QuitId => CreateActionProperties("Exit"),
         _ => throw new DBusException(
             "com.canonical.dbusmenu.Error.UnknownItem",
@@ -186,7 +189,7 @@ internal sealed class DbusMenu : IDbusMenu
         ["visible"] = true,
     };
 
-    private static bool IsKnownId(int id) => id is RootId or SettingsId or QuitId;
+    private static bool IsKnownId(int id) => id is RootId or SettingsId or RefreshId or QuitId;
 
     private void Activate(int id)
     {
@@ -194,6 +197,9 @@ internal sealed class DbusMenu : IDbusMenu
         {
             case SettingsId:
                 _tray.RaiseSettingsRequested();
+                break;
+            case RefreshId:
+                _tray.RaiseRefreshRequested();
                 break;
             case QuitId:
                 _tray.RaiseExitRequested();

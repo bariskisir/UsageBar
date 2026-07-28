@@ -15,13 +15,23 @@ public sealed class AntigravityAuthReader : IAntigravityAuthReader
             var json = ReadFromLibsecret();
             if (!string.IsNullOrWhiteSpace(json))
             {
-                return ParseCredentialJson(json);
+                var parsed = ParseCredentialJson(json);
+                if (parsed is not null)
+                {
+                    return parsed;
+                }
             }
 
             var fileFallback = new FileAntigravityAuthReader(FallbackPath).Read();
             if (fileFallback is not null)
             {
-                Save(fileFallback);
+                try
+                {
+                    Save(fileFallback);
+                }
+                catch
+                {
+                }
             }
 
             return fileFallback;
@@ -40,7 +50,7 @@ public sealed class AntigravityAuthReader : IAntigravityAuthReader
     {
         try
         {
-            using (var process = Process.Start(new ProcessStartInfo { FileName = "secret-tool", ArgumentList = { "lookup", "application", "antigravity", "target", "gemini:antigravity" }, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true, }))
+            using (var process = Process.Start(new ProcessStartInfo { FileName = "secret-tool", ArgumentList = { "lookup", "service", "gemini", "username", "antigravity" }, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true, }))
             {
                 if (process is null)
                 {
@@ -67,7 +77,7 @@ public sealed class AntigravityAuthReader : IAntigravityAuthReader
         var json = SerializeAuth(auth);
         try
         {
-            using (var process = Process.Start(new ProcessStartInfo { FileName = "secret-tool", ArgumentList = { "store", "--label=gemini:antigravity", "application", "antigravity", "target", "gemini:antigravity" }, RedirectStandardInput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true, }))
+            using (var process = Process.Start(new ProcessStartInfo { FileName = "secret-tool", ArgumentList = { "store", "--label=gemini:antigravity", "service", "gemini", "username", "antigravity" }, RedirectStandardInput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true, }))
             {
                 if (process is null)
                 {
