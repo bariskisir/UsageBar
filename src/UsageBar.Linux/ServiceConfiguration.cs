@@ -22,7 +22,9 @@ internal static class ServiceConfiguration
         services.AddSingleton<IAntigravityAuthReader, AntigravityAuthReader>();
         services.AddSingleton<IStartupRegistrationService, StartupRegistrationService>();
 
+        services.AddSingleton<GtkDispatcher>();
         services.AddSingleton<NativeTray>();
+        services.AddSingleton<FallbackStatusWindow>();
         services.AddSingleton<NativeTooltip>();
         services.AddSingleton<SettingsPanel>();
         services.AddSingleton<IUsageView, UsageView>();

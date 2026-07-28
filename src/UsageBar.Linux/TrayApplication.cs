@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using System.Runtime.InteropServices;
 using UsageBar.Core.Application;
 using UsageBar.Core.Configuration;
 using UsageBar.Core.Infrastructure;
@@ -11,6 +12,7 @@ namespace UsageBar.Linux;
 internal sealed class TrayApplication : IDisposable
 {
     private readonly NativeTray _tray;
+    private readonly FallbackStatusWindow _fallbackStatusWindow;
     private readonly NativeTooltip _tooltip;
     private readonly IUsageRefreshService _refresh;
     private readonly SettingsPanel _settingsPanel;
@@ -21,6 +23,7 @@ internal sealed class TrayApplication : IDisposable
 
     public TrayApplication(
         NativeTray tray,
+        FallbackStatusWindow fallbackStatusWindow,
         NativeTooltip tooltip,
         IUsageRefreshService refresh,
         SettingsPanel settingsPanel,
@@ -29,6 +32,7 @@ internal sealed class TrayApplication : IDisposable
         ILogger<TrayApplication> logger)
     {
         _tray = tray;
+        _fallbackStatusWindow = fallbackStatusWindow;
         _tooltip = tooltip;
         _refresh = refresh;
         _settingsPanel = settingsPanel;
@@ -42,6 +46,14 @@ internal sealed class TrayApplication : IDisposable
         _logger.LogInformation("Linux tray application initialising.");
         WireEvents();
 
+        if (!_tray.IsStatusNotifierAvailable)
+        {
+            _logger.LogWarning("No StatusNotifier host was detected; showing the fallback status window.");
+            _tooltip.SetTransientFor(_fallbackStatusWindow.Window);
+            _settingsPanel.SetTransientFor(_fallbackStatusWindow.Window);
+            _fallbackStatusWindow.Show();
+        }
+
         var settings = _coordinator.InitializeAsync(_lifetime.Token).GetAwaiter().GetResult();
 
         var refreshTask = _refresh.RunAsync(_lifetime.Token);
@@ -54,11 +66,16 @@ internal sealed class TrayApplication : IDisposable
         ConsoleCancelEventHandler cancelHandler = (_, eventArgs) =>
         {
             eventArgs.Cancel = true;
-            _logger.LogInformation("Ctrl+C pressed, shutting down.");
-            _lifetime.Cancel();
-            Gtk.Application.Invoke((_, _) => Gtk.Application.Quit());
+            RequestShutdown("Ctrl+C pressed");
         };
         Console.CancelKeyPress += cancelHandler;
+        using var terminateRegistration = PosixSignalRegistration.Create(
+            PosixSignal.SIGTERM,
+            context =>
+            {
+                context.Cancel = true;
+                RequestShutdown("SIGTERM received");
+            });
 
         try
         {
@@ -84,17 +101,14 @@ internal sealed class TrayApplication : IDisposable
     {
         _lifetime.Cancel();
         _lifetime.Dispose();
-        _tooltip.Dispose();
-        _settingsPanel.Dispose();
-        _tray.Dispose();
     }
 
     private void WireEvents()
     {
-        _tray.TooltipToggleRequested += () =>
+        _tray.TooltipToggleRequested += (x, y) =>
         {
             _logger.LogInformation("Tooltip toggle requested.");
-            _tooltip.ShowNearIcon();
+            _tooltip.ToggleNearIcon(x, y);
         };
 
         _tray.SettingsRequested += () =>
@@ -109,10 +123,28 @@ internal sealed class TrayApplication : IDisposable
 
         _tray.ExitRequested += () =>
         {
-            _logger.LogInformation("Exit requested.");
-            _lifetime.Cancel();
-            Gtk.Application.Quit();
+            RequestShutdown("Exit requested");
         };
+
+        _fallbackStatusWindow.UsageRequested += () => _tooltip.ShowNearIcon();
+        _fallbackStatusWindow.SettingsRequested += () => _settingsPanel.Show();
+        _fallbackStatusWindow.RefreshRequested += () => _refresh.RequestManualRefresh();
+        _fallbackStatusWindow.ExitRequested += () =>
+        {
+            RequestShutdown("Exit requested from fallback window");
+        };
+    }
+
+    private void RequestShutdown(string reason)
+    {
+        if (_lifetime.IsCancellationRequested)
+        {
+            return;
+        }
+
+        _logger.LogInformation("{ShutdownReason}, shutting down.", reason);
+        _lifetime.Cancel();
+        Gtk.Application.Invoke((_, _) => Gtk.Application.Quit());
     }
 
     private async Task CheckForUpdatesAsync(CancellationToken cancellationToken)

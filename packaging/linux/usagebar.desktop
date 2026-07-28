@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=UsageBar
+Comment=LLM and API usage in the system tray
+Exec=UsageBar
+Icon=usagebar
+Terminal=false
+Categories=Utility;
+StartupNotify=false
+X-AppImage-Name=UsageBar

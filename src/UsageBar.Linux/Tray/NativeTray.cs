@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Tmds.DBus;
 using UsageBar.Core.Application;
 using UsageBar.Core.Domain;
@@ -5,37 +6,85 @@ using UsageBar.Core.Tray;
 
 namespace UsageBar.Linux.Tray;
 
-[DBusInterface("org.kde.StatusNotifierItem")]
-internal interface IStatusNotifierItem : IDBusObject
+[DBusInterface("org.kde.StatusNotifierItem", PropertyType = typeof(StatusNotifierItemProperties))]
+public interface IStatusNotifierItem : IDBusObject
 {
     Task ActivateAsync(int x, int y);
     Task SecondaryActivateAsync(int x, int y);
     Task ContextMenuAsync(int x, int y);
     Task ScrollAsync(int delta, string orientation);
     Task<object> GetAsync(string prop);
-    Task<IDictionary<string, object>> GetAllAsync();
+    Task<StatusNotifierItemProperties> GetAllAsync();
     Task SetAsync(string prop, object val);
-    Task<IDisposable> WatchPropertiesAsync(Action<(string, IDictionary<string, object>, string[])> handler);
+    Task<IDisposable> WatchPropertiesAsync(Action<PropertyChanges> handler);
+    Task<IDisposable> WatchNewIconAsync(Action handler);
+    Task<IDisposable> WatchNewToolTipAsync(Action handler);
+}
+
+[Dictionary]
+public sealed class StatusNotifierItemProperties
+{
+    [Property(Access = PropertyAccess.Read)]
+    public string Category = "ApplicationStatus";
+
+    [Property(Access = PropertyAccess.Read)]
+    public string Id = "usagebar";
+
+    [Property(Access = PropertyAccess.Read)]
+    public string Title = "Usage Bar";
+
+    [Property(Access = PropertyAccess.Read)]
+    public string Status = "Active";
+
+    [Property(Access = PropertyAccess.Read)]
+    public uint WindowId;
+
+    [Property(Access = PropertyAccess.Read)]
+    public bool ItemIsMenu;
+
+    [Property(Access = PropertyAccess.Read)]
+    public string IconThemePath = string.Empty;
+
+    [Property(Access = PropertyAccess.Read)]
+    public ObjectPath Menu = new("/MenuBar");
+
+    [Property(Access = PropertyAccess.Read)]
+    public string IconName = string.Empty;
+
+    [Property(Access = PropertyAccess.Read)]
+    public (int width, int height, byte[] data)[] IconPixmap = [];
+
+    [Property(Access = PropertyAccess.Read)]
+    public string OverlayIconName = string.Empty;
+
+    [Property(Access = PropertyAccess.Read)]
+    public (int width, int height, byte[] data)[] OverlayIconPixmap = [];
+
+    [Property(Access = PropertyAccess.Read)]
+    public string AttentionIconName = string.Empty;
+
+    [Property(Access = PropertyAccess.Read)]
+    public (int width, int height, byte[] data)[] AttentionIconPixmap = [];
+
+    [Property(Access = PropertyAccess.Read)]
+    public string AttentionMovieName = string.Empty;
+
+    [Property(Access = PropertyAccess.Read)]
+    public (string icon, (int width, int height, byte[] data)[] pixmap, string title, string description) ToolTip
+        = (string.Empty, [], "Usage Bar", string.Empty);
 }
 
 internal sealed class StatusNotifierItem : IStatusNotifierItem
 {
     private readonly NativeTray _tray;
-    private readonly IDictionary<string, object> _props;
-    private Action<(string, IDictionary<string, object>, string[])>? _watchHandler;
+    private readonly StatusNotifierItemProperties _props = new();
+    private Action<PropertyChanges>? _watchHandler;
+    private Action? _newIconHandler;
+    private Action? _newToolTipHandler;
 
     public StatusNotifierItem(NativeTray tray)
     {
         _tray = tray;
-        _props = new Dictionary<string, object>
-        {
-            ["Category"] = "ApplicationStatus",
-            ["Id"] = "usagebar",
-            ["Title"] = "Usage Bar",
-            ["Status"] = "Active",
-            ["WindowId"] = 0,
-            ["ItemIsMenu"] = false,
-        };
         ObjectPath = new ObjectPath("/StatusNotifierItem");
     }
 
@@ -43,48 +92,82 @@ internal sealed class StatusNotifierItem : IStatusNotifierItem
 
     public Task ActivateAsync(int x, int y)
     {
-        _tray.ToggleTooltip();
+        _tray.ToggleTooltip(x, y);
         return Task.CompletedTask;
     }
 
     public Task SecondaryActivateAsync(int x, int y)
     {
-        _tray.RaiseRefreshRequested();
+        _tray.ToggleTooltip(x, y);
         return Task.CompletedTask;
     }
 
     public Task ContextMenuAsync(int x, int y)
     {
-        _tray.RaiseSettingsRequested();
         return Task.CompletedTask;
     }
 
     public Task ScrollAsync(int delta, string orientation) => Task.CompletedTask;
 
-    public Task<object> GetAsync(string prop) =>
-        Task.FromResult(_props.TryGetValue(prop, out var value) ? value : new object());
+    public Task<object> GetAsync(string prop) => Task.FromResult(prop switch
+    {
+        nameof(StatusNotifierItemProperties.Category) => (object)_props.Category,
+        nameof(StatusNotifierItemProperties.Id) => _props.Id,
+        nameof(StatusNotifierItemProperties.Title) => _props.Title,
+        nameof(StatusNotifierItemProperties.Status) => _props.Status,
+        nameof(StatusNotifierItemProperties.WindowId) => _props.WindowId,
+        nameof(StatusNotifierItemProperties.ItemIsMenu) => _props.ItemIsMenu,
+        nameof(StatusNotifierItemProperties.IconThemePath) => _props.IconThemePath,
+        nameof(StatusNotifierItemProperties.Menu) => _props.Menu,
+        nameof(StatusNotifierItemProperties.IconName) => _props.IconName,
+        nameof(StatusNotifierItemProperties.IconPixmap) => _props.IconPixmap,
+        nameof(StatusNotifierItemProperties.OverlayIconName) => _props.OverlayIconName,
+        nameof(StatusNotifierItemProperties.OverlayIconPixmap) => _props.OverlayIconPixmap,
+        nameof(StatusNotifierItemProperties.AttentionIconName) => _props.AttentionIconName,
+        nameof(StatusNotifierItemProperties.AttentionIconPixmap) => _props.AttentionIconPixmap,
+        nameof(StatusNotifierItemProperties.AttentionMovieName) => _props.AttentionMovieName,
+        nameof(StatusNotifierItemProperties.ToolTip) => _props.ToolTip,
+        _ => throw new DBusException(
+            "org.freedesktop.DBus.Error.InvalidArgs",
+            $"Unknown StatusNotifierItem property: {prop}"),
+    });
 
-    public Task<IDictionary<string, object>> GetAllAsync() =>
+    public Task<StatusNotifierItemProperties> GetAllAsync() =>
         Task.FromResult(_props);
 
     public Task SetAsync(string prop, object val) => Task.CompletedTask;
 
-    public Task<IDisposable> WatchPropertiesAsync(Action<(string, IDictionary<string, object>, string[])> handler)
+    public Task<IDisposable> WatchPropertiesAsync(Action<PropertyChanges> handler)
     {
         _watchHandler = handler;
         return Task.FromResult<IDisposable>(new DisposableAction(() => _watchHandler = null));
     }
 
-    public void UpdateIconPixmap((int width, int height, byte[] data)[] pixmap)
+    public Task<IDisposable> WatchNewIconAsync(Action handler)
     {
-        _props["IconPixmap"] = pixmap;
-        _watchHandler?.Invoke(("org.kde.StatusNotifierItem", new Dictionary<string, object> { ["IconPixmap"] = pixmap }, []));
+        _newIconHandler = handler;
+        return Task.FromResult<IDisposable>(new DisposableAction(() => _newIconHandler = null));
     }
 
-    public void UpdateToolTip((string icon, string title, string description) tooltip)
+    public Task<IDisposable> WatchNewToolTipAsync(Action handler)
     {
-        _props["ToolTip"] = tooltip;
-        _watchHandler?.Invoke(("org.kde.StatusNotifierItem", new Dictionary<string, object> { ["ToolTip"] = tooltip }, []));
+        _newToolTipHandler = handler;
+        return Task.FromResult<IDisposable>(new DisposableAction(() => _newToolTipHandler = null));
+    }
+
+    public void UpdateIconPixmap((int width, int height, byte[] data)[] pixmap)
+    {
+        _props.IconPixmap = pixmap;
+        _watchHandler?.Invoke(PropertyChanges.ForProperty(nameof(StatusNotifierItemProperties.IconPixmap), pixmap));
+        _newIconHandler?.Invoke();
+    }
+
+    public void UpdateToolTip(
+        (string icon, (int width, int height, byte[] data)[] pixmap, string title, string description) tooltip)
+    {
+        _props.ToolTip = tooltip;
+        _watchHandler?.Invoke(PropertyChanges.ForProperty(nameof(StatusNotifierItemProperties.ToolTip), tooltip));
+        _newToolTipHandler?.Invoke();
     }
 
     private sealed class DisposableAction(Action action) : IDisposable
@@ -98,7 +181,7 @@ internal interface INativeTray
     event Action? SettingsRequested;
     event Action? RefreshRequested;
     event Action? ExitRequested;
-    event Action? TooltipToggleRequested;
+    event Action<int, int>? TooltipToggleRequested;
 
     void UpdateIcon(IReadOnlyList<IconLayout.Bar> bars);
     void ShowNotification(NotificationLevel level, string message);
@@ -108,28 +191,37 @@ internal sealed class NativeTray : INativeTray, IDisposable
 {
     private readonly Connection _connection;
     private readonly StatusNotifierItem _item;
+    private readonly DbusMenu _menu;
+    private readonly ILogger<NativeTray> _logger;
 
     public event Action? SettingsRequested;
     public event Action? RefreshRequested;
     public event Action? ExitRequested;
-    public event Action? TooltipToggleRequested;
+    public event Action<int, int>? TooltipToggleRequested;
 
-    public NativeTray()
+    public NativeTray(ILogger<NativeTray> logger)
     {
-        _connection = Connection.Session ?? throw new InvalidOperationException("D-Bus session bus is not available.");
+        _logger = logger;
+        var address = Address.Session ?? throw new InvalidOperationException("D-Bus session bus is not available.");
+        _connection = new Connection(address);
+        _connection.ConnectAsync().GetAwaiter().GetResult();
 
         _item = new StatusNotifierItem(this);
+        _menu = new DbusMenu(this);
 
         var serviceName = $"org.kde.StatusNotifierItem-{Environment.ProcessId}-1";
 
         _connection.RegisterServiceAsync(serviceName).GetAwaiter().GetResult();
         _connection.RegisterObjectAsync(_item).GetAwaiter().GetResult();
+        _connection.RegisterObjectAsync(_menu).GetAwaiter().GetResult();
 
-        RegisterWithWatcher(serviceName);
+        IsStatusNotifierAvailable = RegisterWithWatcher(serviceName);
 
         var bars = new IconLayout.Bar[] { new(UsedPercent: null, Weight: 1.0, Provider: "None") };
         UpdateIcon(bars);
     }
+
+    public bool IsStatusNotifierAvailable { get; }
 
     public void UpdateIcon(IReadOnlyList<IconLayout.Bar> bars)
     {
@@ -140,33 +232,24 @@ internal sealed class NativeTray : INativeTray, IDisposable
 
     public void ShowNotification(NotificationLevel level, string message)
     {
-        try
-        {
-            var proxy = _connection.CreateProxy<INotifications>(
-                "org.freedesktop.Notifications",
-                new ObjectPath("/org/freedesktop/Notifications"));
-
-            proxy.NotifyAsync(
-                "Usage Bar", 0, string.Empty,
-                GetLevelTitle(level), message,
-                [], new Dictionary<string, object>(), 5000);
-        }
-        catch
-        {
-        }
+        _ = ShowNotificationAsync(level, message);
     }
 
     internal void RaiseSettingsRequested() => SettingsRequested?.Invoke();
     internal void RaiseRefreshRequested() => RefreshRequested?.Invoke();
     internal void RaiseExitRequested() => ExitRequested?.Invoke();
-    internal void ToggleTooltip() => TooltipToggleRequested?.Invoke();
+    internal void ToggleTooltip(int x = -1, int y = -1)
+    {
+        _logger.LogInformation("Tray activation received at x={X}; y={Y}.", x, y);
+        TooltipToggleRequested?.Invoke(x, y);
+    }
 
     public void Dispose()
     {
         _connection.Dispose();
     }
 
-    private void RegisterWithWatcher(string serviceName)
+    private bool RegisterWithWatcher(string serviceName)
     {
         try
         {
@@ -174,10 +257,35 @@ internal sealed class NativeTray : INativeTray, IDisposable
                 "org.kde.StatusNotifierWatcher",
                 new ObjectPath("/StatusNotifierWatcher"));
 
-            proxy.RegisterStatusNotifierItemAsync(serviceName);
+            proxy.RegisterStatusNotifierItemAsync(serviceName).GetAwaiter().GetResult();
+            _logger.LogInformation("Registered Linux tray icon with the StatusNotifier host.");
+            return true;
         }
-        catch
+        catch (Exception exception)
         {
+            _logger.LogWarning(
+                exception,
+                "StatusNotifier host is unavailable. A fallback window will be used.");
+            return false;
+        }
+    }
+
+    private async Task ShowNotificationAsync(NotificationLevel level, string message)
+    {
+        try
+        {
+            var proxy = _connection.CreateProxy<INotifications>(
+                "org.freedesktop.Notifications",
+                new ObjectPath("/org/freedesktop/Notifications"));
+
+            await proxy.NotifyAsync(
+                "Usage Bar", 0, string.Empty,
+                GetLevelTitle(level), message,
+                [], new Dictionary<string, object>(), 5000).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Could not show a desktop notification.");
         }
     }
 
@@ -205,13 +313,13 @@ internal sealed class NativeTray : INativeTray, IDisposable
 }
 
 [DBusInterface("org.kde.StatusNotifierWatcher")]
-internal interface IStatusNotifierWatcher : IDBusObject
+public interface IStatusNotifierWatcher : IDBusObject
 {
     Task RegisterStatusNotifierItemAsync(string service);
 }
 
 [DBusInterface("org.freedesktop.Notifications")]
-internal interface INotifications : IDBusObject
+public interface INotifications : IDBusObject
 {
     Task<uint> NotifyAsync(string appName, uint replacesId, string appIcon,
         string summary, string body, string[] actions,

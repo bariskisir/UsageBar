@@ -5,11 +5,15 @@ using UsageBar.Linux.Tray;
 
 namespace UsageBar.Linux;
 
-internal sealed class UsageView(NativeTray tray, NativeTooltip tooltip) : IUsageView
+internal sealed class UsageView(
+    NativeTray tray,
+    FallbackStatusWindow fallbackStatusWindow,
+    NativeTooltip tooltip) : IUsageView
 {
     public void ShowIcon(IReadOnlyList<IconLayout.Bar> bars)
     {
         tray.UpdateIcon(bars);
+        fallbackStatusWindow.UpdateIcon(bars);
     }
 
     public void ShowCards(IReadOnlyList<TooltipCard> cards, int scale)
