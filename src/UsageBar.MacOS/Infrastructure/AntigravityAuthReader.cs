@@ -17,13 +17,23 @@ public sealed class AntigravityAuthReader : IAntigravityAuthReader
             var json = ReadFromKeychain();
             if (!string.IsNullOrWhiteSpace(json))
             {
-                return ParseCredentialJson(json);
+                var parsed = ParseCredentialJson(json);
+                if (parsed is not null)
+                {
+                    return parsed;
+                }
             }
 
             var fileFallback = new FileAntigravityAuthReader(FallbackPath).Read();
             if (fileFallback is not null)
             {
-                Save(fileFallback);
+                try
+                {
+                    Save(fileFallback);
+                }
+                catch
+                {
+                }
             }
 
             return fileFallback;

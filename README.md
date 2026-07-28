@@ -1,6 +1,6 @@
 # UsageBar
 
-UsageBar is a minimal Windows, macOS, and Linux tray app for showing LLM or API usage and balance information.
+UsageBar is a minimal Windows and Linux tray app for showing LLM or API usage and balance information.
 
 
 <img src="images/interface.png" alt="UsageBar interface" width="60%">
