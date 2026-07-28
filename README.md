@@ -12,7 +12,12 @@ UsageBar is a minimal Windows, macOS, and Linux tray app for showing LLM or API 
 
 </details>
 
+<details>
+<summary>Linux</summary>
+
 <img src="images/interface_linux.png" alt="UsageBar interface on Linux" width="60%">
+
+</details>
 
 ---
 
@@ -72,11 +77,41 @@ the host.
 GNOME does not provide a StatusNotifier/AppIndicator tray host by default. To display UsageBar beside
 the clock, GNOME users need an AppIndicator-compatible Shell extension, such as **AppIndicator and
 KStatusNotifierItem Support**, enabled for the current user. The exact extension or package name
-depends on the distribution. After enabling it, GNOME Shell may require a logout and login before
-the tray icon appears.
+depends on the distribution.
+
+1. Find **AppIndicator and KStatusNotifierItem Support** in the distribution's software center,
+   package manager, or GNOME extension manager, then enable it.
+2. Log out and log back in so GNOME Shell loads the extension.
+3. Launch the UsageBar AppImage again. Logging back in loads the extension but does not automatically
+   restart UsageBar.
+
+The UsageBar icon should now appear in the top panel. If UsageBar still reports that no tray host was
+detected, confirm that the extension is enabled in the GNOME **Extensions** application, then close
+and relaunch the AppImage.
 
 Desktops that already provide a StatusNotifier host do not need the GNOME extension. Without any
 tray host, UsageBar displays a small fallback window so its actions remain accessible.
+
+#### Start automatically (optional)
+
+An AppImage is portable and does not add itself to the application menu or login startup. Move it out
+of `Downloads` to a location that will not change, for example `~/.local/bin/usagebar`, and make sure
+it remains executable. To start UsageBar after each login, create
+`~/.config/autostart/usagebar.desktop` with the following content, replacing `<username>` with the
+Linux account name:
+
+```ini
+[Desktop Entry]
+Type=Application
+Name=UsageBar
+Comment=LLM and API usage in the system tray
+Exec=/home/<username>/.local/bin/usagebar
+Terminal=false
+X-GNOME-Autostart-enabled=true
+```
+
+The next login will start UsageBar automatically. The AppIndicator extension must still be installed
+and enabled on GNOME for its tray icon to be visible.
 
 ## Configuration
 
