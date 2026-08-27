@@ -1,3 +1,27 @@
+<p align="center">
+  <img src="https://img.shields.io/badge/DEPRECATED-No_Longer_Maintained-red?style=for-the-badge" alt="Deprecated">
+</p>
+
+<h1 align="center">🚨 UsageBar is Deprecated 🚨</h1>
+
+<h3 align="center">This project is no longer maintained and will not receive further updates, bug fixes, or new features.</h3>
+
+<p align="center">
+  <strong>👉 Please migrate to its successor:</strong>
+</p>
+
+<p align="center">
+  <a href="https://github.com/bariskisir/sessionlens">
+    <img src="https://img.shields.io/badge/Migrate_to-Session_Lens-2ea44f?style=for-the-badge&logo=github" alt="Session Lens">
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/bariskisir/sessionlens"><strong>https://github.com/bariskisir/sessionlens</strong></a>
+</p>
+
+---
+
 # UsageBar
 
 UsageBar is a minimal Windows and Linux tray app for showing LLM or API usage and balance information.
